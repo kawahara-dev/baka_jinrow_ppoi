@@ -177,14 +177,17 @@
     .meta { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
 
     .right-panel {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 10px;
       position: sticky;
       top: 12px;
     }
+    .right-panel .screen {
+      padding: 8px;
+    }
     .log {
-      height: 460px;
+      height: clamp(220px, 34vh, 360px);
       overflow: auto;
       background: #fcf9ff;
       border: 1px solid #efddff;
@@ -219,12 +222,14 @@
       border-radius: 12px;
       padding: 12px;
     }
-    .role-guide h3 {
+    .role-guide summary {
       color: var(--pink);
-      margin-bottom: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
     }
     .role-guide ul {
-      margin: 0;
+      margin: 8px 0 0;
       padding-left: 1.1rem;
       display: grid;
       gap: 6px;
@@ -247,7 +252,8 @@
 
     @media (max-width: 980px) {
       .game-ui { grid-template-columns: 1fr; }
-      .right-panel { position: static; }
+      .right-panel { position: static; grid-template-columns: 1fr; }
+      .log { height: min(36vh, 300px); }
       .cards { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
       .player-role-card { padding: 10px; }
       .player-role-card:not([open]) { padding-bottom: 8px; }
@@ -322,19 +328,19 @@
         </div>
       </div>
       <aside class="right-panel">
-        <div class="screen" style="padding:10px;">
+        <div class="screen">
           <h3>セリフ</h3>
           <div id="dialogueLog" class="log"></div>
         </div>
-        <div class="screen" style="padding:10px;">
+        <div class="screen">
           <h3>行動ログ</h3>
           <div id="actionLog" class="log"></div>
         </div>
       </aside>
     </div>
 
-    <div class="role-guide">
-      <h3>役職一覧</h3>
+    <details class="role-guide">
+      <summary>役職一覧</summary>
       <ul>
         <li><strong>見習い占い師（ピュア）</strong>：夜に1人の陣営を調べる。</li>
         <li><strong>守り手（ピュア）</strong>：夜に1人を守る。</li>
@@ -345,7 +351,7 @@
         <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。</li>
         <li><strong>バカ（フェイク）</strong>：夜にノイズを撒いて疑念をゆらす。</li>
       </ul>
-    </div>
+    </details>
 
   </section>
 
