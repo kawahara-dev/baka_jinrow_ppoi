@@ -452,7 +452,7 @@
         lastTarget: null
       })),
       playerId: 0,
-      protectedId: null,
+      protectedTargets: {},
       nightReport: { type: "none", victimId: null }
     };
     showRole();
@@ -532,11 +532,11 @@
     const target = state.players[state.selectedId];
     if (!target || !target.alive) return alert("対象を選んでね！");
 
-    state.protectedId = null;
+    state.protectedTargets = {};
     for (const p of alive) p.lastTarget = null;
 
     if (me.roleKey === "guardian") {
-      state.protectedId = target.id;
+      state.protectedTargets[me.id] = target.id;
       log(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${target.name} を守った。`);
     } else if (me.roleKey === "apprenticeSeer" || me.roleKey === "clumsySeer") {
       let result = ROLES[target.roleKey].faction;
@@ -571,7 +571,10 @@
 
     for (const p of alive) {
       if (p.id === state.playerId) continue;
-      if (p.roleKey === "guardian") state.protectedId = rand(alive.filter(x => x.id !== p.id)).id;
+      if (p.roleKey === "guardian") {
+        if (p.id === state.playerId) continue;
+        state.protectedTargets[p.id] = rand(alive.filter(x => x.id !== p.id)).id;
+      }
       if (p.roleKey === "tracker") {
         const t = rand(alive.filter(x => x.id !== p.id));
         t.lastTarget = rand(alive.filter(x => x.id !== t.id)).id;
@@ -592,7 +595,8 @@
     if (killers.length > 0) {
       const victims = alive.filter(p => !fakeSide.includes(p));
       const v = rand(victims.length ? victims : alive.filter(p => p.roleKey !== "fakeGirl"));
-      if (v && v.id !== state.protectedId) {
+      const isProtected = v && Object.values(state.protectedTargets).includes(v.id);
+      if (v && !isProtected) {
         v.alive = false;
         state.nightReport = { type: "eliminated", victimId: v.id };
         log(`夜行動：フェイク側の襲撃で ${v.name} が夜のあいだに脱落。`);
