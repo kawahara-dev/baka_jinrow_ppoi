@@ -308,6 +308,7 @@
         <div><span>陣営：</span><strong id="roleCardFaction">-</strong></div>
         <div><span>今フェーズでやること：</span><span id="roleCardPhaseHint">-</span></div>
         <div><span>注意点：</span><span id="roleCardRisk">-</span></div>
+        <div><span>仲間情報：</span><span id="roleCardAllies">-</span></div>
       </div>
     </details>
 
@@ -451,7 +452,7 @@
         suspicion: 0,
         lastTarget: null
       })),
-      playerId: 0,
+      playerId: Math.floor(Math.random() * names.length),
       protectedTargets: {},
       nightReport: { type: "none", victimId: null },
       nightActions: {}
@@ -471,10 +472,20 @@
       説明：${r.desc}<br>
       夜の推奨行動：${r.nightActionHint}<br>
       結果の見方：${r.resultInterpretation}<br>
-      注意：${r.riskNote}
+      注意：${r.riskNote}<br>
+      フェイク仲間：${getFakeAlliesText()}
     `;
     el("factionText").textContent = r.faction;
     updateInGameRoleCard();
+  }
+
+
+  function getFakeAlliesText() {
+    const me = state.players[state.playerId];
+    if (!me || ROLES[me.roleKey].faction !== "フェイク") return "なし";
+    const allies = state.players.filter(p => p.id !== me.id && ROLES[p.roleKey].faction === "フェイク");
+    if (!allies.length) return "なし";
+    return allies.map(p => p.name).join("、");
   }
 
   function getPhaseHint(role) {
@@ -493,6 +504,7 @@
     el("roleCardFaction").textContent = role.faction;
     el("roleCardPhaseHint").textContent = getPhaseHint(role);
     el("roleCardRisk").textContent = role.riskNote;
+    el("roleCardAllies").textContent = getFakeAlliesText();
   }
 
   function draw() {
@@ -520,8 +532,20 @@
   }
 
   function selectTarget(id) {
-    if (state.phase === "night" || state.phase === "vote") {
-      if (!state.players[id].alive || id === state.playerId) return;
+    const target = state.players[id];
+    if (!target || !target.alive) return;
+
+    if (state.phase === "night") {
+      const me = state.players[state.playerId];
+      const canSelectSelf = ["guardian", "apprenticeSeer", "clumsySeer", "tracker", "baka", "villager"].includes(me.roleKey);
+      if (id === state.playerId && !canSelectSelf) return;
+      state.selectedId = id;
+      draw();
+      return;
+    }
+
+    if (state.phase === "vote") {
+      if (id === state.playerId) return;
       state.selectedId = id;
       draw();
     }
