@@ -257,13 +257,62 @@
 <script>
 (() => {
   const ROLES = {
-    apprenticeSeer: {name: "見習い占い師", faction: "ピュア", desc: "夜に1人の陣営を調べる。"},
-    guardian: {name: "守り手", faction: "ピュア", desc: "夜に1人を守る。"},
-    tracker: {name: "追跡係", faction: "ピュア", desc: "夜に1人が誰を訪ねたか分かる。"},
-    clumsySeer: {name: "うっかり占い師", faction: "ピュア", desc: "占い結果が時々ランダムにズレる。"},
-    villager: {name: "村ガール", faction: "ピュア", desc: "能力なし。議論と投票で戦う。"},
-    fakeGirl: {name: "フェイクガール", faction: "フェイク", desc: "夜に1人を脱落させる。"},
-    mimic: {name: "なりすまし", faction: "フェイク", desc: "調査でピュアに見えることがある。"}
+    apprenticeSeer: {
+      name: "見習い占い師",
+      faction: "ピュア",
+      desc: "夜に1人の陣営を調べる。",
+      nightActionHint: "怪しい相手を1人選んで調査しよ。",
+      resultInterpretation: "表示された陣営をそのまま参考にしてOK。",
+      riskNote: "相手が『なりすまし』だと65%でピュア判定に化けることがある。"
+    },
+    guardian: {
+      name: "守り手",
+      faction: "ピュア",
+      desc: "夜に1人を守る。",
+      nightActionHint: "襲われそうな子を1人選んでガード。",
+      resultInterpretation: "夜の報告で襲撃が防がれたらガード成功の可能性あり。",
+      riskNote: "誰を守ったかは公開されない。読み負けると守り切れない。"
+    },
+    tracker: {
+      name: "追跡係",
+      faction: "ピュア",
+      desc: "夜に1人が誰を訪ねたか分かる。",
+      nightActionHint: "行動が怪しい相手を1人選んで追跡。",
+      resultInterpretation: "『誰を訪れたか』は間接情報。単体で黒確定にはしないのがコツ。",
+      riskNote: "追跡先の行動理由までは分からないため、早とちり注意。"
+    },
+    clumsySeer: {
+      name: "うっかり占い師",
+      faction: "ピュア",
+      desc: "占い結果が時々ランダムにズレる。",
+      nightActionHint: "怪しい相手を調査しつつ、連日の結果で傾向を見る。",
+      resultInterpretation: "判定は参考止まり。複数日の発言・投票と合わせて判断して。",
+      riskNote: "runNightの仕様で45%の確率で判定がランダム（ピュア/フェイク）に上書きされる。さらに相手が『なりすまし』ならピュア誤認も起こりうる。"
+    },
+    villager: {
+      name: "村ガール",
+      faction: "ピュア",
+      desc: "能力なし。議論と投票で戦う。",
+      nightActionHint: "夜は情報整理に集中。朝ログと発言の矛盾を探そう。",
+      resultInterpretation: "自分の夜結果はないので、他者の報告の整合性がカギ。",
+      riskNote: "強い能力はないぶん、ミスリードに流されやすい。"
+    },
+    fakeGirl: {
+      name: "フェイクガール",
+      faction: "フェイク",
+      desc: "夜に1人を脱落させる。",
+      nightActionHint: "ピュア陣営を優先して人数有利を狙う。",
+      resultInterpretation: "襲撃が通れば盤面有利、守られると計画を立て直し。",
+      riskNote: "守り手の防衛先に当たると襲撃失敗になる。"
+    },
+    mimic: {
+      name: "なりすまし",
+      faction: "フェイク",
+      desc: "調査でピュアに見えることがある。",
+      nightActionHint: "占い対象に選ばれそうな動きを逆手に取って疑いを散らす。",
+      resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。",
+      riskNote: "runNightの仕様で target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。占い師の誤認を誘発できる。"
+    }
   };
 
   const names = ["ルナ", "ミオ", "ユイ", "カノン", "スズ", "リリ", "ノア", "エマ"];
@@ -315,7 +364,10 @@
     el("playerRole").innerHTML = `
       <strong>${me.name} の役職：${r.name}</strong><br>
       陣営：${r.faction}<br>
-      説明：${r.desc}
+      説明：${r.desc}<br>
+      夜の推奨行動：${r.nightActionHint}<br>
+      結果の見方：${r.resultInterpretation}<br>
+      注意：${r.riskNote}
     `;
     el("factionText").textContent = r.faction;
   }
