@@ -124,6 +124,10 @@
     }
     .card.dead { opacity: 0.45; filter: grayscale(0.3); }
     .card.selected { outline: 3px solid var(--pink); }
+    .card.self {
+      border-style: dashed;
+      border-color: #f6add3;
+    }
     .card.voted::after {
       content: "投票済";
       position: absolute;
@@ -282,6 +286,7 @@
         <li><strong>村ガール（ピュア）</strong>：能力なし。議論と投票で戦う。</li>
         <li><strong>フェイクガール（フェイク）</strong>：夜に1人を脱落させる。</li>
         <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。</li>
+        <li><strong>バカ（フェイク）</strong>：表示役職が別のピュア役職に見える攪乱役。</li>
       </ul>
     </div>
 
@@ -348,11 +353,20 @@
       nightActionHint: "占い対象に選ばれそうな動きを逆手に取って疑いを散らす。",
       resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。",
       riskNote: "runNightの仕様で target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。占い師の誤認を誘発できる。"
+    },
+    baka: {
+      name: "バカ",
+      faction: "フェイク",
+      desc: "表示役職が別のピュア役職に見える攪乱役。",
+      nightActionHint: "夜は目立ちすぎない言動で、偽装役職になりきって混乱させる。",
+      resultInterpretation: "専用能力はないが、見えている役職情報そのものを疑わせられる。",
+      riskNote: "ゲーム開始時、バカ本人に表示される役職名はピュア役職のどれかに偽装される。"
     }
   };
 
   const names = ["ルナ", "ミオ", "ユイ", "カノン", "スズ", "リリ", "ノア", "エマ"];
   const icons = ["🌸", "🪄", "🧁", "🎀", "💫", "🫧", "🍬", "🌙"];
+  const BAKEABLE_SHOW_ROLES = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager"];
 
   let state = {};
 
@@ -368,7 +382,7 @@
   function alivePlayers() { return state.players.filter(p => p.alive); }
 
   function setupGame() {
-    const roleBag = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "villager", "fakeGirl", "mimic"]
+    const roleBag = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "baka", "fakeGirl", "mimic"]
       .sort(() => Math.random() - 0.5);
     state = {
       day: 1,
@@ -380,6 +394,7 @@
         name: n,
         icon: icons[i],
         roleKey: roleBag[i],
+        shownRoleKey: roleBag[i],
         alive: true,
         voted: false,
         suspicion: 0,
@@ -389,6 +404,7 @@
       protectedId: null,
       nightReport: { type: "none", victimId: null }
     };
+    assignShownRoles();
     showRole();
     draw();
     el("log").innerHTML = "";
@@ -397,16 +413,22 @@
 
   function showRole() {
     const me = state.players[state.playerId];
-    const r = ROLES[me.roleKey];
+    const r = ROLES[me.shownRoleKey || me.roleKey];
+    const myFaction = ROLES[me.roleKey].faction;
+    const fakeMates = state.players.filter(p => p.id !== me.id && ROLES[p.roleKey].faction === "フェイク").map(p => p.name);
+    const mateLine = myFaction === "フェイク"
+      ? `相方情報：${fakeMates.length ? fakeMates.join("、") : "いない"}`
+      : "";
     el("playerRole").innerHTML = `
       <strong>${me.name} の役職：${r.name}</strong><br>
-      陣営：${r.faction}<br>
+      陣営：${myFaction}<br>
       説明：${r.desc}<br>
       夜の推奨行動：${r.nightActionHint}<br>
       結果の見方：${r.resultInterpretation}<br>
       注意：${r.riskNote}
+      ${mateLine ? `<br>${mateLine}` : ""}
     `;
-    el("factionText").textContent = r.faction;
+    el("factionText").textContent = myFaction;
   }
 
   function draw() {
@@ -417,11 +439,11 @@
     const cards = el("cards"); cards.innerHTML = "";
     for (const p of state.players) {
       const div = document.createElement("div");
-      div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""}`;
+      div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""} ${p.id===state.playerId?"self":""}`;
       div.onclick = () => selectTarget(p.id);
       div.innerHTML = `
         <div class="avatar">${p.icon}</div>
-        <div class="name">${p.name}</div>
+        <div class="name">${p.name}${p.id===state.playerId ? "（あなた）" : ""}</div>
         <div class="meta">${p.alive?"生存中":"脱落済み"}</div>
       `;
       cards.appendChild(div);
@@ -434,9 +456,23 @@
 
   function selectTarget(id) {
     if (state.phase === "night" || state.phase === "vote") {
-      if (!state.players[id].alive || id === state.playerId) return;
+      if (!state.players[id].alive) return;
+      if (id === state.playerId) {
+        log("自分自身は対象に選べないよ。");
+        return;
+      }
       state.selectedId = id;
       draw();
+    }
+  }
+
+  function assignShownRoles() {
+    for (const p of state.players) {
+      if (p.roleKey === "baka") {
+        p.shownRoleKey = rand(BAKEABLE_SHOW_ROLES);
+      } else {
+        p.shownRoleKey = p.roleKey;
+      }
     }
   }
 
