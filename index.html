@@ -458,6 +458,37 @@
 
   const actionLog = msg => appendLog("actionLog", msg);
   const dialogueLog = msg => appendLog("dialogueLog", msg);
+  function formatActionLog(type, payload = {}) {
+    const withLabel = (label, message) => label ? `[${label}] ${message}` : message;
+    const actor = payload.actor || "不明";
+    const target = payload.target || "不明";
+    switch (type) {
+      case "protect":
+        return `${actor} → ${target} → 防衛`;
+      case "investigate":
+        return `${actor} → ${target} → 判定: ${payload.result || "不明"}`;
+      case "disturb":
+        return `${actor} → ${target} → かく乱`;
+      case "track":
+        return `${actor} → ${target} → 訪問先${payload.visitTarget ? payload.visitTarget : "なし"}`;
+      case "attackEliminated":
+        return `フェイク陣営 → ${target} → 脱落`;
+      case "attackBlocked":
+        return `フェイク陣営 → ${target} → 防衛成功`;
+      case "voteGuide":
+        return withLabel(payload.label, "投票 → 対象選択 → 実行");
+      case "voteEliminated":
+        return withLabel(payload.label, `投票 → ${target} → 追放(${payload.votes}票)`);
+      case "voteTie":
+        return withLabel(payload.label, `投票 → 同数(${payload.votes}票) → 追放なし`);
+      case "roleReveal":
+        return withLabel(payload.label, `${target} → 役職: ${payload.role}`);
+      case "phaseNightStart":
+        return `${payload.day}日目 → 夜 → 開始`;
+      default:
+        return payload.message || "";
+    }
+  }
 
   function rand(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
   function alivePlayers() { return state.players.filter(p => p.alive); }
@@ -649,22 +680,22 @@
       const actionType = ROLES[actor.roleKey].nightAction?.type;
       if (actionType === "protect") {
         state.protectedTargets.add(target.id);
-        if (actor.id === me.id) actionLog(`夜行動：あなた（${ROLES[actor.roleKey].name}）は ${target.name} を守った。`);
+        if (actor.id === me.id) actionLog(formatActionLog("protect", { actor: ROLES[actor.roleKey].name, target: target.name }));
       } else if (actionType === "investigate") {
         let result = ROLES[target.roleKey].faction;
         if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
         if (actor.roleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
-        if (actor.id === me.id) actionLog(`夜行動：あなた（${ROLES[actor.roleKey].name}）が ${target.name} を調査 → 判定「${result}」。`);
+        if (actor.id === me.id) actionLog(formatActionLog("investigate", { actor: ROLES[actor.roleKey].name, target: target.name, result }));
         if (actor.id !== me.id && result === "フェイク") target.suspicion += 1;
       } else if (actionType === "disturb") {
         target.suspicion += 1.2;
-        if (actor.id === me.id) actionLog(`夜行動：あなた（バカ）が ${target.name} の情報にノイズを注入。`);
-        else actionLog(`夜行動：何者かが ${target.name} の情報をかく乱した。`);
+        if (actor.id === me.id) actionLog(formatActionLog("disturb", { actor: "バカ", target: target.name }));
+        else actionLog(formatActionLog("disturb", { actor: "何者か", target: target.name }));
       } else if (actionType === "track") {
         const visitId = state.nightActions[target.id];
         const visitTarget = visitId !== undefined ? state.players[visitId] : null;
         if (visitTarget) target.lastTarget = visitTarget.id;
-        if (actor.id === me.id) actionLog(`夜行動：あなた（追跡係）が ${target.name} を追跡 → ${visitTarget ? `訪問先は ${visitTarget.name}` : "訪問なし"}。`);
+        if (actor.id === me.id) actionLog(formatActionLog("track", { actor: "追跡係", target: target.name, visitTarget: visitTarget?.name }));
       } else if (actionType === "attack") {
         attacks.push(target.id);
       }
@@ -676,10 +707,10 @@
       if (victim && victim.alive && !state.protectedTargets.has(victim.id)) {
         victim.alive = false;
         state.nightReport = { type: "eliminated", victimId: victim.id };
-        actionLog(`夜行動：フェイク側の襲撃で ${victim.name} が夜のあいだに脱落。`);
+        actionLog(formatActionLog("attackEliminated", { target: victim.name }));
       } else {
         state.nightReport = { type: "blocked", victimId: null };
-        actionLog("夜行動：フェイク側の襲撃は守りによって防がれた。");
+        actionLog(formatActionLog("attackBlocked", { target: victim?.name || "不明" }));
       }
     } else {
       state.nightReport = { type: "none", victimId: null };
@@ -749,7 +780,7 @@
     if (state.phase !== "discussion") return;
     state.phase = "vote";
     state.players.forEach(p => p.voted = false);
-    actionLog("投票フェーズ：追放したい相手を選んで「投票する」を押してね。");
+    actionLog(formatActionLog("voteGuide", { label: "投票" }));
     draw();
   }
 
@@ -780,7 +811,7 @@
       } else if (c === max) topIds.push(id);
     }
     if (topIds.length !== 1) {
-      actionLog(`投票結果：最多票が同数（${max}票）だったため本日は追放なし。`);
+      actionLog(formatActionLog("voteTie", { label: "投票", votes: max }));
       const winTie = checkWin();
       if (winTie) {
         state.phase = "end";
@@ -798,8 +829,8 @@
     const ex = state.players[maxId];
     ex.alive = false;
     state.executed = ex.id;
-    actionLog(`投票結果：${ex.name} が ${max} 票で追放された。`);
-    actionLog(`${ex.name} の役職は「${ROLES[ex.roleKey].name}」だった。`);
+    actionLog(formatActionLog("voteEliminated", { label: "投票", target: ex.name, votes: max }));
+    actionLog(formatActionLog("roleReveal", { label: "投票", target: ex.name, role: ROLES[ex.roleKey].name }));
 
     const win = checkWin();
     if (win) {
@@ -814,7 +845,7 @@
       state.phase = "night";
       state.selectedId = null;
       state.players.forEach(p => { p.voted = false; p.suspicion = Math.max(0, p.suspicion - 1); });
-      actionLog(`--- Day ${state.day} の夜が始まる ---`);
+      actionLog(formatActionLog("phaseNightStart", { day: state.day }));
     }
     draw();
   }
