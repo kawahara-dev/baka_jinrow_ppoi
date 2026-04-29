@@ -453,7 +453,8 @@
       })),
       playerId: 0,
       protectedTargets: {},
-      nightReport: { type: "none", victimId: null }
+      nightReport: { type: "none", victimId: null },
+      nightActions: {}
     };
     showRole();
     draw();
@@ -535,68 +536,104 @@
     state.protectedTargets = {};
     for (const p of alive) p.lastTarget = null;
 
-    if (me.roleKey === "guardian") {
-      state.protectedTargets[me.id] = target.id;
-      log(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${target.name} を守った。`);
-    } else if (me.roleKey === "apprenticeSeer" || me.roleKey === "clumsySeer") {
-      let result = ROLES[target.roleKey].faction;
-      if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
-      if (me.roleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
-      log(`夜行動：あなた（${ROLES[me.roleKey].name}）が ${target.name} を調査 → 判定「${result}」。`);
-      if (result === "フェイク") target.suspicion += 2;
-    } else if (me.roleKey === "tracker") {
-      const visitTarget = rand(alive.filter(p => p.id !== target.id));
-      target.lastTarget = visitTarget.id;
-      log(`夜行動：あなた（追跡係）が ${target.name} を追跡 → 訪問先は ${visitTarget.name}。`);
-      visitTarget.suspicion += 1;
-    } else if (me.roleKey === "baka") {
-      const noisyResult = Math.random() < 0.5 ? "ピュア" : "フェイク";
-      target.suspicion += 1.5;
-      target.lastTarget = target.id;
-      log(`夜行動：あなた（バカ）が ${target.name} にノイズを注入 → 翌朝の判定は「${noisyResult}」っぽく見える。`);
-    } else {
-      log(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${target.name} を見守った。`);
+    const nightActions = {};
+    const registerAction = (actorId, targetId) => {
+      if (targetId === null || targetId === undefined) return;
+      nightActions[actorId] = targetId;
+    };
+
+    for (const p of alive) {
+      if (p.roleKey === "guardian") {
+        const guardTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
+        if (guardTarget !== undefined) {
+          registerAction(p.id, guardTarget);
+          state.protectedTargets[p.id] = guardTarget;
+        }
+      } else if (p.roleKey === "apprenticeSeer" || p.roleKey === "clumsySeer") {
+        const inspectTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
+        registerAction(p.id, inspectTarget);
+      } else if (p.roleKey === "tracker") {
+        const trackTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
+        registerAction(p.id, trackTarget);
+      } else if (p.roleKey === "baka") {
+        const noisyTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
+        registerAction(p.id, noisyTarget);
+      } else if (p.roleKey === "fakeGirl") {
+        const fakeSide = alive.filter(x => ["fakeGirl", "mimic", "baka"].includes(x.roleKey));
+        const victims = alive.filter(x => !fakeSide.includes(x));
+        const attackTarget = rand(victims.length ? victims : alive.filter(x => x.roleKey !== "fakeGirl"))?.id;
+        registerAction(p.id, attackTarget);
+      }
     }
 
-    cpuNightActions();
+    state.nightActions = nightActions;
+    resolveNightActions(me, target, alive);
+
     state.phase = "morning";
     state.selectedId = null;
     draw();
   }
 
-  function cpuNightActions() {
-    const alive = alivePlayers();
+  function resolveNightActions(me, selectedTarget, alive) {
+    if (me.roleKey === "guardian") {
+      log(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${selectedTarget.name} を守った。`);
+    } else if (me.roleKey === "apprenticeSeer" || me.roleKey === "clumsySeer") {
+      let result = ROLES[selectedTarget.roleKey].faction;
+      if (selectedTarget.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
+      if (me.roleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+      log(`夜行動：あなた（${ROLES[me.roleKey].name}）が ${selectedTarget.name} を調査 → 判定「${result}」。`);
+      if (result === "フェイク") selectedTarget.suspicion += 2;
+    } else if (me.roleKey === "tracker") {
+      const visitId = state.nightActions[selectedTarget.id];
+      const visitTarget = visitId !== undefined ? state.players[visitId] : null;
+      if (visitTarget) {
+        selectedTarget.lastTarget = visitTarget.id;
+        log(`夜行動：あなた（追跡係）が ${selectedTarget.name} を追跡 → 訪問先は ${visitTarget.name}。`);
+        visitTarget.suspicion += 1;
+      } else {
+        log(`夜行動：あなた（追跡係）が ${selectedTarget.name} を追跡 → 訪問なし。`);
+      }
+    } else if (me.roleKey === "baka") {
+      const noisyResult = Math.random() < 0.5 ? "ピュア" : "フェイク";
+      selectedTarget.suspicion += 1.5;
+      log(`夜行動：あなた（バカ）が ${selectedTarget.name} にノイズを注入 → 翌朝の判定は「${noisyResult}」っぽく見える。`);
+    } else {
+      log(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${selectedTarget.name} を見守った。`);
+    }
+
+    cpuNightActions(alive);
+  }
+
+  function cpuNightActions(alive) {
     const killers = alive.filter(p => p.roleKey === "fakeGirl");
-    const fakeSide = alive.filter(p => ["fakeGirl", "mimic", "baka"].includes(p.roleKey));
 
     for (const p of alive) {
       if (p.id === state.playerId) continue;
-      if (p.roleKey === "guardian") {
-        if (p.id === state.playerId) continue;
-        state.protectedTargets[p.id] = rand(alive.filter(x => x.id !== p.id)).id;
-      }
       if (p.roleKey === "tracker") {
         const t = rand(alive.filter(x => x.id !== p.id));
-        t.lastTarget = rand(alive.filter(x => x.id !== t.id)).id;
+        if (!t) continue;
+        const visitedId = state.nightActions[t.id];
+        if (visitedId !== undefined) t.lastTarget = visitedId;
       }
       if (p.roleKey === "baka") {
-        const t = rand(alive.filter(x => x.id !== p.id));
+        const t = state.players[state.nightActions[p.id]];
+        if (!t) continue;
         const fakeTarget = rand(alive.filter(x => x.id !== t.id));
         t.suspicion += 1.2;
-        t.lastTarget = fakeTarget ? fakeTarget.id : null;
         log(`夜行動：${p.name}（バカ）が ${t.name} の情報をかく乱し、${fakeTarget ? fakeTarget.name : "不明"} への疑念を演出。`);
       }
       if (p.roleKey === "apprenticeSeer" || p.roleKey === "clumsySeer") {
-        const t = rand(alive.filter(x => x.id !== p.id));
-        if (ROLES[t.roleKey].faction === "フェイク") t.suspicion += 1;
+        const t = state.players[state.nightActions[p.id]];
+        if (t && ROLES[t.roleKey].faction === "フェイク") t.suspicion += 1;
       }
     }
 
     if (killers.length > 0) {
-      const victims = alive.filter(p => !fakeSide.includes(p));
-      const v = rand(victims.length ? victims : alive.filter(p => p.roleKey !== "fakeGirl"));
+      const attackIds = killers.map(k => state.nightActions[k.id]).filter(v => v !== undefined);
+      const targetId = attackIds[0];
+      const v = targetId !== undefined ? state.players[targetId] : null;
       const isProtected = v && Object.values(state.protectedTargets).includes(v.id);
-      if (v && !isProtected) {
+      if (v && v.alive && !isProtected) {
         v.alive = false;
         state.nightReport = { type: "eliminated", victimId: v.id };
         log(`夜行動：フェイク側の襲撃で ${v.name} が夜のあいだに脱落。`);
