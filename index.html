@@ -664,7 +664,7 @@
         if (!t) continue;
         const fakeTarget = rand(alive.filter(x => x.id !== t.id));
         t.suspicion += 1.2;
-        actionLog(`夜行動：${p.name}（バカ）が ${t.name} の情報をかく乱し、${fakeTarget ? fakeTarget.name : "不明"} への疑念を演出。`);
+        actionLog(`夜行動：何者かが ${t.name} の情報をかく乱し、${fakeTarget ? fakeTarget.name : "不明"} への疑念を演出。`);
       }
       if (p.roleKey === "apprenticeSeer" || p.roleKey === "clumsySeer") {
         const t = state.players[state.nightActions[p.id]];
