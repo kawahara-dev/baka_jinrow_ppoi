@@ -482,7 +482,7 @@
       case "voteTie":
         return withLabel(payload.label, `投票 → 同数(${payload.votes}票) → 追放なし`);
       case "roleReveal":
-        return withLabel(payload.label, `${target} → 役職: ${payload.role}`);
+        return withLabel(payload.label, `${target} → 役職: ${payload.role} / 陣営: ${payload.faction}`);
       case "phaseNightStart":
         return `${payload.day}日目 → 夜 → 開始`;
       default:
@@ -708,6 +708,7 @@
         victim.alive = false;
         state.nightReport = { type: "eliminated", victimId: victim.id };
         actionLog(formatActionLog("attackEliminated", { target: victim.name }));
+        actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
       } else {
         state.nightReport = { type: "blocked", victimId: null };
         actionLog(formatActionLog("attackBlocked", { target: victim?.name || "不明" }));
@@ -830,7 +831,7 @@
     ex.alive = false;
     state.executed = ex.id;
     actionLog(formatActionLog("voteEliminated", { label: "投票", target: ex.name, votes: max }));
-    actionLog(formatActionLog("roleReveal", { label: "投票", target: ex.name, role: ROLES[ex.roleKey].name }));
+    actionLog(formatActionLog("roleReveal", { label: "投票", target: ex.name, role: ROLES[ex.roleKey].name, faction: ROLES[ex.roleKey].faction }));
 
     const win = checkWin();
     if (win) {
