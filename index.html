@@ -283,8 +283,9 @@
     <div id="howTo" class="screen hidden" style="max-width:720px;text-align:left;">
       <h3>遊び方</h3>
       <p>・8人でスタート。あなた1人＋CPU7人。</p>
-      <p>・夜に能力を使い、朝の報告を確認。</p>
-      <p>・昼の発言をヒントに投票して追放。</p>
+      <p>・フェーズ順：夜行動 → 朝の報告 → 昼の議論 → 投票。</p>
+      <p>・夜の解決順：防御 → 調査 → ノイズ/追跡 → 襲撃。</p>
+      <p>・昼は「報告→議論→投票」を順番に進行し、各フェーズで操作が制限されます。</p>
       <p>・ピュア陣営はフェイク全員追放で勝利、フェイク陣営は同数以上で勝利。</p>
       <p>・一部のピュア役職は「うっかり」で結果がズレることあり！</p>
     </div>
@@ -344,7 +345,7 @@
       <ul>
         <li><strong>村ガール（ピュア）</strong>：基本陣営。議論と投票が主軸。</li>
         <li><strong>見習い占い師（ピュア）</strong>：夜に1人の陣営を調べる。</li>
-        <li><strong>守り手（ピュア）</strong>：夜に1人を守る。</li>
+        <li><strong>守り手（ピュア）</strong>：夜に1人を守る（防御は襲撃より先に解決）。</li>
         <li><strong>追跡係（ピュア）</strong>：夜に1人が誰を訪ねたか分かる。</li>
         <li><strong>フェイクガール（フェイク）</strong>：夜に1人を脱落させる。今回は1〜2人で編成。</li>
         <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。</li>
@@ -366,7 +367,8 @@
       desc: "夜に1人の陣営を調べる。",
       nightActionHint: "怪しい相手を1人選んで調査しよ。",
       resultInterpretation: "表示された陣営をそのまま参考にしてOK。",
-      riskNote: "相手が『なりすまし』だと65%でピュア判定に化けることがある。"
+      riskNote: "相手が『なりすまし』だと65%でピュア判定に化けることがある。",
+      nightAction: { type: "investigate", priority: 20, allowSelf: false }
     },
     guardian: {
       name: "守り手",
@@ -374,7 +376,8 @@
       desc: "夜に1人を守る。",
       nightActionHint: "襲われそうな子を1人選んでガード。",
       resultInterpretation: "夜の報告で襲撃が防がれたらガード成功の可能性あり。",
-      riskNote: "誰を守ったかは公開されない。読み負けると守り切れない。"
+      riskNote: "誰を守ったかは公開されない。読み負けると守り切れない。",
+      nightAction: { type: "protect", priority: 10, allowSelf: true }
     },
     tracker: {
       name: "追跡係",
@@ -382,7 +385,8 @@
       desc: "夜に1人が誰を訪ねたか分かる。",
       nightActionHint: "行動が怪しい相手を1人選んで追跡。",
       resultInterpretation: "『誰を訪れたか』は間接情報。単体で黒確定にはしないのがコツ。",
-      riskNote: "追跡先の行動理由までは分からないため、早とちり注意。"
+      riskNote: "追跡先の行動理由までは分からないため、早とちり注意。",
+      nightAction: { type: "track", priority: 30, allowSelf: false }
     },
     clumsySeer: {
       name: "うっかり占い師",
@@ -390,7 +394,8 @@
       desc: "占い結果が時々ランダムにズレる。",
       nightActionHint: "怪しい相手を調査しつつ、連日の結果で傾向を見る。",
       resultInterpretation: "判定は参考止まり。複数日の発言・投票と合わせて判断して。",
-      riskNote: "runNightの仕様で45%の確率で判定がランダム（ピュア/フェイク）に上書きされる。さらに相手が『なりすまし』ならピュア誤認も起こりうる。"
+      riskNote: "45%の確率で判定がランダム（ピュア/フェイク）に上書きされる。さらに相手が『なりすまし』ならピュア誤認も起こりうる。",
+      nightAction: { type: "investigate", priority: 20, allowSelf: false }
     },
     villager: {
       name: "村ガール",
@@ -398,7 +403,8 @@
       desc: "能力なし。議論と投票で戦う。",
       nightActionHint: "夜は情報整理に集中。朝ログと発言の矛盾を探そう。",
       resultInterpretation: "自分の夜結果はないので、他者の報告の整合性がカギ。",
-      riskNote: "強い能力はないぶん、ミスリードに流されやすい。"
+      riskNote: "強い能力はないぶん、ミスリードに流されやすい。",
+      nightAction: null
     },
     fakeGirl: {
       name: "フェイクガール",
@@ -406,7 +412,8 @@
       desc: "夜に1人を脱落させる。",
       nightActionHint: "ピュア陣営を優先して人数有利を狙う。",
       resultInterpretation: "襲撃が通れば盤面有利、守られると計画を立て直し。",
-      riskNote: "守り手の防衛先に当たると襲撃失敗になる。"
+      riskNote: "守り手の防衛先に当たると襲撃失敗になる。",
+      nightAction: { type: "attack", priority: 40, allowSelf: false }
     },
     mimic: {
       name: "なりすまし",
@@ -414,7 +421,8 @@
       desc: "調査でピュアに見えることがある。",
       nightActionHint: "占い対象に選ばれそうな動きを逆手に取って疑いを散らす。",
       resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。",
-      riskNote: "runNightの仕様で target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。占い師の誤認を誘発できる。"
+      riskNote: "target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。占い師の誤認を誘発できる。",
+      nightAction: null
     },
     baka: {
       name: "バカ",
@@ -422,8 +430,17 @@
       desc: "わざと混乱を招く。夜にノイズを撒いて情報を歪ませる（ピュア陣営）。",
       nightActionHint: "怪しまれそうな相手を選び、調査ノイズや疑念操作で議論を崩す。",
       resultInterpretation: "夜のログはあえて断片的。誰の情報がねじれたかを覚えておくと有利。",
-      riskNote: "ノイズを撒きすぎると自分の行動が不自然になり、昼の追及でバレやすい。"
+      riskNote: "ノイズを撒きすぎると自分の行動が不自然になり、昼の追及でバレやすい。",
+      nightAction: { type: "disturb", priority: 25, allowSelf: false }
     }
+  };
+
+  const PHASE_META = {
+    night: { label: "夜行動", button: "夜行動を実行" },
+    morning: { label: "朝の報告", button: "報告を読む" },
+    discussion: { label: "昼の議論", button: "議論を終えて投票へ" },
+    vote: { label: "投票", button: "投票する" },
+    end: { label: "勝敗", button: "-" }
   };
 
   const names = ["ルナ", "ミオ", "ユイ", "カノン", "スズ", "リリ", "ノア", "エマ"];
@@ -472,7 +489,7 @@
         lastTarget: null
       })),
       playerId: Math.floor(Math.random() * names.length),
-      protectedTargets: {},
+      protectedTargets: new Set(),
       nightReport: { type: "none", victimId: null },
       nightActions: {}
     };
@@ -510,7 +527,7 @@
 
   function getPhaseHint(role) {
     if (state.phase === "night") return role.nightActionHint;
-    if (state.phase === "morning") return role.resultInterpretation;
+    if (state.phase === "morning") return "朝の報告を整理して、発言方針を決めよう。";
     if (state.phase === "vote") return "ログと投票履歴から、いちばん矛盾が大きい相手に投票しよ。";
     if (state.phase === "discussion") return "朝の報告と発言のズレを比較して、投票候補を絞ろう。";
     return "勝敗ログを見て、次ゲームの立ち回りメモを作ろう。";
@@ -529,8 +546,7 @@
 
   function draw() {
     el("dayText").textContent = state.day;
-    const phaseJa = {night:"夜行動", morning:"朝の報告", discussion:"昼の議論", vote:"投票", end:"勝敗"}[state.phase];
-    el("phaseText").textContent = phaseJa;
+    el("phaseText").textContent = PHASE_META[state.phase].label;
     updateInGameRoleCard();
 
     const cards = el("cards"); cards.innerHTML = "";
@@ -546,6 +562,7 @@
       cards.appendChild(div);
     }
 
+    el("actionBtn").textContent = PHASE_META[state.phase]?.button || "実行";
     el("actionBtn").classList.toggle("hidden", state.phase !== "night");
     el("voteBtn").classList.toggle("hidden", state.phase !== "vote");
     el("nextBtn").classList.toggle("hidden", !["morning", "discussion"].includes(state.phase));
@@ -557,7 +574,7 @@
 
     if (state.phase === "night") {
       const me = state.players[state.playerId];
-      const canSelectSelf = ["guardian", "apprenticeSeer", "clumsySeer", "tracker", "baka", "villager"].includes(me.roleKey);
+      const canSelectSelf = !!ROLES[me.roleKey].nightAction?.allowSelf;
       if (id === state.playerId && !canSelectSelf) return;
       state.selectedId = id;
       draw();
@@ -577,7 +594,7 @@
     const target = state.players[state.selectedId];
     if (!target || !target.alive) return alert("対象を選んでね！");
 
-    state.protectedTargets = {};
+    state.protectedTargets = new Set();
     for (const p of alive) p.lastTarget = null;
 
     const nightActions = {};
@@ -587,11 +604,12 @@
     };
 
     for (const p of alive) {
+      if (!ROLES[p.roleKey].nightAction) continue;
       if (p.roleKey === "guardian") {
         const guardTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         if (guardTarget !== undefined) {
           registerAction(p.id, guardTarget);
-          state.protectedTargets[p.id] = guardTarget;
+          state.protectedTargets.add(guardTarget);
         }
       } else if (p.roleKey === "apprenticeSeer" || p.roleKey === "clumsySeer") {
         const inspectTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
@@ -619,78 +637,69 @@
   }
 
   function resolveNightActions(me, selectedTarget, alive) {
-    if (me.roleKey === "guardian") {
-      actionLog(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${selectedTarget.name} を守った。`);
-    } else if (me.roleKey === "apprenticeSeer" || me.roleKey === "clumsySeer") {
-      let result = ROLES[selectedTarget.roleKey].faction;
-      if (selectedTarget.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
-      if (me.roleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
-      actionLog(`夜行動：あなた（${ROLES[me.roleKey].name}）が ${selectedTarget.name} を調査 → 判定「${result}」。`);
-      if (result === "フェイク") selectedTarget.suspicion += 2;
-    } else if (me.roleKey === "tracker") {
-      const visitId = state.nightActions[selectedTarget.id];
-      const visitTarget = visitId !== undefined ? state.players[visitId] : null;
-      if (visitTarget) {
-        selectedTarget.lastTarget = visitTarget.id;
-        actionLog(`夜行動：あなた（追跡係）が ${selectedTarget.name} を追跡 → 訪問先は ${visitTarget.name}。`);
-        visitTarget.suspicion += 1;
-      } else {
-        actionLog(`夜行動：あなた（追跡係）が ${selectedTarget.name} を追跡 → 訪問なし。`);
+    const actionOrder = Object.entries(state.nightActions)
+      .map(([actorId, targetId]) => ({ actor: state.players[Number(actorId)], target: state.players[targetId] }))
+      .filter(x => x.actor && x.target && x.actor.alive && x.target.alive)
+      .sort((a, b) => ROLES[a.actor.roleKey].nightAction.priority - ROLES[b.actor.roleKey].nightAction.priority);
+
+    const attacks = [];
+    for (const step of actionOrder) {
+      const actor = step.actor;
+      const target = step.target;
+      const actionType = ROLES[actor.roleKey].nightAction?.type;
+      if (actionType === "protect") {
+        state.protectedTargets.add(target.id);
+        if (actor.id === me.id) actionLog(`夜行動：あなた（${ROLES[actor.roleKey].name}）は ${target.name} を守った。`);
+      } else if (actionType === "investigate") {
+        let result = ROLES[target.roleKey].faction;
+        if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
+        if (actor.roleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+        if (actor.id === me.id) actionLog(`夜行動：あなた（${ROLES[actor.roleKey].name}）が ${target.name} を調査 → 判定「${result}」。`);
+        if (actor.id !== me.id && result === "フェイク") target.suspicion += 1;
+      } else if (actionType === "disturb") {
+        target.suspicion += 1.2;
+        if (actor.id === me.id) actionLog(`夜行動：あなた（バカ）が ${target.name} の情報にノイズを注入。`);
+        else actionLog(`夜行動：何者かが ${target.name} の情報をかく乱した。`);
+      } else if (actionType === "track") {
+        const visitId = state.nightActions[target.id];
+        const visitTarget = visitId !== undefined ? state.players[visitId] : null;
+        if (visitTarget) target.lastTarget = visitTarget.id;
+        if (actor.id === me.id) actionLog(`夜行動：あなた（追跡係）が ${target.name} を追跡 → ${visitTarget ? `訪問先は ${visitTarget.name}` : "訪問なし"}。`);
+      } else if (actionType === "attack") {
+        attacks.push(target.id);
       }
-    } else if (me.roleKey === "baka") {
-      const noisyResult = Math.random() < 0.5 ? "ピュア" : "フェイク";
-      selectedTarget.suspicion += 1.5;
-      actionLog(`夜行動：あなた（バカ）が ${selectedTarget.name} にノイズを注入 → 翌朝の判定は「${noisyResult}」っぽく見える。`);
+    }
+
+    const targetId = attacks[0];
+    if (targetId !== undefined) {
+      const victim = state.players[targetId];
+      if (victim && victim.alive && !state.protectedTargets.has(victim.id)) {
+        victim.alive = false;
+        state.nightReport = { type: "eliminated", victimId: victim.id };
+        actionLog(`夜行動：フェイク側の襲撃で ${victim.name} が夜のあいだに脱落。`);
+      } else {
+        state.nightReport = { type: "blocked", victimId: null };
+        actionLog("夜行動：フェイク側の襲撃は守りによって防がれた。");
+      }
     } else {
-      actionLog(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${selectedTarget.name} を見守った。`);
+      state.nightReport = { type: "none", victimId: null };
     }
 
     cpuNightActions(alive);
   }
 
   function cpuNightActions(alive) {
-    const killers = alive.filter(p => p.roleKey === "fakeGirl");
-
     for (const p of alive) {
       if (p.id === state.playerId) continue;
-      if (p.roleKey === "tracker") {
-        const t = rand(alive.filter(x => x.id !== p.id));
-        if (!t) continue;
-        const visitedId = state.nightActions[t.id];
-        if (visitedId !== undefined) t.lastTarget = visitedId;
+      if (p.roleKey === "tracker" && p.lastTarget !== null) {
+        const t = state.players[p.lastTarget];
+        if (t) t.suspicion += 0.6;
       }
-      if (p.roleKey === "baka") {
-        const t = state.players[state.nightActions[p.id]];
-        if (!t) continue;
-        const fakeTarget = rand(alive.filter(x => x.id !== t.id));
-        t.suspicion += 1.2;
-        actionLog(`夜行動：何者かが ${t.name} の情報をかく乱し、${fakeTarget ? fakeTarget.name : "不明"} への疑念を演出。`);
-      }
-      if (p.roleKey === "apprenticeSeer" || p.roleKey === "clumsySeer") {
-        const t = state.players[state.nightActions[p.id]];
-        if (t && ROLES[t.roleKey].faction === "フェイク") t.suspicion += 1;
-      }
-    }
-
-    if (killers.length > 0) {
-      const attackIds = killers.map(k => state.nightActions[k.id]).filter(v => v !== undefined);
-      const targetId = attackIds[0];
-      const v = targetId !== undefined ? state.players[targetId] : null;
-      const isProtected = v && Object.values(state.protectedTargets).includes(v.id);
-      if (v && v.alive && !isProtected) {
-        v.alive = false;
-        state.nightReport = { type: "eliminated", victimId: v.id };
-        actionLog(`夜行動：フェイク側の襲撃で ${v.name} が夜のあいだに脱落。`);
-      } else {
-        state.nightReport = { type: "blocked", victimId: null };
-        actionLog("夜行動：フェイク側の襲撃は守りによって防がれた。")
-      }
-    } else {
-      state.nightReport = { type: "none", victimId: null };
     }
   }
 
   function morningToDiscussion() {
+    if (state.phase !== "morning") return;
     state.phase = "discussion";
     const alive = alivePlayers().filter(p => p.id !== state.playerId);
     const suspicionTier = (value) => {
@@ -718,43 +727,26 @@
         high: ["発言の温度差が大きすぎる子がいる。今日はそこを見たい。", "噛み合ってない証言が増えてきたし、強めに精査しよう。"],
         mid: ["昨日の会話、少し噛み合ってないところあったよね。", "一回整理して、矛盾がある発言から見たいな。"],
         low: ["まずは情報を並べてから決めたいな。", "投票は慎重に、根拠ベースでいこ。"]
-      },
-      agree: {
-        high: ["その指摘わかる、私も同じところを強く怪しんでる。", "うん、その視点かなり大事。今日はそこ優先で。"],
-        mid: ["その意見にだいたい賛成。もう少しだけ材料を足したい。", "同調する。流れとしてはその方向が自然かも。"],
-        low: ["うん、その話は一理あるね。", "私はその案に乗ってもいいと思う。"]
       }
     };
-    const nightLine = (() => {
-      if (state.nightReport.type === "eliminated") {
-        const victim = state.players[state.nightReport.victimId];
-        return victim ? `${victim.name} が脱落した以上、襲撃筋と発言の矛盾を見たい。` : "朝の脱落情報を軸に整理しよう。";
-      }
-      if (state.nightReport.type === "blocked") return "襲撃失敗なら、守りを嫌がる発言をした子に注目したい。";
-      return "夜に大きな事件はなかったし、発言の整合を優先しよう。";
-    })();
-
     alive.forEach(p => {
       const tier = suspicionTier(p.suspicion);
       let category = "observe";
       if (p.lastTarget !== null) category = "tracker";
       else if (p.suspicion >= 3) category = "defense";
       else if (p.suspicion >= 1.5) category = "pressure";
-      else if (Math.random() < 0.28) category = "agree";
-
       let line = rand(templates[category][tier]);
       if (category === "tracker" && p.lastTarget !== null) {
         const targetName = state.players[p.lastTarget]?.name;
         if (targetName) line = line.replaceAll("{target}", targetName);
       }
-      const spice = tier === "high" ? "（語気つよめ）" : tier === "mid" ? "（少し警戒）" : "";
-      const addNightContext = Math.random() < 0.35 ? ` ${nightLine}` : "";
-      dialogueLog(`${p.name}：${line}${addNightContext}${spice}`);
+      dialogueLog(`${p.name}：${line}`);
     });
     draw();
   }
 
   function discussionToVote() {
+    if (state.phase !== "discussion") return;
     state.phase = "vote";
     state.players.forEach(p => p.voted = false);
     actionLog("投票フェーズ：追放したい相手を選んで「投票する」を押してね。");
@@ -779,8 +771,29 @@
       p.voted = true;
     }
 
-    let maxId = -1, max = -1;
-    for (const [id, c] of votes.entries()) if (c > max) { max = c; maxId = id; }
+    let max = -1;
+    let topIds = [];
+    for (const [id, c] of votes.entries()) {
+      if (c > max) {
+        max = c;
+        topIds = [id];
+      } else if (c === max) topIds.push(id);
+    }
+    if (topIds.length !== 1) {
+      actionLog(`投票結果：最多票が同数（${max}票）だったため本日は追放なし。`);
+      const winTie = checkWin();
+      if (winTie) {
+        state.phase = "end";
+        actionLog(winTie);
+        el("retryBtn").classList.remove("hidden");
+      } else {
+        state.day += 1;
+        state.phase = "night";
+      }
+      draw();
+      return;
+    }
+    const maxId = topIds[0];
 
     const ex = state.players[maxId];
     ex.alive = false;
@@ -811,7 +824,7 @@
     const pure = alive.filter(p => ROLES[p.roleKey].faction === "ピュア").length;
     const fake = alive.filter(p => ROLES[p.roleKey].faction === "フェイク").length;
     if (fake === 0) return "🎉 ピュア陣営の勝利！フェイクを全員追放したよ！";
-    if (fake >= pure) return "💀 フェイク陣営の勝利…村はだまされちゃった。";
+    if (fake >= pure) return "💀 フェイク陣営の勝利…生存者数が同数以上になった。";
     return null;
   }
 
