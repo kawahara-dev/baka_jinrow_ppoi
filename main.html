@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fake Bloom</title>
+  <style>
+    :root {
+      --bg: #fff7fc;
+      --panel: #ffffff;
+      --pink: #ff6fb3;
+      --pink-soft: #ffd7ec;
+      --violet: #b79bff;
+      --violet-soft: #efe8ff;
+      --text: #3c2d4d;
+      --danger: #ff5f7a;
+      --muted: #8a7ca8;
+      --ok: #64be8b;
+      --shadow: 0 10px 25px rgba(181, 146, 255, 0.18);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #fff7fc 0%, #f5eeff 100%);
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .screen {
+      background: var(--panel);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+      border: 1px solid #f4e9ff;
+    }
+
+    .hidden { display: none !important; }
+
+    h1, h2, h3, p { margin: 0; }
+
+    .title-screen {
+      display: grid;
+      place-items: center;
+      min-height: 60vh;
+      text-align: center;
+      gap: 18px;
+    }
+    .title-main {
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      color: var(--pink);
+      text-shadow: 0 4px 0 #ffe2f1;
+    }
+    .subtitle { color: var(--muted); }
+
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, filter 0.12s ease;
+    }
+    button:hover { transform: translateY(-1px); filter: brightness(1.03); }
+    button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
+    .primary { background: var(--pink); color: #fff; }
+    .secondary { background: var(--violet-soft); color: var(--text); }
+    .accent { background: var(--violet); color: #fff; }
+    .danger { background: var(--danger); color: #fff; }
+
+    .game-ui {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .stat {
+      background: linear-gradient(180deg, #fff 0%, #f9f4ff 100%);
+      border: 1px solid #f2e8ff;
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 0.92rem;
+    }
+    .phase-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--pink);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 10px;
+    }
+    .card {
+      border: 1px solid #eedfff;
+      border-radius: 14px;
+      padding: 10px;
+      background: #fff;
+      box-shadow: 0 5px 12px rgba(184, 155, 255, 0.1);
+      position: relative;
+      cursor: pointer;
+      min-height: 126px;
+    }
+    .card.dead { opacity: 0.45; filter: grayscale(0.3); }
+    .card.selected { outline: 3px solid var(--pink); }
+    .card.voted::after {
+      content: "投票済";
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #ffe9f4;
+      color: #9f3f73;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .avatar { font-size: 1.8rem; }
+    .name { font-weight: 700; margin-top: 4px; }
+    .meta { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+    .right-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: sticky;
+      top: 12px;
+    }
+    .log {
+      height: 460px;
+      overflow: auto;
+      background: #fcf9ff;
+      border: 1px solid #efddff;
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .log p { margin-bottom: 8px; }
+
+    .control-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .role-box {
+      margin-top: 8px;
+      background: #fff6fb;
+      border: 1px dashed #ffb6dc;
+      border-radius: 10px;
+      padding: 8px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    #ad-space {
+      margin-top: auto;
+      border: 2px dashed #e5d8ff;
+      border-radius: 10px;
+      min-height: 72px;
+      display: grid;
+      place-items: center;
+      color: #b8abc9;
+      font-size: 0.9rem;
+      background: rgba(255,255,255,0.65);
+    }
+
+    @media (max-width: 980px) {
+      .game-ui { grid-template-columns: 1fr; }
+      .right-panel { position: static; }
+      .cards { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <section id="titleScreen" class="screen title-screen">
+    <div>
+      <h1 class="title-main">Fake Bloom</h1>
+      <p class="subtitle">— おとぼけ魔女会議 —</p>
+    </div>
+    <p>かわいい村で正体隠匿バトル！夜の行動と昼の議論でフェイクを見抜こう。</p>
+    <div class="btn-row">
+      <button id="startBtn" class="primary">START</button>
+      <button id="howBtn" class="secondary">遊び方</button>
+    </div>
+    <div id="howTo" class="screen hidden" style="max-width:720px;text-align:left;">
+      <h3>遊び方</h3>
+      <p>・8人でスタート。あなた1人＋CPU7人。</p>
+      <p>・夜に能力を使い、朝の報告を確認。</p>
+      <p>・昼の発言をヒントに投票して追放。</p>
+      <p>・ピュア陣営はフェイク全員追放で勝利、フェイク陣営は同数以上で勝利。</p>
+      <p>・一部のピュア役職は「うっかり」で結果がズレることあり！</p>
+    </div>
+  </section>
+
+  <section id="roleScreen" class="screen hidden">
+    <h2>あなたの役職</h2>
+    <div id="playerRole" class="role-box"></div>
+    <div class="control-bar">
+      <button id="toGameBtn" class="primary">ゲーム開始</button>
+    </div>
+  </section>
+
+  <section id="gameScreen" class="screen hidden">
+    <div class="topbar">
+      <div class="stat"><div>Day</div><strong id="dayText">1</strong></div>
+      <div class="stat"><div>現在フェーズ</div><div id="phaseText" class="phase-title">夜行動</div></div>
+      <div class="stat"><div>あなたの陣営</div><strong id="factionText">-</strong></div>
+    </div>
+
+    <div class="game-ui">
+      <div>
+        <div id="cards" class="cards"></div>
+        <div class="control-bar">
+          <button id="actionBtn" class="accent">夜行動を実行</button>
+          <button id="voteBtn" class="danger hidden">投票する</button>
+          <button id="nextBtn" class="primary hidden">次へ</button>
+          <button id="retryBtn" class="secondary hidden">リトライ</button>
+        </div>
+      </div>
+      <aside class="right-panel">
+        <div class="screen" style="padding:10px;">
+          <h3>ログ</h3>
+          <div id="log" class="log"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <div id="ad-space">広告スペース</div>
+</div>
+
+<script>
+(() => {
+  const ROLES = {
+    apprenticeSeer: {name: "見習い占い師", faction: "ピュア", desc: "夜に1人の陣営を調べる。"},
+    guardian: {name: "守り手", faction: "ピュア", desc: "夜に1人を守る。"},
+    tracker: {name: "追跡係", faction: "ピュア", desc: "夜に1人が誰を訪ねたか分かる。"},
+    clumsySeer: {name: "うっかり占い師", faction: "ピュア", desc: "占い結果が時々ランダムにズレる。"},
+    villager: {name: "村ガール", faction: "ピュア", desc: "能力なし。議論と投票で戦う。"},
+    fakeGirl: {name: "フェイクガール", faction: "フェイク", desc: "夜に1人を脱落させる。"},
+    mimic: {name: "なりすまし", faction: "フェイク", desc: "調査でピュアに見えることがある。"}
+  };
+
+  const names = ["ルナ", "ミオ", "ユイ", "カノン", "スズ", "リリ", "ノア", "エマ"];
+  const icons = ["🌸", "🪄", "🧁", "🎀", "💫", "🫧", "🍬", "🌙"];
+
+  let state = {};
+
+  const el = id => document.getElementById(id);
+  const log = msg => {
+    const p = document.createElement("p");
+    p.textContent = msg;
+    el("log").appendChild(p);
+    el("log").scrollTop = el("log").scrollHeight;
+  };
+
+  function rand(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
+  function alivePlayers() { return state.players.filter(p => p.alive); }
+
+  function setupGame() {
+    const roleBag = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "villager", "fakeGirl", "mimic"]
+      .sort(() => Math.random() - 0.5);
+    state = {
+      day: 1,
+      phase: "night",
+      selectedId: null,
+      executed: null,
+      players: names.map((n, i) => ({
+        id: i,
+        name: n,
+        icon: icons[i],
+        roleKey: roleBag[i],
+        alive: true,
+        voted: false,
+        suspicion: 0,
+        lastTarget: null
+      })),
+      playerId: 0,
+      protectedId: null
+    };
+    showRole();
+    draw();
+    el("log").innerHTML = "";
+    log("ゲーム開始！夜行動からスタートだよ。");
+  }
+
+  function showRole() {
+    const me = state.players[state.playerId];
+    const r = ROLES[me.roleKey];
+    el("playerRole").innerHTML = `
+      <strong>${me.name} の役職：${r.name}</strong><br>
+      陣営：${r.faction}<br>
+      説明：${r.desc}
+    `;
+    el("factionText").textContent = r.faction;
+  }
+
+  function draw() {
+    el("dayText").textContent = state.day;
+    const phaseJa = {night:"夜行動", morning:"朝の報告", discussion:"昼の議論", vote:"投票", end:"勝敗"}[state.phase];
+    el("phaseText").textContent = phaseJa;
+
+    const cards = el("cards"); cards.innerHTML = "";
+    for (const p of state.players) {
+      const div = document.createElement("div");
+      div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""}`;
+      div.onclick = () => selectTarget(p.id);
+      div.innerHTML = `
+        <div class="avatar">${p.icon}</div>
+        <div class="name">${p.name}</div>
+        <div class="meta">${p.alive?"生存中":"脱落済み"}</div>
+      `;
+      cards.appendChild(div);
+    }
+
+    el("actionBtn").classList.toggle("hidden", state.phase !== "night");
+    el("voteBtn").classList.toggle("hidden", state.phase !== "vote");
+    el("nextBtn").classList.toggle("hidden", !["morning", "discussion"].includes(state.phase));
+  }
+
+  function selectTarget(id) {
+    if (state.phase === "night" || state.phase === "vote") {
+      if (!state.players[id].alive || id === state.playerId) return;
+      state.selectedId = id;
+      draw();
+    }
+  }
+
+  function runNight() {
+    const me = state.players[state.playerId];
+    const alive = alivePlayers();
+    const target = state.players[state.selectedId];
+    if (!target || !target.alive) return alert("対象を選んでね！");
+
+    state.protectedId = null;
+    for (const p of alive) p.lastTarget = null;
+
+    if (me.roleKey === "guardian") {
+      state.protectedId = target.id;
+      log(`あなたは ${target.name} を守った。`);
+    } else if (me.roleKey === "apprenticeSeer" || me.roleKey === "clumsySeer") {
+      let result = ROLES[target.roleKey].faction;
+      if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
+      if (me.roleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+      log(`あなたの調査：${target.name} は「${result}」に見えた。`);
+      if (result === "フェイク") target.suspicion += 2;
+    } else if (me.roleKey === "tracker") {
+      const visitTarget = rand(alive.filter(p => p.id !== target.id));
+      target.lastTarget = visitTarget.id;
+      log(`あなたの追跡：${target.name} は ${visitTarget.name} を訪れたようだ。`);
+      visitTarget.suspicion += 1;
+    } else {
+      log(`あなたは ${target.name} を見守った。`);
+    }
+
+    cpuNightActions();
+    state.phase = "morning";
+    state.selectedId = null;
+    draw();
+  }
+
+  function cpuNightActions() {
+    const alive = alivePlayers();
+    const killers = alive.filter(p => p.roleKey === "fakeGirl");
+    const fakeSide = alive.filter(p => ["fakeGirl", "mimic"].includes(p.roleKey));
+
+    for (const p of alive) {
+      if (p.id === state.playerId) continue;
+      if (p.roleKey === "guardian") state.protectedId = rand(alive.filter(x => x.id !== p.id)).id;
+      if (p.roleKey === "tracker") {
+        const t = rand(alive.filter(x => x.id !== p.id));
+        t.lastTarget = rand(alive.filter(x => x.id !== t.id)).id;
+      }
+      if (p.roleKey === "apprenticeSeer" || p.roleKey === "clumsySeer") {
+        const t = rand(alive.filter(x => x.id !== p.id));
+        if (ROLES[t.roleKey].faction === "フェイク") t.suspicion += 1;
+      }
+    }
+
+    if (killers.length > 0) {
+      const victims = alive.filter(p => !fakeSide.includes(p));
+      const v = rand(victims.length ? victims : alive.filter(p => p.roleKey !== "fakeGirl"));
+      if (v && v.id !== state.protectedId) {
+        v.alive = false;
+        log(`朝の報告：${v.name} が夜のあいだに脱落した。`);
+      } else {
+        log("朝の報告：昨夜の襲撃は守りによって防がれたみたい！");
+      }
+    }
+  }
+
+  function morningToDiscussion() {
+    state.phase = "discussion";
+    const alive = alivePlayers().filter(p => p.id !== state.playerId);
+    const lines = [
+      "うーん、直感だけど怪しい子がいる…",
+      "昨日の様子、ちょっと不自然だったかも。",
+      "私はピュアだよ！信じて！",
+      "結果がズレてる証言、逆に本物っぽい？",
+      "投票は慎重にいこう。",
+      "フェイクが紛れてるのは確実だよね。"
+    ];
+    alive.forEach(p => {
+      const spice = p.suspicion > 1 ? "（やや焦って見える）" : "";
+      log(`${p.name}：${rand(lines)}${spice}`);
+    });
+    draw();
+  }
+
+  function discussionToVote() {
+    state.phase = "vote";
+    state.players.forEach(p => p.voted = false);
+    log("投票フェーズ：追放したい相手を選んで「投票する」を押してね。");
+    draw();
+  }
+
+  function doVote() {
+    const target = state.players[state.selectedId];
+    if (!target || !target.alive) return alert("投票先を選んでね！");
+    const votes = new Map();
+    const addVote = (id) => votes.set(id, (votes.get(id) || 0) + 1);
+
+    addVote(target.id);
+    state.players[state.playerId].voted = true;
+
+    for (const p of alivePlayers()) {
+      if (p.id === state.playerId) continue;
+      const candidates = alivePlayers().filter(x => x.id !== p.id);
+      candidates.sort((a, b) => (b.suspicion + Math.random()) - (a.suspicion + Math.random()));
+      const pick = candidates[0];
+      addVote(pick.id);
+      p.voted = true;
+    }
+
+    let maxId = -1, max = -1;
+    for (const [id, c] of votes.entries()) if (c > max) { max = c; maxId = id; }
+
+    const ex = state.players[maxId];
+    ex.alive = false;
+    state.executed = ex.id;
+    log(`投票結果：${ex.name} が ${max} 票で追放された。`);
+    log(`${ex.name} の役職は「${ROLES[ex.roleKey].name}」だった。`);
+
+    const win = checkWin();
+    if (win) {
+      state.phase = "end";
+      log(win);
+      el("retryBtn").classList.remove("hidden");
+      el("actionBtn").classList.add("hidden");
+      el("voteBtn").classList.add("hidden");
+      el("nextBtn").classList.add("hidden");
+    } else {
+      state.day += 1;
+      state.phase = "night";
+      state.selectedId = null;
+      state.players.forEach(p => { p.voted = false; p.suspicion = Math.max(0, p.suspicion - 1); });
+      log(`--- Day ${state.day} の夜が始まる ---`);
+    }
+    draw();
+  }
+
+  function checkWin() {
+    const alive = alivePlayers();
+    const pure = alive.filter(p => ROLES[p.roleKey].faction === "ピュア").length;
+    const fake = alive.length - pure;
+    if (fake === 0) return "🎉 ピュア陣営の勝利！フェイクを全員追放したよ！";
+    if (fake >= pure) return "💀 フェイク陣営の勝利…村はだまされちゃった。";
+    return null;
+  }
+
+  el("startBtn").onclick = () => {
+    el("titleScreen").classList.add("hidden");
+    el("roleScreen").classList.remove("hidden");
+    setupGame();
+  };
+  el("howBtn").onclick = () => el("howTo").classList.toggle("hidden");
+  el("toGameBtn").onclick = () => {
+    el("roleScreen").classList.add("hidden");
+    el("gameScreen").classList.remove("hidden");
+  };
+  el("actionBtn").onclick = runNight;
+  el("voteBtn").onclick = doVote;
+  el("nextBtn").onclick = () => {
+    if (state.phase === "morning") morningToDiscussion();
+    else if (state.phase === "discussion") discussionToVote();
+  };
+  el("retryBtn").onclick = () => {
+    el("retryBtn").classList.add("hidden");
+    setupGame();
+    el("roleScreen").classList.remove("hidden");
+    el("gameScreen").classList.add("hidden");
+  };
+})();
+</script>
+</body>
+</html>
