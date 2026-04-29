@@ -106,6 +106,42 @@
       font-weight: 800;
       color: var(--pink);
     }
+    .player-role-card {
+      margin-bottom: 12px;
+      background: linear-gradient(145deg, #fff5fb 0%, #ffe4f2 100%);
+      border: 2px solid #ffb7db;
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 8px 18px rgba(255, 111, 179, 0.18);
+    }
+    .player-role-card summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      list-style: none;
+      cursor: pointer;
+      user-select: none;
+    }
+    .player-role-card summary::-webkit-details-marker { display: none; }
+    .player-role-heading {
+      font-weight: 800;
+      color: #b13f7e;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .player-role-meta {
+      margin-top: 8px;
+      display: grid;
+      gap: 6px;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+    .player-role-meta span {
+      color: #7d4a6c;
+      font-weight: 700;
+    }
 
     .cards {
       display: grid;
@@ -214,6 +250,16 @@
       .game-ui { grid-template-columns: 1fr; }
       .right-panel { position: static; }
       .cards { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .player-role-card { padding: 10px; }
+      .player-role-card:not([open]) { padding-bottom: 8px; }
+      .player-role-card summary::after {
+        content: "▼";
+        color: #b13f7e;
+        font-size: 0.8rem;
+      }
+      .player-role-card[open] summary::after {
+        content: "▲";
+      }
     }
   </style>
 </head>
@@ -253,6 +299,17 @@
       <div class="stat"><div>現在フェーズ</div><div id="phaseText" class="phase-title">夜行動</div></div>
       <div class="stat"><div>あなたの陣営</div><strong id="factionText">-</strong></div>
     </div>
+    <details id="inGameRoleCard" class="player-role-card" open>
+      <summary>
+        <span class="player-role-heading">🪪 あなたの役職カード</span>
+      </summary>
+      <div class="player-role-meta">
+        <div><span>役職名：</span><strong id="roleCardName">-</strong></div>
+        <div><span>陣営：</span><strong id="roleCardFaction">-</strong></div>
+        <div><span>今フェーズでやること：</span><span id="roleCardPhaseHint">-</span></div>
+        <div><span>注意点：</span><span id="roleCardRisk">-</span></div>
+      </div>
+    </details>
 
     <div class="game-ui">
       <div>
@@ -407,12 +464,32 @@
       注意：${r.riskNote}
     `;
     el("factionText").textContent = r.faction;
+    updateInGameRoleCard();
+  }
+
+  function getPhaseHint(role) {
+    if (state.phase === "night") return role.nightActionHint;
+    if (state.phase === "morning") return role.resultInterpretation;
+    if (state.phase === "vote") return "ログと投票履歴から、いちばん矛盾が大きい相手に投票しよ。";
+    if (state.phase === "discussion") return "朝の報告と発言のズレを比較して、投票候補を絞ろう。";
+    return "勝敗ログを見て、次ゲームの立ち回りメモを作ろう。";
+  }
+
+  function updateInGameRoleCard() {
+    if (!state.players || !state.players.length) return;
+    const me = state.players[state.playerId];
+    const role = ROLES[me.roleKey];
+    el("roleCardName").textContent = role.name;
+    el("roleCardFaction").textContent = role.faction;
+    el("roleCardPhaseHint").textContent = getPhaseHint(role);
+    el("roleCardRisk").textContent = role.riskNote;
   }
 
   function draw() {
     el("dayText").textContent = state.day;
     const phaseJa = {night:"夜行動", morning:"朝の報告", discussion:"昼の議論", vote:"投票", end:"勝敗"}[state.phase];
     el("phaseText").textContent = phaseJa;
+    updateInGameRoleCard();
 
     const cards = el("cards"); cards.innerHTML = "";
     for (const p of state.players) {
