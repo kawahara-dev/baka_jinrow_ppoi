@@ -342,14 +342,13 @@
     <details class="role-guide">
       <summary>役職一覧</summary>
       <ul>
+        <li><strong>村ガール（ピュア）</strong>：基本陣営。議論と投票が主軸。</li>
         <li><strong>見習い占い師（ピュア）</strong>：夜に1人の陣営を調べる。</li>
         <li><strong>守り手（ピュア）</strong>：夜に1人を守る。</li>
         <li><strong>追跡係（ピュア）</strong>：夜に1人が誰を訪ねたか分かる。</li>
-        <li><strong>うっかり占い師（ピュア）</strong>：占い結果が時々ランダムにズレる。</li>
-        <li><strong>村ガール（ピュア）</strong>：能力なし。議論と投票で戦う。</li>
-        <li><strong>フェイクガール（フェイク）</strong>：夜に1人を脱落させる。</li>
+        <li><strong>フェイクガール（フェイク）</strong>：夜に1人を脱落させる。今回は1〜2人で編成。</li>
         <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。</li>
-        <li><strong>バカ（フェイク）</strong>：夜にノイズを撒いて疑念をゆらす。</li>
+        <li><strong>バカ（フェイク）</strong>：夜にノイズを撒いて盤面を乱す。</li>
       </ul>
     </details>
 
@@ -447,8 +446,16 @@
   function alivePlayers() { return state.players.filter(p => p.alive); }
 
   function setupGame() {
-    const roleBag = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "fakeGirl", "mimic", "baka"]
-      .sort(() => Math.random() - 0.5);
+    const fakeCount = Math.random() < 0.5 ? 1 : 2;
+    const fakePool = ["fakeGirl", "mimic"].sort(() => Math.random() - 0.5);
+    const innocentPool = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager"];
+    const neutralPool = ["baka"];
+    const roleBag = [
+      ...fakePool.slice(0, fakeCount),
+      ...innocentPool,
+      ...neutralPool,
+      ...Array.from({ length: 8 - fakeCount - innocentPool.length - neutralPool.length }, () => "villager")
+    ].sort(() => Math.random() - 0.5);
     state = {
       day: 1,
       phase: "night",
@@ -596,7 +603,7 @@
         const noisyTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         registerAction(p.id, noisyTarget);
       } else if (p.roleKey === "fakeGirl") {
-        const fakeSide = alive.filter(x => ["fakeGirl", "mimic", "baka"].includes(x.roleKey));
+        const fakeSide = alive.filter(x => ["fakeGirl", "mimic"].includes(x.roleKey));
         const victims = alive.filter(x => !fakeSide.includes(x));
         const attackTarget = rand(victims.length ? victims : alive.filter(x => x.roleKey !== "fakeGirl"))?.id;
         registerAction(p.id, attackTarget);
@@ -802,7 +809,7 @@
   function checkWin() {
     const alive = alivePlayers();
     const pure = alive.filter(p => ROLES[p.roleKey].faction === "ピュア").length;
-    const fake = alive.length - pure;
+    const fake = alive.filter(p => ROLES[p.roleKey].faction === "フェイク").length;
     if (fake === 0) return "🎉 ピュア陣営の勝利！フェイクを全員追放したよ！";
     if (fake >= pure) return "💀 フェイク陣営の勝利…村はだまされちゃった。";
     return null;
