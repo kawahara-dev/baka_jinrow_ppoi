@@ -339,6 +339,7 @@
         <li><strong>村ガール（ピュア）</strong>：能力なし。議論と投票で戦う。</li>
         <li><strong>フェイクガール（フェイク）</strong>：夜に1人を脱落させる。</li>
         <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。</li>
+        <li><strong>バカ（フェイク）</strong>：夜にノイズを撒いて疑念をゆらす。</li>
       </ul>
     </div>
 
@@ -405,6 +406,14 @@
       nightActionHint: "占い対象に選ばれそうな動きを逆手に取って疑いを散らす。",
       resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。",
       riskNote: "runNightの仕様で target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。占い師の誤認を誘発できる。"
+    },
+    baka: {
+      name: "バカ",
+      faction: "フェイク",
+      desc: "わざと混乱を招く。夜にノイズを撒いて情報を歪ませる。",
+      nightActionHint: "怪しまれそうな相手を選び、調査ノイズや疑念操作で議論を崩す。",
+      resultInterpretation: "夜のログはあえて断片的。誰の情報がねじれたかを覚えておくと有利。",
+      riskNote: "ノイズを撒きすぎると自分の行動が不自然になり、昼の追及でバレやすい。"
     }
   };
 
@@ -425,7 +434,7 @@
   function alivePlayers() { return state.players.filter(p => p.alive); }
 
   function setupGame() {
-    const roleBag = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "villager", "fakeGirl", "mimic"]
+    const roleBag = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "fakeGirl", "mimic", "baka"]
       .sort(() => Math.random() - 0.5);
     state = {
       day: 1,
@@ -528,20 +537,25 @@
 
     if (me.roleKey === "guardian") {
       state.protectedId = target.id;
-      log(`あなたは ${target.name} を守った。`);
+      log(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${target.name} を守った。`);
     } else if (me.roleKey === "apprenticeSeer" || me.roleKey === "clumsySeer") {
       let result = ROLES[target.roleKey].faction;
       if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
       if (me.roleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
-      log(`あなたの調査：${target.name} は「${result}」に見えた。`);
+      log(`夜行動：あなた（${ROLES[me.roleKey].name}）が ${target.name} を調査 → 判定「${result}」。`);
       if (result === "フェイク") target.suspicion += 2;
     } else if (me.roleKey === "tracker") {
       const visitTarget = rand(alive.filter(p => p.id !== target.id));
       target.lastTarget = visitTarget.id;
-      log(`あなたの追跡：${target.name} は ${visitTarget.name} を訪れたようだ。`);
+      log(`夜行動：あなた（追跡係）が ${target.name} を追跡 → 訪問先は ${visitTarget.name}。`);
       visitTarget.suspicion += 1;
+    } else if (me.roleKey === "baka") {
+      const noisyResult = Math.random() < 0.5 ? "ピュア" : "フェイク";
+      target.suspicion += 1.5;
+      target.lastTarget = target.id;
+      log(`夜行動：あなた（バカ）が ${target.name} にノイズを注入 → 翌朝の判定は「${noisyResult}」っぽく見える。`);
     } else {
-      log(`あなたは ${target.name} を見守った。`);
+      log(`夜行動：あなた（${ROLES[me.roleKey].name}）は ${target.name} を見守った。`);
     }
 
     cpuNightActions();
@@ -553,7 +567,7 @@
   function cpuNightActions() {
     const alive = alivePlayers();
     const killers = alive.filter(p => p.roleKey === "fakeGirl");
-    const fakeSide = alive.filter(p => ["fakeGirl", "mimic"].includes(p.roleKey));
+    const fakeSide = alive.filter(p => ["fakeGirl", "mimic", "baka"].includes(p.roleKey));
 
     for (const p of alive) {
       if (p.id === state.playerId) continue;
@@ -561,6 +575,13 @@
       if (p.roleKey === "tracker") {
         const t = rand(alive.filter(x => x.id !== p.id));
         t.lastTarget = rand(alive.filter(x => x.id !== t.id)).id;
+      }
+      if (p.roleKey === "baka") {
+        const t = rand(alive.filter(x => x.id !== p.id));
+        const fakeTarget = rand(alive.filter(x => x.id !== t.id));
+        t.suspicion += 1.2;
+        t.lastTarget = fakeTarget ? fakeTarget.id : null;
+        log(`夜行動：${p.name}（バカ）が ${t.name} の情報をかく乱し、${fakeTarget ? fakeTarget.name : "不明"} への疑念を演出。`);
       }
       if (p.roleKey === "apprenticeSeer" || p.roleKey === "clumsySeer") {
         const t = rand(alive.filter(x => x.id !== p.id));
@@ -574,10 +595,10 @@
       if (v && v.id !== state.protectedId) {
         v.alive = false;
         state.nightReport = { type: "eliminated", victimId: v.id };
-        log(`朝の報告：${v.name} が夜のあいだに脱落した。`);
+        log(`夜行動：フェイク側の襲撃で ${v.name} が夜のあいだに脱落。`);
       } else {
         state.nightReport = { type: "blocked", victimId: null };
-        log("朝の報告：昨夜の襲撃は守りによって防がれたみたい！");
+        log("夜行動：フェイク側の襲撃は守りによって防がれた。")
       }
     } else {
       state.nightReport = { type: "none", victimId: null };
