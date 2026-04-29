@@ -350,7 +350,8 @@
         lastTarget: null
       })),
       playerId: 0,
-      protectedId: null
+      protectedId: null,
+      nightReport: { type: "none", victimId: null }
     };
     showRole();
     draw();
@@ -459,27 +460,77 @@
       const v = rand(victims.length ? victims : alive.filter(p => p.roleKey !== "fakeGirl"));
       if (v && v.id !== state.protectedId) {
         v.alive = false;
+        state.nightReport = { type: "eliminated", victimId: v.id };
         log(`朝の報告：${v.name} が夜のあいだに脱落した。`);
       } else {
+        state.nightReport = { type: "blocked", victimId: null };
         log("朝の報告：昨夜の襲撃は守りによって防がれたみたい！");
       }
+    } else {
+      state.nightReport = { type: "none", victimId: null };
     }
   }
 
   function morningToDiscussion() {
     state.phase = "discussion";
     const alive = alivePlayers().filter(p => p.id !== state.playerId);
-    const lines = [
-      "うーん、直感だけど怪しい子がいる…",
-      "昨日の様子、ちょっと不自然だったかも。",
-      "私はピュアだよ！信じて！",
-      "結果がズレてる証言、逆に本物っぽい？",
-      "投票は慎重にいこう。",
-      "フェイクが紛れてるのは確実だよね。"
-    ];
+    const suspicionTier = (value) => {
+      if (value >= 3) return "high";
+      if (value >= 1) return "mid";
+      return "low";
+    };
+    const templates = {
+      defense: {
+        high: ["ち、違うってば…！私ばっかり疑うのは変じゃない？", "疑われるのしんどい…でも私、ほんとにピュアだよ！"],
+        mid: ["私のこと疑ってるなら、理由をちゃんと聞かせてほしいな。", "今の流れ、私に寄りすぎじゃない？落ち着いて見直そ。"],
+        low: ["私は白寄りだと思ってる。変な動きしてないはず。", "必要なら私への質問ぜんぶ答えるよ。"]
+      },
+      pressure: {
+        high: ["正直、もう見過ごせない。今日は強く追うべき。", "ここで逃がしたら危ない。投票先を絞ろう。"],
+        mid: ["ちょっと怪しい動きあったし、発言を詰めたい。", "うーん、違和感あるから今日は注目したいな。"],
+        low: ["一応気になる点はあるし、軽く確認していい？", "断定はしないけど、様子は見ておきたい。"]
+      },
+      tracker: {
+        high: ["昨夜の動き、かなり黒く見える。{target} に寄ってたのが気になる。", "追跡先が {target} だったの、偶然で片づけにくいよね。"],
+        mid: ["昨夜の行動で言うと、{target} に触れてたのは情報として覚えておきたい。", "{target} 周りの動きが見えたから、そこから整理しよ。"],
+        low: ["昨夜は {target} に動きがあったみたい。参考情報として置いとくね。", "{target} への接触が見えたよ。すぐ断定はしないけど。"]
+      },
+      observe: {
+        high: ["発言の温度差が大きすぎる子がいる。今日はそこを見たい。", "噛み合ってない証言が増えてきたし、強めに精査しよう。"],
+        mid: ["昨日の会話、少し噛み合ってないところあったよね。", "一回整理して、矛盾がある発言から見たいな。"],
+        low: ["まずは情報を並べてから決めたいな。", "投票は慎重に、根拠ベースでいこ。"]
+      },
+      agree: {
+        high: ["その指摘わかる、私も同じところを強く怪しんでる。", "うん、その視点かなり大事。今日はそこ優先で。"],
+        mid: ["その意見にだいたい賛成。もう少しだけ材料を足したい。", "同調する。流れとしてはその方向が自然かも。"],
+        low: ["うん、その話は一理あるね。", "私はその案に乗ってもいいと思う。"]
+      }
+    };
+    const nightLine = (() => {
+      if (state.nightReport.type === "eliminated") {
+        const victim = state.players[state.nightReport.victimId];
+        return victim ? `${victim.name} が脱落した以上、襲撃筋と発言の矛盾を見たい。` : "朝の脱落情報を軸に整理しよう。";
+      }
+      if (state.nightReport.type === "blocked") return "襲撃失敗なら、守りを嫌がる発言をした子に注目したい。";
+      return "夜に大きな事件はなかったし、発言の整合を優先しよう。";
+    })();
+
     alive.forEach(p => {
-      const spice = p.suspicion > 1 ? "（やや焦って見える）" : "";
-      log(`${p.name}：${rand(lines)}${spice}`);
+      const tier = suspicionTier(p.suspicion);
+      let category = "observe";
+      if (p.lastTarget !== null) category = "tracker";
+      else if (p.suspicion >= 3) category = "defense";
+      else if (p.suspicion >= 1.5) category = "pressure";
+      else if (Math.random() < 0.28) category = "agree";
+
+      let line = rand(templates[category][tier]);
+      if (category === "tracker" && p.lastTarget !== null) {
+        const targetName = state.players[p.lastTarget]?.name;
+        if (targetName) line = line.replaceAll("{target}", targetName);
+      }
+      const spice = tier === "high" ? "（語気つよめ）" : tier === "mid" ? "（少し警戒）" : "";
+      const addNightContext = Math.random() < 0.35 ? ` ${nightLine}` : "";
+      log(`${p.name}：${line}${addNightContext}${spice}`);
     });
     draw();
   }
