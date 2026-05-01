@@ -427,11 +427,11 @@
     baka: {
       name: "バカ",
       faction: "ピュア",
-      desc: "わざと混乱を招く。夜にノイズを撒いて情報を歪ませる（ピュア陣営）。",
-      nightActionHint: "怪しまれそうな相手を選び、調査ノイズや疑念操作で議論を崩す。",
-      resultInterpretation: "夜のログはあえて断片的。誰の情報がねじれたかを覚えておくと有利。",
-      riskNote: "ノイズを撒きすぎると自分の行動が不自然になり、昼の追及でバレやすい。",
-      nightAction: { type: "disturb", priority: 25, allowSelf: false }
+      desc: "見た目だけ別のピュア役職として振る舞うトリッキー枠。表示された役職の夜能力で処理される。",
+      nightActionHint: "割り当てられた偽表示役職として夜行動しよう（能力なしのこともある）。",
+      resultInterpretation: "夜の処理は偽表示役職ベース。脱落時には実役職『バカ』が公開される。",
+      riskNote: "表示と実体のギャップが読まれると疑われやすい。行動ログの整合性を意識して。",
+      nightAction: null
     }
   };
 
@@ -445,6 +445,7 @@
 
   const names = ["ルナ", "ミオ", "ユイ", "カノン", "スズ", "リリ", "ノア", "エマ"];
   const icons = ["🌸", "🪄", "🧁", "🎀", "💫", "🫧", "🍬", "🌙"];
+  const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager"];
 
   let state = {};
 
@@ -492,11 +493,15 @@
 
   function rand(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
   function alivePlayers() { return state.players.filter(p => p.alive); }
+  function getEffectiveRoleKey(player) {
+    if (player.roleKey === "baka") return player.fakeDisplayRoleKey || "villager";
+    return player.roleKey;
+  }
 
   function setupGame() {
     const fakeCount = Math.random() < 0.5 ? 1 : 2;
     const fakePool = ["fakeGirl", ...(Math.random() < 0.5 ? ["mimic"] : [])].sort(() => Math.random() - 0.5);
-    const innocentPool = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager"];
+    const innocentPool = [...INNOCENT_ROLE_KEYS];
     const neutralPool = ["baka"];
     const roleBag = [
       ...fakePool.slice(0, fakeCount),
@@ -517,7 +522,8 @@
         alive: true,
         voted: false,
         suspicion: 0,
-        lastTarget: null
+        lastTarget: null,
+        fakeDisplayRoleKey: roleBag[i] === "baka" ? rand(INNOCENT_ROLE_KEYS) : null
       })),
       playerId: Math.floor(Math.random() * names.length),
       protectedTargets: new Set(),
@@ -534,10 +540,12 @@
   function showRole() {
     const me = state.players[state.playerId];
     const r = ROLES[me.roleKey];
+    const fakeRoleName = me.roleKey === "baka" ? ROLES[me.fakeDisplayRoleKey]?.name : null;
     el("playerRole").innerHTML = `
       <strong>${me.name} の役職：${r.name}</strong><br>
       陣営：${r.faction}<br>
       説明：${r.desc}<br>
+      ${fakeRoleName ? `偽表示ロール：${fakeRoleName}<br>` : ""}
       夜の推奨行動：${r.nightActionHint}<br>
       結果の見方：${r.resultInterpretation}<br>
       注意：${r.riskNote}<br>
@@ -563,7 +571,14 @@
     return `フェイク仲間：${getFakeAlliesText()}`;
   }
   function getPhaseHint(role) {
-    if (state.phase === "night") return role.nightActionHint;
+    if (state.phase === "night") {
+      const me = state.players[state.playerId];
+      if (me.roleKey === "baka") {
+        const fakeRole = ROLES[me.fakeDisplayRoleKey];
+        if (fakeRole) return `偽表示ロール「${fakeRole.name}」として行動：${fakeRole.nightActionHint}`;
+      }
+      return role.nightActionHint;
+    }
     if (state.phase === "morning") return "朝の報告を整理して、発言方針を決めよう。";
     if (state.phase === "vote") return "ログと投票履歴から、いちばん矛盾が大きい相手に投票しよ。";
     if (state.phase === "discussion") return "朝の報告と発言のズレを比較して、投票候補を絞ろう。";
@@ -646,22 +661,20 @@
     };
 
     for (const p of alive) {
-      if (!ROLES[p.roleKey].nightAction) continue;
-      if (p.roleKey === "guardian") {
+      const effectiveRoleKey = getEffectiveRoleKey(p);
+      if (!ROLES[effectiveRoleKey].nightAction) continue;
+      if (effectiveRoleKey === "guardian") {
         const guardTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         if (guardTarget !== undefined) {
           registerAction(p.id, guardTarget);
           state.protectedTargets.add(guardTarget);
         }
-      } else if (p.roleKey === "apprenticeSeer" || p.roleKey === "clumsySeer") {
+      } else if (effectiveRoleKey === "apprenticeSeer" || effectiveRoleKey === "clumsySeer") {
         const inspectTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         registerAction(p.id, inspectTarget);
-      } else if (p.roleKey === "tracker") {
+      } else if (effectiveRoleKey === "tracker") {
         const trackTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         registerAction(p.id, trackTarget);
-      } else if (p.roleKey === "baka") {
-        const noisyTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
-        registerAction(p.id, noisyTarget);
       }
     }
 
@@ -686,31 +699,28 @@
     const actionOrder = Object.entries(state.nightActions)
       .map(([actorId, targetId]) => ({ actor: state.players[Number(actorId)], target: state.players[targetId] }))
       .filter(x => x.actor && x.target && x.actor.alive && x.target.alive)
-      .sort((a, b) => ROLES[a.actor.roleKey].nightAction.priority - ROLES[b.actor.roleKey].nightAction.priority);
+      .sort((a, b) => ROLES[getEffectiveRoleKey(a.actor)].nightAction.priority - ROLES[getEffectiveRoleKey(b.actor)].nightAction.priority);
 
     let attackTargetId = null;
     for (const step of actionOrder) {
       const actor = step.actor;
       const target = step.target;
-      const actionType = ROLES[actor.roleKey].nightAction?.type;
+      const effectiveRoleKey = getEffectiveRoleKey(actor);
+      const actionType = ROLES[effectiveRoleKey].nightAction?.type;
       if (actionType === "protect") {
         state.protectedTargets.add(target.id);
-        if (actor.id === me.id) actionLog(formatActionLog("protect", { actor: ROLES[actor.roleKey].name, target: target.name }));
+        if (actor.id === me.id) actionLog(formatActionLog("protect", { actor: ROLES[effectiveRoleKey].name, target: target.name }));
       } else if (actionType === "investigate") {
         let result = ROLES[target.roleKey].faction;
         if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
-        if (actor.roleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
-        if (actor.id === me.id) actionLog(formatActionLog("investigate", { actor: ROLES[actor.roleKey].name, target: target.name, result }));
+        if (effectiveRoleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+        if (actor.id === me.id) actionLog(formatActionLog("investigate", { actor: ROLES[effectiveRoleKey].name, target: target.name, result }));
         if (actor.id !== me.id && result === "フェイク") target.suspicion += 1;
-      } else if (actionType === "disturb") {
-        target.suspicion += 1.2;
-        if (actor.id === me.id) actionLog(formatActionLog("disturb", { actor: "バカ", target: target.name }));
-        else actionLog(formatActionLog("disturb", { actor: ROLES[actor.roleKey].name, target: target.name }));
       } else if (actionType === "track") {
         const visitId = state.nightActions[target.id];
         const visitTarget = visitId !== undefined ? state.players[visitId] : null;
         if (visitTarget) target.lastTarget = visitTarget.id;
-        if (actor.id === me.id) actionLog(formatActionLog("track", { actor: "追跡係", target: target.name, visitTarget: visitTarget?.name }));
+        if (actor.id === me.id) actionLog(formatActionLog("track", { actor: ROLES[effectiveRoleKey].name, target: target.name, visitTarget: visitTarget?.name }));
       } else if (actionType === "attack") {
         attackTargetId = target.id;
       }
