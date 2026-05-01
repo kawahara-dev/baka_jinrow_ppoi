@@ -594,10 +594,11 @@
       const div = document.createElement("div");
       div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""}`;
       div.onclick = () => selectTarget(p.id);
+      const revealedRole = p.alive ? "？" : ROLES[p.roleKey].name;
       div.innerHTML = `
         <div class="avatar">${p.icon}</div>
         <div class="name">${p.name}</div>
-        <div class="meta">役職：？</div>
+        <div class="meta">役職：${revealedRole}</div>
         <div class="meta">${p.alive?"生存中":"脱落済み"}</div>
       `;
       cards.appendChild(div);
