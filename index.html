@@ -541,7 +541,7 @@
       夜の推奨行動：${r.nightActionHint}<br>
       結果の見方：${r.resultInterpretation}<br>
       注意：${r.riskNote}<br>
-      フェイク仲間：${getFakeAlliesText()}
+      ${getAlliesLineForRole()}
     `;
     el("factionText").textContent = r.faction;
     updateInGameRoleCard();
@@ -550,12 +550,18 @@
 
   function getFakeAlliesText() {
     const me = state.players[state.playerId];
-    if (!me || ROLES[me.roleKey].faction !== "フェイク") return "なし";
+    if (!me || ROLES[me.roleKey].faction !== "フェイク") return "";
     const allies = state.players.filter(p => p.id !== me.id && ROLES[p.roleKey].faction === "フェイク");
     if (!allies.length) return "なし";
     return allies.map(p => p.name).join("、");
   }
 
+
+  function getAlliesLineForRole() {
+    const me = state.players[state.playerId];
+    if (!me || ROLES[me.roleKey].faction !== "フェイク") return "";
+    return `フェイク仲間：${getFakeAlliesText()}`;
+  }
   function getPhaseHint(role) {
     if (state.phase === "night") return role.nightActionHint;
     if (state.phase === "morning") return "朝の報告を整理して、発言方針を決めよう。";
@@ -572,7 +578,10 @@
     el("roleCardFaction").textContent = role.faction;
     el("roleCardPhaseHint").textContent = getPhaseHint(role);
     el("roleCardRisk").textContent = role.riskNote;
-    el("roleCardAllies").textContent = getFakeAlliesText();
+    const alliesText = getFakeAlliesText();
+    const alliesRow = el("roleCardAllies").closest("div");
+    el("roleCardAllies").textContent = alliesText;
+    alliesRow.classList.toggle("hidden", !alliesText);
   }
 
   function draw() {
