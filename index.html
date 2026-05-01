@@ -347,8 +347,8 @@
         <li><strong>見習い占い師（ピュア）</strong>：夜に1人の陣営を調べる。</li>
         <li><strong>守り手（ピュア）</strong>：夜に1人を守る（防御は襲撃より先に解決）。</li>
         <li><strong>追跡係（ピュア）</strong>：夜に1人が誰を訪ねたか分かる。</li>
-        <li><strong>フェイクガール（フェイク）</strong>：夜に1人を脱落させる。今回は1〜2人で編成。</li>
-        <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。</li>
+        <li><strong>フェイクガール（フェイク）</strong>：フェイク陣営は夜に1人を脱落させる。今回は必ず1人は編成。</li>
+        <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。襲撃はフェイク陣営で1回。</li>
         <li><strong>バカ（ピュア）</strong>：夜にノイズを撒いて盤面を乱す。正体は脱落時まで公開されない。</li>
       </ul>
     </details>
@@ -409,19 +409,19 @@
     fakeGirl: {
       name: "フェイクガール",
       faction: "フェイク",
-      desc: "夜に1人を脱落させる。",
-      nightActionHint: "ピュア陣営を優先して人数有利を狙う。",
+      desc: "フェイク陣営として夜に1人を脱落させる。",
+      nightActionHint: "仲間と相談した想定で、フェイク陣営として襲撃先を1人に絞る。",
       resultInterpretation: "襲撃が通れば盤面有利、守られると計画を立て直し。",
-      riskNote: "守り手の防衛先に当たると襲撃失敗になる。",
+      riskNote: "守り手の防衛先に当たると襲撃失敗。襲撃は陣営で1回だけ。",
       nightAction: { type: "attack", priority: 40, allowSelf: false }
     },
     mimic: {
       name: "なりすまし",
       faction: "フェイク",
-      desc: "調査でピュアに見えることがある。",
-      nightActionHint: "占い対象に選ばれそうな動きを逆手に取って疑いを散らす。",
+      desc: "調査でピュアに見えることがある。フェイク陣営の襲撃方針にも参加。",
+      nightActionHint: "占いをいなしつつ、フェイク陣営の襲撃先相談に乗る立ち回り。",
       resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。",
-      riskNote: "target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。占い師の誤認を誘発できる。",
+      riskNote: "target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。襲撃実行はフェイク陣営で1回だけ。",
       nightAction: null
     },
     baka: {
@@ -495,7 +495,7 @@
 
   function setupGame() {
     const fakeCount = Math.random() < 0.5 ? 1 : 2;
-    const fakePool = ["fakeGirl", "mimic"].sort(() => Math.random() - 0.5);
+    const fakePool = ["fakeGirl", ...(Math.random() < 0.5 ? ["mimic"] : [])].sort(() => Math.random() - 0.5);
     const innocentPool = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager"];
     const neutralPool = ["baka"];
     const roleBag = [
@@ -661,12 +661,16 @@
       } else if (p.roleKey === "baka") {
         const noisyTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         registerAction(p.id, noisyTarget);
-      } else if (p.roleKey === "fakeGirl") {
-        const fakeSide = alive.filter(x => ["fakeGirl", "mimic"].includes(x.roleKey));
-        const victims = alive.filter(x => !fakeSide.includes(x));
-        const attackTarget = rand(victims.length ? victims : alive.filter(x => x.roleKey !== "fakeGirl"))?.id;
-        registerAction(p.id, attackTarget);
       }
+    }
+
+    const fakeSide = alive.filter(x => ["fakeGirl", "mimic"].includes(x.roleKey));
+    if (fakeSide.length) {
+      const fakeActor = rand(fakeSide);
+      const victims = alive.filter(x => !fakeSide.includes(x));
+      const fallbackVictims = alive.filter(x => x.id !== fakeActor.id);
+      const attackTarget = rand(victims.length ? victims : fallbackVictims)?.id;
+      registerAction(fakeActor.id, attackTarget);
     }
 
     state.nightActions = nightActions;
@@ -683,7 +687,7 @@
       .filter(x => x.actor && x.target && x.actor.alive && x.target.alive)
       .sort((a, b) => ROLES[a.actor.roleKey].nightAction.priority - ROLES[b.actor.roleKey].nightAction.priority);
 
-    const attacks = [];
+    let attackTargetId = null;
     for (const step of actionOrder) {
       const actor = step.actor;
       const target = step.target;
@@ -707,12 +711,12 @@
         if (visitTarget) target.lastTarget = visitTarget.id;
         if (actor.id === me.id) actionLog(formatActionLog("track", { actor: "追跡係", target: target.name, visitTarget: visitTarget?.name }));
       } else if (actionType === "attack") {
-        attacks.push(target.id);
+        attackTargetId = target.id;
       }
     }
 
-    const targetId = attacks[0];
-    if (targetId !== undefined) {
+    const targetId = attackTargetId;
+    if (targetId !== null && targetId !== undefined) {
       const victim = state.players[targetId];
       if (victim && victim.alive && !state.protectedTargets.has(victim.id)) {
         victim.alive = false;
