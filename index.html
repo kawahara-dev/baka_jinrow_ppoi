@@ -700,7 +700,7 @@
       } else if (actionType === "disturb") {
         target.suspicion += 1.2;
         if (actor.id === me.id) actionLog(formatActionLog("disturb", { actor: "バカ", target: target.name }));
-        else actionLog(formatActionLog("disturb", { actor: "何者か", target: target.name }));
+        else actionLog(formatActionLog("disturb", { actor: ROLES[actor.roleKey].name, target: target.name }));
       } else if (actionType === "track") {
         const visitId = state.nightActions[target.id];
         const visitTarget = visitId !== undefined ? state.players[visitId] : null;
