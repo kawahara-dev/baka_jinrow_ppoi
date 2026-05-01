@@ -500,15 +500,22 @@
 
   function setupGame() {
     const fakeCount = Math.random() < 0.5 ? 1 : 2;
-    const fakePool = ["fakeGirl", ...(Math.random() < 0.5 ? ["mimic"] : [])].sort(() => Math.random() - 0.5);
+    const fixedFakeRoles = ["fakeGirl", "mimic"];
+    const fakePool = fakeCount === 1
+      ? [fixedFakeRoles[Math.floor(Math.random() * fixedFakeRoles.length)]]
+      : [...fixedFakeRoles];
     const innocentPool = [...INNOCENT_ROLE_KEYS];
     const neutralPool = ["baka"];
     const roleBag = [
-      ...fakePool.slice(0, fakeCount),
+      ...fakePool,
       ...innocentPool,
       ...neutralPool,
       ...Array.from({ length: 8 - fakeCount - innocentPool.length - neutralPool.length }, () => "villager")
     ].sort(() => Math.random() - 0.5);
+    const assignedFakeCount = roleBag.filter(roleKey => fixedFakeRoles.includes(roleKey)).length;
+    if (assignedFakeCount !== fakeCount) {
+      console.warn(`[setupGame] フェイク人数ミスマッチ: expected=${fakeCount}, actual=${assignedFakeCount}`, roleBag);
+    }
     state = {
       day: 1,
       phase: "night",
