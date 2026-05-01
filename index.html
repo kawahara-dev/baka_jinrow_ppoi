@@ -588,6 +588,7 @@
       div.innerHTML = `
         <div class="avatar">${p.icon}</div>
         <div class="name">${p.name}</div>
+        <div class="meta">役職：${ROLES[p.roleKey].name}</div>
         <div class="meta">${p.alive?"生存中":"脱落済み"}</div>
       `;
       cards.appendChild(div);
