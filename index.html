@@ -422,7 +422,7 @@
       nightActionHint: "占いをいなしつつ、フェイク陣営の襲撃先相談に乗る立ち回り。",
       resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。",
       riskNote: "target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。襲撃実行はフェイク陣営で1回だけ。",
-      nightAction: null
+      nightAction: { type: "attack", priority: 40, allowSelf: false }
     },
     baka: {
       name: "バカ",
@@ -687,10 +687,21 @@
 
     const fakeSide = alive.filter(x => ["fakeGirl", "mimic"].includes(x.roleKey));
     if (fakeSide.length) {
-      const fakeActor = rand(fakeSide);
       const victims = alive.filter(x => !fakeSide.includes(x));
-      const fallbackVictims = alive.filter(x => x.id !== fakeActor.id);
-      const attackTarget = rand(victims.length ? victims : fallbackVictims)?.id;
+      let fakeActor;
+      let attackTarget;
+      if (fakeSide.includes(me)) {
+        // The human player leads the faction attack: use their selected target
+        // (fall back to a random victim if they picked a fellow fake member).
+        fakeActor = me;
+        attackTarget = victims.some(x => x.id === target.id)
+          ? target.id
+          : rand(victims)?.id;
+      } else {
+        fakeActor = rand(fakeSide);
+        const fallbackVictims = alive.filter(x => x.id !== fakeActor.id);
+        attackTarget = rand(victims.length ? victims : fallbackVictims)?.id;
+      }
       registerAction(fakeActor.id, attackTarget);
     }
 
@@ -706,7 +717,7 @@
     const actionOrder = Object.entries(state.nightActions)
       .map(([actorId, targetId]) => ({ actor: state.players[Number(actorId)], target: state.players[targetId] }))
       .filter(x => x.actor && x.target && x.actor.alive && x.target.alive)
-      .sort((a, b) => ROLES[getEffectiveRoleKey(a.actor)].nightAction.priority - ROLES[getEffectiveRoleKey(b.actor)].nightAction.priority);
+      .sort((a, b) => (ROLES[getEffectiveRoleKey(a.actor)].nightAction?.priority ?? 40) - (ROLES[getEffectiveRoleKey(b.actor)].nightAction?.priority ?? 40));
 
     let attackTargetId = null;
     for (const step of actionOrder) {
