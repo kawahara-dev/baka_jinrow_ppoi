@@ -1018,6 +1018,7 @@
 
   function resolveNightActions(me, selectedTarget, alive) {
     state.bombReport = { explodedVictims: [], fizzled: false };
+    state.lastInvestigation = {};
     const actionTypeOf = (actor) => state.nightActionTypes?.[actor.id] || ROLES[getEffectiveRoleKey(actor)].nightAction?.type;
     const priorityOf = (actor) => {
       const t = actionTypeOf(actor);
@@ -1079,6 +1080,7 @@
           if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
           if (effectiveRoleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
         }
+        state.lastInvestigation[actor.id] = { targetId: target.id, result };
         if (actor.id === me.id) actionLog(formatActionLog("investigate", { actor: ROLES[effectiveRoleKey].name, target: target.name, result }));
         if (actor.id !== me.id && result === "フェイク") target.suspicion += 1;
         if (actor.id !== me.id && result === "ニュートラル") target.suspicion += 0.5;
@@ -1152,48 +1154,80 @@
   function morningToDiscussion() {
     if (state.phase !== "morning") return;
     state.phase = "discussion";
-    const alive = alivePlayers().filter(p => p.id !== state.playerId);
+    draw();
+    const target = state.players[state.nightReport?.targetId];
+    const templates = {
+      defense: {
+        low: ["{target} は怪しくないと思うけどな","{target} は普通にしてたよ","{target} を疑う理由、まだ薄くない？","{target} は昨夜も静かだったよ"],
+        mid: ["{target} は少し気になる","{target} の動き、目立たなかったのが逆に気になる","{target} は話題に上がりやすいね","{target} は様子見かな"],
+        high: ["{target} はかなり怪しい","{target} が黒っぽい","{target} を今日落とすべきかも","{target} の票の動きが不自然だよ"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫そう","{target} に圧をかけるのは早いよ","{target} は様子見したい","{target} は今日じゃなくていいと思う"],
+        mid: ["{target} に説明してほしい","{target} は何か知ってそう","{target} は情報出して","{target} の昨夜の動き、聞きたいな"],
+        high: ["{target}、昨夜何してた？正直に言って","{target} は白じゃない気がする","{target} を信じきれない","{target}、言い訳が弱いと思う"]
+      },
+      tracker: {
+        low: ["私、昨夜は動いてないよ。誰も見なかった","追跡では何も掴めなかった","昨夜は静かだったな"],
+        mid: ["何も見なかったけど、空気は怪しい","足跡は薄かったけど気になる","手がかりは少ないまま"],
+        high: ["昨夜の動きは怪しさ満点。誰か絶対動いてる","痕跡が残ってた。これは普通じゃない","昨夜、誰か確実に動いてる"]
+      },
+      observe: {
+        low: ["まだ情報が少ないね","誰がフェイクか全然わからない","今日は様子見でいいかも","初手は慎重にいきたいね","まずは話を聞こう"],
+        mid: ["そろそろ絞っていきたい","このままだとフェイクに有利だよ","票を合わせるのが大事だね","昨夜の結果がヒントになるはず"],
+        high: ["もう決めないと危ない","フェイクはこの中にいる。絶対","外したら終わりが見えるよ","情報は出揃ってきた。あとは決断だけ"]
+      },
+      claimFake: ["占いの結果なんだけど…{target} がフェイクだったよ","私の占いでは {target} は黒。信じてほしいな","言いにくいけど、{target} がフェイク判定だった","{target}、昨夜調べたらフェイクだったんだ"],
+      claimWhite: ["{target} は私の占いではピュアだったよ","{target} は白判定。疑うなら他を見て","占いでは {target} はピュア。ひとまず安心かな"],
+      claimNeutral: ["{target}、どっちの陣営でもなさそう。ニュートラル判定だった","占いの反応が変だった。{target} は第三勢力かも","{target} はボマーの可能性。近づかないで"],
+      bomb: ["爆弾とか怖すぎる…ボマーがいるってことだよね","昨夜の爆発、ボマーの仕業だ…","爆弾は次の夜に爆発するらしい。今日仕掛けられたら明日…","ボマーを早く見つけないと全員危ない"],
+      guardian: ["（守れてよかった…！）","昨夜の襲撃が防げたのは大きいね","誰かが守り切ったんだね、ナイスガード"],
+      endgame: ["もう人数が少ない…外したら終わりだよ","ここからは一票が重い。慎重にいこ","残り少ないし、情報は全部出して考えよ"]
+    };
     const suspicionTier = (value) => {
-      if (value >= 3) return "high";
+      if (value >= 2.5) return "high";
       if (value >= 1) return "mid";
       return "low";
     };
-    const templates = {
-      defense: {
-        high: ["ち、違うってば…！私ばっかり疑うのは変じゃない？", "疑われるのしんどい…でも私、ほんとにピュアだよ！"],
-        mid: ["私のこと疑ってるなら、理由をちゃんと聞かせてほしいな。", "今の流れ、私に寄りすぎじゃない？落ち着いて見直そ。"],
-        low: ["私は白寄りだと思ってる。変な動きしてないはず。", "必要なら私への質問ぜんぶ答えるよ。"]
-      },
-      pressure: {
-        high: ["正直、もう見過ごせない。今日は強く追うべき。", "ここで逃がしたら危ない。投票先を絞ろう。"],
-        mid: ["ちょっと怪しい動きあったし、発言を詰めたい。", "うーん、違和感あるから今日は注目したいな。"],
-        low: ["一応気になる点はあるし、軽く確認していい？", "断定はしないけど、様子は見ておきたい。"]
-      },
-      tracker: {
-        high: ["昨夜の動き、かなり黒く見える。{target} に寄ってたのが気になる。", "追跡先が {target} だったの、偶然で片づけにくいよね。"],
-        mid: ["昨夜の行動で言うと、{target} に触れてたのは情報として覚えておきたい。", "{target} 周りの動きが見えたから、そこから整理しよ。"],
-        low: ["昨夜は {target} に動きがあったみたい。参考情報として置いとくね。", "{target} への接触が見えたよ。すぐ断定はしないけど。"]
-      },
-      observe: {
-        high: ["発言の温度差が大きすぎる子がいる。今日はそこを見たい。", "噛み合ってない証言が増えてきたし、強めに精査しよう。"],
-        mid: ["昨日の会話、少し噛み合ってないところあったよね。", "一回整理して、矛盾がある発言から見たいな。"],
-        low: ["まずは情報を並べてから決めたいな。", "投票は慎重に、根拠ベースでいこ。"]
+    const alivePlayers = state.players.filter(p => p.alive);
+    for (const p of alivePlayers) {
+      if (p.id === state.playerId) continue;
+      const inv = state.lastInvestigation?.[p.id];
+      const invTarget = inv ? state.players[inv.targetId] : null;
+      let category, lineTarget;
+      if (inv && inv.result === "フェイク" && invTarget?.alive) {
+        category = "claimFake"; lineTarget = invTarget;
+      } else if (state.bombReport?.explodedVictims?.length && Math.random() < 0.5) {
+        category = "bomb";
+      } else if (inv && inv.result === "ニュートラル" && invTarget?.alive && Math.random() < 0.5) {
+        category = "claimNeutral"; lineTarget = invTarget;
+      } else if (inv && inv.result === "ピュア" && invTarget?.alive && Math.random() < 0.35) {
+        category = "claimWhite"; lineTarget = invTarget;
+      } else if (p.roleKey === "guardian" && state.nightReport?.type === "blocked" && Math.random() < 0.45) {
+        category = "guardian";
+      } else if (p.lastTarget != null) {
+        category = "tracker"; lineTarget = state.players[p.lastTarget];
+      } else if (alivePlayers.length <= 4 && Math.random() < 0.4) {
+        category = "endgame";
+      } else {
+        const others = alivePlayers.filter(q => q.id !== p.id);
+        lineTarget = others[Math.floor(Math.random() * others.length)];
+        category = Math.random() < 0.5 ? "defense" : "pressure";
+        if (!lineTarget) { category = "observe"; lineTarget = target; }
+        if (Math.random() < 0.2) category = "observe";
       }
-    };
-    alive.forEach(p => {
-      const tier = suspicionTier(p.suspicion);
-      let category = "observe";
-      if (p.lastTarget !== null) category = "tracker";
-      else if (p.suspicion >= 3) category = "defense";
-      else if (p.suspicion >= 1.5) category = "pressure";
-      let line = rand(templates[category][tier]);
-      if (category === "tracker" && p.lastTarget !== null) {
-        const targetName = state.players[p.lastTarget]?.name;
-        if (targetName) line = line.replaceAll("{target}", targetName);
+      let line;
+      if (Array.isArray(templates[category])) {
+        const pool = templates[category];
+        line = pool[Math.floor(Math.random() * pool.length)];
+      } else {
+        const tier = suspicionTier((lineTarget || target)?.suspicion || 0);
+        const pool = templates[category][tier];
+        line = pool[Math.floor(Math.random() * pool.length)];
       }
-      dialogueLog(`${p.name}：${line}`);
-    });
-    draw();
+      const nameForLine = lineTarget?.name || target?.name || "みんな";
+      dialogueLog(`${p.name}：${line.replaceAll("{target}", nameForLine)}`);
+    }
   }
 
   function discussionToVote() {
