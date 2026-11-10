@@ -428,10 +428,10 @@
     baka: {
       name: "バカ",
       faction: "ピュア",
-      desc: "見た目だけ別のピュア役職として振る舞うトリッキー枠。表示された役職の夜能力で処理される。",
-      nightActionHint: "割り当てられた偽表示役職として夜行動しよう（能力なしのこともある）。",
-      resultInterpretation: "夜の処理は偽表示役職ベース。脱落時には実役職『バカ』が公開される。",
-      riskNote: "表示と実体のギャップが読まれると疑われやすい。行動ログの整合性を意識して。",
+      desc: "見た目だけ別のピュア役職として振る舞うトリッキー枠。表示された役職で夜行動できるが、その結果はすべて偽物（FeignのInsane方式）。",
+      nightActionHint: "割り当てられた偽表示役職として夜行動しよう（能力なしのこともある）。ただし結果は信用できない。",
+      resultInterpretation: "夜の結果はすべて偽物。占い判定はランダム、護衛は実際には守れず、追跡情報もデタラメ。脱落時に実役職『バカ』が公開される。",
+      riskNote: "自分の結果を根拠に推理すると論理が破綻して疑われる。周りから見ると、結果の矛盾がバカのサイン。",
       nightAction: null
     }
   };
@@ -687,7 +687,7 @@
         const guardTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         if (guardTarget !== undefined) {
           registerAction(p.id, guardTarget);
-          state.protectedTargets.add(guardTarget);
+          if (p.roleKey !== "baka") state.protectedTargets.add(guardTarget);
         }
       } else if (effectiveRoleKey === "apprenticeSeer" || effectiveRoleKey === "clumsySeer") {
         const inspectTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
@@ -739,17 +739,30 @@
       const effectiveRoleKey = getEffectiveRoleKey(actor);
       const actionType = ROLES[effectiveRoleKey].nightAction?.type;
       if (actionType === "protect") {
-        state.protectedTargets.add(target.id);
+        if (actor.roleKey !== "baka") state.protectedTargets.add(target.id);
         if (actor.id === me.id) actionLog(formatActionLog("protect", { actor: ROLES[effectiveRoleKey].name, target: target.name }));
       } else if (actionType === "investigate") {
         let result = ROLES[target.roleKey].faction;
-        if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
-        if (effectiveRoleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+        if (actor.roleKey === "baka") {
+          // Feign's Insane: a baka's investigation result is entirely fake.
+          result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+        } else {
+          if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
+          if (effectiveRoleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+        }
         if (actor.id === me.id) actionLog(formatActionLog("investigate", { actor: ROLES[effectiveRoleKey].name, target: target.name, result }));
         if (actor.id !== me.id && result === "フェイク") target.suspicion += 1;
       } else if (actionType === "track") {
-        const visitId = state.nightActions[target.id];
-        const visitTarget = visitId !== undefined ? state.players[visitId] : null;
+        let visitTarget;
+        if (actor.roleKey === "baka") {
+          // A baka's tracking report is fabricated: half the time there was
+          // "no visit", otherwise it names a random other player.
+          const others = alive.filter(x => x.id !== target.id && x.id !== actor.id);
+          visitTarget = Math.random() < 0.5 || !others.length ? null : rand(others);
+        } else {
+          const visitId = state.nightActions[target.id];
+          visitTarget = visitId !== undefined ? state.players[visitId] : null;
+        }
         if (visitTarget) target.lastTarget = visitTarget.id;
         if (actor.id === me.id) actionLog(formatActionLog("track", { actor: ROLES[effectiveRoleKey].name, target: target.name, visitTarget: visitTarget?.name }));
       } else if (actionType === "attack") {
