@@ -2,7 +2,8 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#fff7fc" />
   <title>Fake Bloom</title>
   <style>
     :root {
@@ -24,7 +25,12 @@
       margin: 0;
       font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
       color: var(--text);
-      background: linear-gradient(180deg, #fff7fc 0%, #f5eeff 100%);
+      background:
+        radial-gradient(600px 300px at 12% -40px, rgba(255, 183, 219, 0.35), transparent 70%),
+        radial-gradient(700px 340px at 88% -60px, rgba(183, 155, 255, 0.30), transparent 70%),
+        linear-gradient(180deg, #fff7fc 0%, #f5eeff 100%);
+      background-attachment: fixed;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .wrap {
@@ -39,7 +45,7 @@
 
     .screen {
       background: var(--panel);
-      border-radius: 16px;
+      border-radius: 20px;
       box-shadow: var(--shadow);
       padding: 16px;
       border: 1px solid #f4e9ff;
@@ -68,13 +74,17 @@
     button {
       border: none;
       border-radius: 999px;
-      padding: 10px 18px;
-      font-size: 0.95rem;
+      padding: 12px 22px;
+      min-height: 44px;
+      font-size: 1rem;
       font-weight: 700;
       cursor: pointer;
+      touch-action: manipulation;
       transition: transform 0.12s ease, filter 0.12s ease;
     }
     button:hover { transform: translateY(-1px); filter: brightness(1.03); }
+    button:active { transform: scale(0.98); }
+    button:focus-visible, .card:focus-visible, summary:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; }
     button:disabled { cursor: not-allowed; opacity: 0.5; transform: none; }
     .primary { background: var(--pink); color: #fff; }
     .secondary { background: var(--violet-soft); color: var(--text); }
@@ -100,11 +110,16 @@
       border-radius: 12px;
       padding: 10px;
       font-size: 0.92rem;
+      text-align: center;
     }
+    .stat > div:first-child { font-size: 0.78rem; color: var(--muted); font-weight: 700; letter-spacing: 0.04em; }
     .phase-title {
       font-size: 1.35rem;
       font-weight: 800;
-      color: var(--pink);
+      background: linear-gradient(90deg, var(--pink), var(--violet));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
     }
     .player-role-card {
       margin-bottom: 12px;
@@ -157,9 +172,15 @@
       position: relative;
       cursor: pointer;
       min-height: 126px;
+      text-align: center;
+      touch-action: manipulation;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    @media (hover: hover) {
+      .card:hover { transform: translateY(-2px); box-shadow: 0 10px 18px rgba(184, 155, 255, 0.22); }
     }
     .card.dead { opacity: 0.45; filter: grayscale(0.3); }
-    .card.selected { outline: 3px solid var(--pink); }
+    .card.selected { outline: 3px solid var(--pink); box-shadow: 0 0 0 5px rgba(255, 111, 179, 0.18), 0 10px 18px rgba(184, 155, 255, 0.22); }
     .card.voted::after {
       content: "投票済";
       position: absolute;
@@ -225,6 +246,19 @@
       gap: 8px;
       margin-top: 10px;
     }
+    #gameScreen > .control-bar {
+      position: sticky;
+      bottom: calc(10px + env(safe-area-inset-bottom));
+      z-index: 6;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #f2e2ff;
+      border-radius: 18px;
+      padding: 8px;
+      box-shadow: 0 12px 28px rgba(140, 100, 200, 0.25);
+    }
+    #gameScreen > .control-bar button { flex: 1 1 auto; min-height: 48px; }
 
     .role-box {
       margin-top: 8px;
@@ -276,7 +310,7 @@
       .game-ui { grid-template-columns: 1fr; }
       .right-panel { position: static; grid-template-columns: 1fr; }
       .log { height: min(36vh, 300px); }
-      .cards { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .player-role-card { padding: 10px; }
       .player-role-card:not([open]) { padding-bottom: 8px; }
       .player-role-card summary::after {
@@ -287,6 +321,34 @@
       .player-role-card[open] summary::after {
         content: "▲";
       }
+    }
+
+    @media (max-width: 640px) {
+      .wrap { padding: 10px; gap: 10px; }
+      .screen { padding: 12px; border-radius: 16px; }
+      .title-screen { min-height: 52vh; gap: 14px; }
+      .title-main { font-size: clamp(1.8rem, 9vw, 2.4rem); }
+      .btn-row { width: 100%; }
+      .btn-row button { flex: 1 1 130px; min-height: 52px; font-size: 1.05rem; }
+      .parade { height: 118px; margin-top: 6px; }
+      .wbody img { height: 92px; }
+      .topbar { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+      .stat { padding: 8px 4px; font-size: 0.82rem; border-radius: 10px; }
+      .phase-title { font-size: 1.02rem; }
+      .player-role-card { padding: 10px; }
+      .player-role-card summary { padding: 6px 0; }
+      .player-role-meta { font-size: 0.88rem; }
+      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .card { min-height: 0; padding: 8px 6px; border-radius: 12px; }
+      .avatar { width: 52px; height: 52px; font-size: 1.5rem; }
+      .name { font-size: 0.92rem; }
+      .meta { font-size: 0.74rem; }
+      .card.voted::after { font-size: 0.66rem; padding: 1px 6px; top: 6px; right: 6px; }
+      .log { height: min(30vh, 260px); font-size: 0.88rem; }
+      .right-panel .screen { padding: 10px; }
+      .role-guide { font-size: 0.9rem; padding: 10px; }
+      #ad-space { min-height: 56px; font-size: 0.82rem; }
+      #howTo { width: 100%; }
     }
   </style>
 </head>
@@ -316,9 +378,10 @@
       <h3>遊び方</h3>
       <p>・8人でスタート。あなた1人＋CPU7人。</p>
       <p>・フェーズ順：夜行動 → 朝の報告 → 昼の議論 → 投票。</p>
-      <p>・夜の解決順：防御 → 調査 → ノイズ/追跡 → 襲撃。</p>
+      <p>・夜の解決順：妨害 → 護衛 → 調査・盗み見 → 爆弾設置 → 追跡・見張り → 襲撃 → 爆発（前日の爆弾）。</p>
       <p>・昼は「報告→議論→投票」を順番に進行し、各フェーズで操作が制限されます。</p>
-      <p>・ピュア陣営はフェイク全員追放で勝利、フェイク陣営は同数以上で勝利。</p>
+      <p>・ピュア陣営はフェイク全員追放で勝利、フェイク陣営はピュアと同数以上で勝利。</p>
+      <p>・約半分のゲームでは第三勢力「ボマー」も登場。最後の1人になると単独勝利するのでご注意。</p>
       <p>・一部のピュア役職は「うっかり」で結果がズレることあり！</p>
     </div>
   </section>
@@ -327,7 +390,7 @@
     <h2>あなたの役職</h2>
     <div id="playerRole" class="role-box"></div>
     <div class="control-bar">
-      <button id="toGameBtn" class="primary">ゲーム開始</button>
+      <button id="toGameBtn" class="primary" style="flex:1 1 auto;min-height:48px;">ゲーム開始</button>
     </div>
   </section>
 
@@ -353,12 +416,6 @@
     <div class="game-ui">
       <div>
         <div id="cards" class="cards"></div>
-        <div class="control-bar">
-          <button id="actionBtn" class="accent">夜行動を実行</button>
-          <button id="voteBtn" class="danger hidden">投票する</button>
-          <button id="nextBtn" class="primary hidden">次へ</button>
-          <button id="retryBtn" class="secondary hidden">リトライ</button>
-        </div>
       </div>
       <aside class="right-panel">
         <div class="screen">
@@ -372,17 +429,29 @@
       </aside>
     </div>
 
+    <div class="control-bar">
+      <button id="actionBtn" class="accent">夜行動を実行</button>
+      <button id="voteBtn" class="danger hidden">投票する</button>
+      <button id="nextBtn" class="primary hidden">次へ</button>
+      <button id="retryBtn" class="secondary hidden">リトライ</button>
+    </div>
+
     <details class="role-guide">
-      <summary>確定していない役職は？</summary>
+      <summary>役職一覧</summary>
       <ul>
-        <li><strong>村ガール（ピュア）</strong>：基本陣営。議論と投票が主軸。</li>
         <li><strong>見習い占い師（ピュア）</strong>：夜に1人の陣営を調べる。</li>
-        <li><strong>守り手（ピュア）</strong>：夜に1人を守る（防御は襲撃より先に解決）。</li>
+        <li><strong>うっかり占い師（ピュア）</strong>：占い結果が45%の確率でランダムにズレる。</li>
+        <li><strong>守り手（ピュア）</strong>：夜に1人を襲撃や爆発から守る。</li>
         <li><strong>追跡係（ピュア）</strong>：夜に1人が誰を訪ねたか分かる。</li>
-        <li><strong>フェイクガール（フェイク）</strong>：フェイク陣営は夜に1人を脱落させる。今回は必ず1人は編成。</li>
-        <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。襲撃はフェイク陣営で1回。</li>
-        <li><strong>バカ（ピュア）</strong>：夜にノイズを撒いて盤面を乱す。正体は脱落時まで公開されない。</li>
+        <li><strong>ポリス（ピュア）</strong>：夜に1人の行動を封じる（襲撃そのものは止められない）。</li>
+        <li><strong>見張り役（ピュア）</strong>：夜に1人の家を訪れた全員が分かる。</li>
+        <li><strong>村ガール（ピュア）</strong>：能力なし。議論と投票が主軸。</li>
+        <li><strong>フェイクガール（フェイク）</strong>：襲撃しない夜は、ピュア側1人の行動を妨害する。</li>
+        <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。襲撃しない夜はピュア側1人の実役職を盗み見する。</li>
+        <li><strong>ボマー（ニュートラル）</strong>：約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になると単独勝利。</li>
+        <li><strong>バカ（ピュア）</strong>：表示された別の役職で行動するが、結果はすべて偽物。脱落時に実役職が公開される。</li>
       </ul>
+      <p style="margin-top:8px;">ピュア側の役職（占い師・バカ以外）は毎ゲーム抽選で、登場しないこともあります。フェイク陣営の襲撃は陣営で1回だけ。</p>
     </details>
 
   </section>
