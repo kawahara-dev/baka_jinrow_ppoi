@@ -234,6 +234,22 @@
       background: var(--pink-soft); border-radius: 62% 38% 62% 38% / 52% 62% 38% 48%;
       animation-name: petalFall; animation-timing-function: linear; animation-iteration-count: infinite; }
     @keyframes petalFall { to { transform: translateY(75vh) translateX(34px) rotate(320deg); } }
+    .result-panel { background: linear-gradient(180deg, #fff 0%, #fdf4ff 100%); border: 1px solid #f2e8ff;
+      border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 12px 28px rgba(92, 52, 140, 0.12); }
+    .result-title { margin: 0 0 4px; font-size: 1.25rem; font-weight: 900; text-align: center; }
+    .result-sub { margin: 0 0 12px; text-align: center; font-weight: 800; color: var(--muted); }
+    .result-rows { display: grid; gap: 6px; }
+    .result-row { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center;
+      background: #fff; border: 1px solid #f6ecff; border-radius: 12px; padding: 6px 10px; }
+    .result-row.dead { opacity: 0.62; }
+    .result-row .avatar { width: 40px; height: 40px; font-size: 1.25rem; }
+    .result-name { font-weight: 900; }
+    .result-role { font-size: 0.84rem; color: var(--muted); font-weight: 700; }
+    .result-status { font-size: 0.84rem; font-weight: 800; text-align: right; }
+    .faction-chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 900; color: #fff; margin-left: 6px; vertical-align: 2px; }
+    .faction-chip.pure { background: #3d9970; }
+    .faction-chip.fake { background: #e0485f; }
+    .faction-chip.neutral { background: #e07b2a; }
     .stage { position: relative; height: 92px; overflow: hidden; border-radius: 14px; margin-bottom: 10px;
       border: 1px solid #f2e8ff;
       background: linear-gradient(180deg, #ffeef8 0%, #f3eaff 60%, #e2f6e6 61%, #d3efdb 100%);
@@ -538,6 +554,12 @@
       </aside>
     </div>
 
+    <section id="resultPanel" class="result-panel hidden">
+      <h3 id="resultTitle" class="result-title"></h3>
+      <p id="resultSub" class="result-sub"></p>
+      <div id="resultRows" class="result-rows"></div>
+    </section>
+
     <div class="control-bar">
       <button id="actionBtn" class="accent">夜行動を実行</button>
       <button id="voteBtn" class="danger hidden">投票する</button>
@@ -821,7 +843,9 @@
         suspicion: 0,
         lastTarget: null,
         fakeDisplayRoleKey: roleBag[i] === "baka" ? rand(INNOCENT_ROLE_KEYS) : null,
-        mouseUsed: false
+        mouseUsed: false,
+        deathCause: null,
+        deathDay: null
       })),
       playerId: Math.floor(Math.random() * names.length),
       protectedTargets: new Set(),
@@ -842,6 +866,7 @@
     draw();
     el("dialogueLog").innerHTML = "";
     el("actionLog").innerHTML = "";
+    el("resultPanel").classList.add("hidden");
     actionLog("ゲーム開始！夜行動からスタートだよ。");
   }
 
@@ -1074,6 +1099,7 @@
       state.phase = "end";
       actionLog(winAfterNight);
       el("retryBtn").classList.remove("hidden");
+      showResults(winAfterNight);
     } else {
       state.phase = "morning";
     }
@@ -1222,6 +1248,8 @@
       const victim = state.players[targetId];
       if (victim && victim.alive && !state.protectedTargets.has(victim.id)) {
         victim.alive = false;
+        victim.deathCause = "襲撃";
+        victim.deathDay = state.day;
         state.nightReport = { type: "eliminated", victimId: victim.id };
         actionLog(formatActionLog("attackEliminated", { target: victim.name }));
         actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
@@ -1230,6 +1258,8 @@
           const attacker = state.players[attackActorId];
           if (attacker && attacker.alive) {
             attacker.alive = false;
+            attacker.deathCause = "罠";
+            attacker.deathDay = state.day;
             state.trapReport = { attackerId: attacker.id, victimId: victim.id };
             actionLog(`🪤 ${victim.name} の家の罠が作動！襲撃者も道連れになった！`);
             actionLog(formatActionLog("roleReveal", { label: "夜", target: attacker.name, role: ROLES[attacker.roleKey].name, faction: ROLES[attacker.roleKey].faction }));
@@ -1257,6 +1287,8 @@
           continue;
         }
         victim.alive = false;
+        victim.deathCause = "爆発";
+        victim.deathDay = state.day;
         state.bombReport.explodedVictims.push(victim.id);
         actionLog(`💣💥 ${victim.name} が爆発に巻き込まれて倒れた…`);
         actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
@@ -1276,7 +1308,11 @@
           state.bombReport.explodedVictims = state.bombReport.explodedVictims.filter(id => id !== patient.id);
           state.doctorReport = { victimId: patient.id, cause: "bomb" };
         }
-        if (state.doctorReport) actionLog(`💉 しかし間一髪、${patient.name} はドクターの蘇生で助かった！`);
+        if (state.doctorReport) {
+          patient.deathCause = null;
+          patient.deathDay = null;
+          actionLog(`💉 しかし間一髪、${patient.name} はドクターの蘇生で助かった！`);
+        }
       }
     }
 
@@ -1456,6 +1492,7 @@
         state.phase = "end";
         actionLog(winTie);
         el("retryBtn").classList.remove("hidden");
+        showResults(winTie);
       } else {
         state.day += 1;
         state.phase = "night";
@@ -1467,6 +1504,8 @@
 
     const ex = state.players[maxId];
     ex.alive = false;
+    ex.deathCause = "追放";
+    ex.deathDay = state.day;
     state.executed = ex.id;
     showCutin("🗳️ 投票結果", `${ex.name} が追放された`, "phase");
     actionLog(formatActionLog("voteEliminated", { label: "投票", target: ex.name, votes: max }));
@@ -1478,6 +1517,7 @@
       actionLog(win);
       showCutin(win, "", "win");
       celebrate();
+      showResults(win);
       el("retryBtn").classList.remove("hidden");
       el("actionBtn").classList.add("hidden");
       el("voteBtn").classList.add("hidden");
@@ -1490,6 +1530,34 @@
       actionLog(formatActionLog("phaseNightStart", { day: state.day }));
     }
     draw();
+  }
+
+  // End-of-game results: winner, your outcome, and the full roster with
+  // real roles, factions, and how each player fell.
+  function showResults(winText) {
+    const winnerFaction = winText.includes("ピュア陣営の勝利") ? "ピュア"
+      : winText.includes("フェイク陣営の勝利") ? "フェイク" : "ニュートラル";
+    state.winnerFaction = winnerFaction;
+    const me = state.players[state.playerId];
+    state.myWin = ROLES[me.roleKey].faction === winnerFaction;
+    el("resultTitle").textContent = winText;
+    el("resultSub").textContent = `あなたは「${ROLES[me.roleKey].name}」（${ROLES[me.roleKey].faction}）で ${state.myWin ? "勝利！" : "敗北…"}`;
+    el("resultRows").innerHTML = state.players.map(p => {
+      const role = ROLES[p.roleKey];
+      const displayNote = p.roleKey === "baka" && p.fakeDisplayRoleKey ? `（表示：${ROLES[p.fakeDisplayRoleKey].name}）` : "";
+      const chipClass = role.faction === "ピュア" ? "pure" : role.faction === "フェイク" ? "fake" : "neutral";
+      const status = p.alive ? "生存" : `${p.deathDay ?? "?"}日目に脱落${p.deathCause ? `（${p.deathCause}）` : ""}`;
+      const img = ICON_IMGS[ICON_SLUGS[p.id]];
+      return `<div class="result-row ${p.alive ? "" : "dead"}">
+        <div class="avatar"><span>${p.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${p.name}">` : ""}</div>
+        <div><div class="result-name">${p.name}${p.id === state.playerId ? "（あなた）" : ""}<span class="faction-chip ${chipClass}">${role.faction}</span></div>
+        <div class="result-role">${role.name}${displayNote}</div></div>
+        <div class="result-status">${status}</div>
+      </div>`;
+    }).join("");
+    const panel = el("resultPanel");
+    panel.classList.remove("hidden");
+    if (panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function checkWin() {
