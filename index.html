@@ -476,6 +476,13 @@
         </div>
       </div>
       <div class="settings-row">
+        <span class="settings-label">効果音</span>
+        <div class="seg" data-setting="sound">
+          <button type="button" data-value="on">オン</button>
+          <button type="button" data-value="off">オフ</button>
+        </div>
+      </div>
+      <div class="settings-row">
         <span class="settings-label">ボマー</span>
         <div class="seg" data-setting="bomber">
           <button type="button" data-value="random">ランダム</button>
@@ -972,6 +979,7 @@
   function selectTarget(id) {
     const target = state.players[id];
     if (!target || !target.alive) return;
+    sfx("tick");
 
     if (state.phase === "night") {
       const me = state.players[state.playerId];
@@ -1555,6 +1563,7 @@
         <div class="result-status">${status}</div>
       </div>`;
     }).join("");
+    sfx(state.myWin ? "win" : "lose");
     const panel = el("resultPanel");
     panel.classList.remove("hidden");
     if (panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1605,6 +1614,7 @@
       band.style.animation = "";
     }
     if (item.kind === "bomb" || item.kind === "attack") shakeScreen();
+    sfx({ attack: "attack", bomb: "bomb", protect: "protect", info: "pop", phase: "phase" }[item.kind] || "pop");
     const done = () => {
       box.classList.add("hidden");
       cutinBusy = false;
@@ -1681,17 +1691,85 @@
   }
   hydrateWalkImages(document);
 
+  // ---- tiny WebAudio synth for game sounds (no audio assets) ----
+  let audioCtx = null;
+  let noiseBuffer = null;
+  function initAudio() {
+    try {
+      if (audioCtx) {
+        if (audioCtx.resume) audioCtx.resume();
+        return;
+      }
+      const AC = typeof AudioContext !== "undefined" ? AudioContext
+        : (typeof webkitAudioContext !== "undefined" ? webkitAudioContext : null);
+      if (!AC) return;
+      audioCtx = new AC();
+    } catch {
+      audioCtx = null;
+    }
+  }
+  function tone(freqFrom, freqTo, dur, type, vol, delay = 0) {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freqFrom, t0);
+    if (freqTo && freqTo !== freqFrom) osc.frequency.exponentialRampToValueAtTime(Math.max(30, freqTo), t0 + dur);
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+  function noiseBurst(dur, vol, freq) {
+    if (!audioCtx) return;
+    if (!noiseBuffer) {
+      noiseBuffer = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.6), audioCtx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuffer;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = freq;
+    const gain = audioCtx.createGain();
+    const t0 = audioCtx.currentTime;
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filter).connect(gain).connect(audioCtx.destination);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+  }
+  function sfx(name) {
+    if (!audioCtx || gameSettings.sound === "off") return;
+    try {
+      switch (name) {
+        case "tick": tone(950, 950, 0.05, "triangle", 0.05); break;
+        case "pop": tone(620, 920, 0.09, "triangle", 0.10); break;
+        case "phase": tone(520, 520, 0.09, "sine", 0.08); tone(780, 780, 0.12, "sine", 0.08, 0.09); break;
+        case "attack": tone(200, 55, 0.28, "sawtooth", 0.14); tone(90, 40, 0.3, "sine", 0.16); break;
+        case "bomb": noiseBurst(0.55, 0.22, 900); tone(120, 30, 0.55, "sine", 0.20); break;
+        case "protect": tone(880, 880, 0.14, "sine", 0.10); tone(1318, 1318, 0.20, "sine", 0.09, 0.10); break;
+        case "win": [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.22, "triangle", 0.11, i * 0.11)); break;
+        case "lose": [392, 330, 262].forEach((f, i) => tone(f, f, 0.25, "triangle", 0.10, i * 0.14)); break;
+      }
+    } catch { /* sound is decorative; never let it break the game */ }
+  }
+
   // ---- game settings (title screen; persisted in localStorage) ----
   const SETTINGS_KEY = "fakeBloomSettings";
   const gameSettings = (() => {
-    const fallback = { fakeCount: "random", bomber: "random" };
+    const fallback = { fakeCount: "random", bomber: "random", sound: "on" };
     try {
       const raw = typeof localStorage !== "undefined" ? localStorage.getItem(SETTINGS_KEY) : null;
       if (!raw) return { ...fallback };
       const parsed = JSON.parse(raw);
       return {
         fakeCount: ["random", "1", "2"].includes(parsed.fakeCount) ? parsed.fakeCount : fallback.fakeCount,
-        bomber: ["random", "on", "off"].includes(parsed.bomber) ? parsed.bomber : fallback.bomber
+        bomber: ["random", "on", "off"].includes(parsed.bomber) ? parsed.bomber : fallback.bomber,
+        sound: ["on", "off"].includes(parsed.sound) ? parsed.sound : fallback.sound
       };
     } catch {
       return { ...fallback };
@@ -1720,6 +1798,7 @@
   paintSettings();
 
   el("startBtn").onclick = () => {
+    initAudio();
     el("titleScreen").classList.add("hidden");
     el("roleScreen").classList.remove("hidden");
     setupGame();
