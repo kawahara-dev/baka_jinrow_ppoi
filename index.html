@@ -105,7 +105,11 @@
       grid-template-columns: repeat(3, minmax(120px, 1fr));
       gap: 10px;
       margin-bottom: 10px;
+      position: sticky;
+      top: 8px;
+      z-index: 30;
     }
+    .topbar .stat { box-shadow: 0 6px 18px rgba(92, 52, 140, 0.10); }
     .stat {
       background: linear-gradient(180deg, #fff 0%, #f9f4ff 100%);
       border: 1px solid #f2e8ff;
@@ -388,7 +392,7 @@
       .btn-row button { flex: 1 1 130px; min-height: 52px; font-size: 1.05rem; }
       .parade { height: 118px; margin-top: 6px; }
       .wbody img { height: 92px; }
-      .topbar { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+      .topbar { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; top: 6px; }
       .stat { padding: 8px 4px; font-size: 0.82rem; border-radius: 10px; }
       .phase-title { font-size: 1.02rem; }
       .player-role-card { padding: 10px; }
