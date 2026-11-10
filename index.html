@@ -56,6 +56,8 @@
     h1, h2, h3, p { margin: 0; }
 
     .title-screen {
+      position: relative;
+      overflow: hidden;
       display: grid;
       place-items: center;
       min-height: 60vh;
@@ -214,6 +216,52 @@
     @keyframes techitechi { from { transform: translateY(0) rotate(-2.4deg); } to { transform: translateY(-7px) rotate(2.4deg); } }
     @keyframes shadowPulse { from { transform: scaleX(1); opacity: 0.85; } to { transform: scaleX(0.78); opacity: 0.5; } }
     @media (prefers-reduced-motion: reduce) { .walker, .wbody, .wbody img, .wshadow { animation: none; } }
+
+    /* ---- screen effects (presentation only) ---- */
+    #mood { position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      transition: background 0.8s ease, box-shadow 0.8s ease; }
+    body[data-phase="night"] #mood { background: rgba(38, 28, 92, 0.32); box-shadow: inset 0 0 190px rgba(16, 8, 48, 0.55); }
+    body[data-phase="morning"] #mood { background: rgba(255, 196, 110, 0.15); }
+    body[data-phase="vote"] #mood { background: rgba(255, 95, 122, 0.10); }
+    body[data-phase="end"] #mood { background: rgba(255, 183, 219, 0.18); }
+    .wrap { position: relative; z-index: 1; }
+    .petals { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .petals span { position: absolute; top: -20px; width: 12px; height: 12px; opacity: 0.75;
+      background: var(--pink-soft); border-radius: 62% 38% 62% 38% / 52% 62% 38% 48%;
+      animation-name: petalFall; animation-timing-function: linear; animation-iteration-count: infinite; }
+    @keyframes petalFall { to { transform: translateY(75vh) translateX(34px) rotate(320deg); } }
+    .cutin { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+      background: rgba(43, 24, 66, 0.45); cursor: pointer; }
+    .cutin-band { width: 100%; padding: 26px 16px; text-align: center;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.97) 10%, rgba(255,255,255,0.97) 90%, transparent);
+      box-shadow: 0 18px 44px rgba(60, 30, 110, 0.35);
+      animation: cutinIn 0.45s cubic-bezier(.2,.9,.25,1.15) both; }
+    .cutin-title { font-size: clamp(1.7rem, 6.5vw, 2.7rem); font-weight: 900; line-height: 1.18; }
+    .cutin-sub { margin-top: 8px; font-size: clamp(1rem, 3.8vw, 1.25rem); font-weight: 800; color: var(--text); }
+    .cutin[data-kind="attack"] .cutin-title { color: var(--danger); }
+    .cutin[data-kind="bomb"] .cutin-title { color: #e07b2a; }
+    .cutin[data-kind="protect"] .cutin-title { color: #2f9e6e; }
+    .cutin[data-kind="info"] .cutin-title { color: #7a5fd0; }
+    .cutin[data-kind="phase"] .cutin-title { color: #b13f7e; }
+    .cutin[data-kind="win"] .cutin-title { background: linear-gradient(90deg, #ff6fb3, #b79bff, #ffb347);
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    @keyframes cutinIn { from { transform: translateX(-46px) skewX(-7deg); opacity: 0; } to { transform: translateX(0) skewX(0); opacity: 1; } }
+    .shake { animation: shakeAnim 0.45s ease; }
+    @keyframes shakeAnim { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px, 2px); } 40% { transform: translate(6px, -2px); } 60% { transform: translate(-4px, 1px); } 80% { transform: translate(3px, -1px); } }
+    #confetti { position: fixed; inset: 0; z-index: 55; pointer-events: none; overflow: hidden; }
+    .confetti-piece { position: absolute; top: -14px; width: 9px; height: 14px; border-radius: 2px;
+      animation-name: confettiFall; animation-timing-function: ease-in; animation-fill-mode: both; }
+    @keyframes confettiFall { to { transform: translateY(106vh) rotate(660deg); } }
+    .card { animation: cardIn 0.3s ease both; }
+    @keyframes cardIn { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+    .log p { animation: logIn 0.25s ease both; }
+    @keyframes logIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    #actionBtn:not(.hidden), #voteBtn:not(.hidden) { animation: btnPulse 1.8s ease-in-out infinite; }
+    @keyframes btnPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255, 111, 179, 0.45); } 50% { box-shadow: 0 0 0 9px rgba(255, 111, 179, 0); } }
+    @media (prefers-reduced-motion: reduce) {
+      .petals span, .confetti-piece, .cutin-band, .card, .log p, .shake,
+      #actionBtn:not(.hidden), #voteBtn:not(.hidden) { animation: none !important; }
+    }
     .avatar { font-size: 1.8rem; position: relative; width: 64px; height: 64px; margin: 0 auto; }
     .avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
     .name { font-weight: 700; margin-top: 4px; }
@@ -353,8 +401,26 @@
   </style>
 </head>
 <body>
+<div id="mood" aria-hidden="true"></div>
+<div id="confetti" aria-hidden="true"></div>
+<div id="cutin" class="cutin hidden" data-kind="phase" role="status">
+  <div class="cutin-band">
+    <div id="cutinTitle" class="cutin-title"></div>
+    <div id="cutinSub" class="cutin-sub"></div>
+  </div>
+</div>
 <div class="wrap">
   <section id="titleScreen" class="screen title-screen">
+    <div class="petals" aria-hidden="true">
+      <span style="left:6%;animation-duration:11s;animation-delay:-2s"></span>
+      <span style="left:18%;animation-duration:14s;animation-delay:-7s"></span>
+      <span style="left:33%;animation-duration:10s;animation-delay:-4s"></span>
+      <span style="left:47%;animation-duration:13s;animation-delay:-9s"></span>
+      <span style="left:58%;animation-duration:11.5s;animation-delay:-1s"></span>
+      <span style="left:71%;animation-duration:12.5s;animation-delay:-6s"></span>
+      <span style="left:83%;animation-duration:10.5s;animation-delay:-3s"></span>
+      <span style="left:93%;animation-duration:13.5s;animation-delay:-8s"></span>
+    </div>
     <div>
       <h1 class="title-main">Fake Bloom</h1>
       <p class="subtitle">— おとぼけ魔女会議 —</p>
@@ -685,7 +751,9 @@
       nightActions: {},
       nightActionTypes: {},
       fakeIntel: {},
-      bombs: []
+      bombs: [],
+      bombReport: { explodedVictims: [], fizzled: false },
+      humanBlocked: false
     };
     showRole();
     draw();
@@ -757,13 +825,16 @@
   }
 
   function draw() {
+    if (document.body && document.body.dataset) document.body.dataset.phase = state.phase;
     el("dayText").textContent = state.day;
     el("phaseText").textContent = PHASE_META[state.phase].label;
     updateInGameRoleCard();
 
     const cards = el("cards"); cards.innerHTML = "";
+    let cardIndex = 0;
     for (const p of state.players) {
       const div = document.createElement("div");
+      div.style.animationDelay = `${cardIndex++ * 45}ms`;
       div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""}`;
       div.onclick = () => selectTarget(p.id);
       const revealedRole = p.alive ? "？" : ROLES[p.roleKey].name;
@@ -897,6 +968,7 @@
 
     state.nightActions = nightActions;
     state.nightActionTypes = nightActionTypes;
+    state.humanBlocked = false;
     resolveNightActions(me, target, alive);
 
     state.selectedId = null;
@@ -909,9 +981,43 @@
       state.phase = "morning";
     }
     draw();
+    nightCutins(me, target, winAfterNight);
+  }
+
+  // Dramatise the night as a short cut-in recap. Only outcomes the game
+  // already announces publicly are shown; who acted stays secret.
+  function nightCutins(me, target, winAfterNight) {
+    const myType = state.nightActionTypes?.[me.id] || ROLES[getEffectiveRoleKey(me)].nightAction?.type;
+    if (state.humanBlocked) {
+      showCutin("✋ 妨害された！", "今夜は行動できなかった…", "attack");
+    } else if (myType) {
+      const meta = {
+        investigate: ["🔍 調査", "info"], protect: ["🛡️ 護衛", "protect"],
+        track: ["👣 追跡", "info"], attack: ["🗡️ 襲撃", "attack"],
+        block: ["✋ 妨害", "info"], spy: ["👀 盗み見", "info"],
+        plant: ["💣 爆弾設置", "bomb"], lookout: ["🔭 見張り", "info"]
+      }[myType];
+      if (meta) showCutin(meta[0], `→ ${target.name}`, meta[1]);
+    } else {
+      showCutin("🌙 夜行動", "あなたは静かに夜を過ごした", "phase");
+    }
+    if (state.nightReport?.type === "eliminated") {
+      showCutin("🌙 夜の襲撃", `${state.players[state.nightReport.victimId].name} が倒れた…`, "attack");
+    } else if (state.nightReport?.type === "blocked") {
+      showCutin("🛡️ 襲撃は防がれた！", "誰かが守り切った", "protect");
+    }
+    for (const vid of state.bombReport?.explodedVictims || []) {
+      showCutin("💣 爆弾が爆発！", `${state.players[vid].name} が巻き込まれた…`, "bomb");
+    }
+    if (state.bombReport?.fizzled) showCutin("💣 爆弾は不発だった", "護衛が爆発を防いだ", "protect");
+    if (winAfterNight) {
+      showCutin(winAfterNight, "", "win");
+      celebrate();
+    }
   }
 
   function resolveNightActions(me, selectedTarget, alive) {
+    state.bombReport = { explodedVictims: [], fizzled: false };
     const actionTypeOf = (actor) => state.nightActionTypes?.[actor.id] || ROLES[getEffectiveRoleKey(actor)].nightAction?.type;
     const priorityOf = (actor) => {
       const t = actionTypeOf(actor);
@@ -932,7 +1038,10 @@
       const effectiveRoleKey = getEffectiveRoleKey(actor);
       const actionType = actionTypeOf(actor);
       if (blockedIds.has(actor.id) && actionType !== "attack") {
-        if (actor.id === me.id) actionLog("誰かに妨害されて、今夜は行動できなかった！");
+        if (actor.id === me.id) {
+          actionLog("誰かに妨害されて、今夜は行動できなかった！");
+          state.humanBlocked = true;
+        }
         continue;
       }
       if (actionType === "block") {
@@ -1017,9 +1126,11 @@
         if (!victim || !victim.alive) continue;
         if (state.protectedTargets.has(victim.id)) {
           actionLog(`💣 ${victim.name} に仕掛けられた爆弾は、護衛のおかげで不発に終わった！`);
+          state.bombReport.fizzled = true;
           continue;
         }
         victim.alive = false;
+        state.bombReport.explodedVictims.push(victim.id);
         actionLog(`💣💥 ${victim.name} が爆発に巻き込まれて倒れた…`);
         actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
       }
@@ -1121,6 +1232,7 @@
     }
     if (topIds.length !== 1) {
       actionLog(formatActionLog("voteTie", { label: "投票", votes: max }));
+      showCutin("🗳️ 投票結果", "同数のため追放なし", "phase");
       const winTie = checkWin();
       if (winTie) {
         state.phase = "end";
@@ -1138,6 +1250,7 @@
     const ex = state.players[maxId];
     ex.alive = false;
     state.executed = ex.id;
+    showCutin("🗳️ 投票結果", `${ex.name} が追放された`, "phase");
     actionLog(formatActionLog("voteEliminated", { label: "投票", target: ex.name, votes: max }));
     actionLog(formatActionLog("roleReveal", { label: "投票", target: ex.name, role: ROLES[ex.roleKey].name, faction: ROLES[ex.roleKey].faction }));
 
@@ -1145,6 +1258,8 @@
     if (win) {
       state.phase = "end";
       actionLog(win);
+      showCutin(win, "", "win");
+      celebrate();
       el("retryBtn").classList.remove("hidden");
       el("actionBtn").classList.add("hidden");
       el("voteBtn").classList.add("hidden");
@@ -1168,6 +1283,75 @@
     if (fake === 0) return "🎉 ピュア陣営の勝利！フェイクを全員追放したよ！";
     if (fake >= pure) return "💀 フェイク陣営の勝利…生存者数が同数以上になった。";
     return null;
+  }
+
+  // ---- presentation helpers: cut-ins, screen shake, confetti ----
+  const cutinQueue = [];
+  let cutinBusy = false;
+  let cutinTimer = null;
+  function later(fn, ms) {
+    if (typeof setTimeout === "function") return setTimeout(fn, ms);
+    fn();
+    return null;
+  }
+  function showCutin(title, sub, kind) {
+    cutinQueue.push({ title, sub: sub || "", kind: kind || "phase" });
+    pumpCutin();
+  }
+  function pumpCutin() {
+    if (cutinBusy) return;
+    const box = el("cutin");
+    if (!box) return;
+    const item = cutinQueue.shift();
+    if (!item) {
+      box.classList.add("hidden");
+      return;
+    }
+    cutinBusy = true;
+    el("cutinTitle").textContent = item.title;
+    el("cutinSub").textContent = item.sub;
+    if (box.dataset) box.dataset.kind = item.kind;
+    box.classList.remove("hidden");
+    const band = box.querySelector ? box.querySelector(".cutin-band") : null;
+    if (band) {
+      band.style.animation = "none";
+      void band.offsetWidth;
+      band.style.animation = "";
+    }
+    if (item.kind === "bomb" || item.kind === "attack") shakeScreen();
+    const done = () => {
+      box.classList.add("hidden");
+      cutinBusy = false;
+      pumpCutin();
+    };
+    cutinTimer = later(done, 1450);
+    box.onclick = () => {
+      if (cutinTimer && typeof clearTimeout === "function") clearTimeout(cutinTimer);
+      done();
+    };
+  }
+  function shakeScreen() {
+    const w = document.querySelector ? document.querySelector(".wrap") : null;
+    if (!w) return;
+    w.classList.remove("shake");
+    void w.offsetWidth;
+    w.classList.add("shake");
+    later(() => w.classList.remove("shake"), 500);
+  }
+  function celebrate() {
+    const layer = el("confetti");
+    if (!layer) return;
+    const colors = ["#ff6fb3", "#b79bff", "#ffd7ec", "#8be0b0", "#ffe08a"];
+    for (let i = 0; i < 26; i++) {
+      const s = document.createElement("span");
+      s.className = "confetti-piece";
+      s.style.left = `${Math.random() * 100}%`;
+      s.style.background = colors[i % colors.length];
+      s.style.animationDelay = `${Math.random() * 0.5}s`;
+      s.style.animationDuration = `${2.2 + Math.random() * 1.6}s`;
+      layer.appendChild(s);
+      if (s.remove) later(() => s.remove(), 4600);
+    }
   }
 
   // The walking-parade artwork is stored as base64 text files under walk/
