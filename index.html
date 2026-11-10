@@ -529,6 +529,7 @@
       <button id="actionBtn" class="accent">夜行動を実行</button>
       <button id="voteBtn" class="danger hidden">投票する</button>
       <button id="nextBtn" class="primary hidden">次へ</button>
+      <button id="mouseBtn" class="secondary hidden">🐭 役職を公開</button>
       <button id="retryBtn" class="secondary hidden">リトライ</button>
     </div>
 
@@ -541,6 +542,10 @@
         <li><strong>追跡係（ピュア）</strong>：夜に1人が誰を訪ねたか分かる。</li>
         <li><strong>ポリス（ピュア）</strong>：夜に1人の行動を封じる（襲撃そのものは止められない）。</li>
         <li><strong>見張り役（ピュア）</strong>：夜に1人の家を訪れた全員が分かる。</li>
+        <li><strong>トラッパー（ピュア）</strong>：夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。</li>
+        <li><strong>ドクター（ピュア）</strong>：夜に1人を診察。その人がその夜倒れたら蘇生させる。</li>
+        <li><strong>マウス（ピュア）</strong>：昼に1回だけ、1人の本当の役職を全員に公開できる。</li>
+        <li><strong>政治家（ピュア）</strong>：投票の票が2票分になる。</li>
         <li><strong>村ガール（ピュア）</strong>：能力なし。議論と投票が主軸。</li>
         <li><strong>フェイクガール（フェイク）</strong>：襲撃しない夜は、ピュア側1人の行動を妨害する。</li>
         <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。襲撃しない夜はピュア側1人の実役職を盗み見する。</li>
@@ -602,6 +607,42 @@
       resultInterpretation: "訪問者の中に襲撃者や能力者が混ざっている。誰が何をしたかまでは分からない。",
       riskNote: "訪問＝黒ではない。護衛や調査の訪問も見えてしまう。",
       nightAction: { type: "lookout", priority: 35, allowSelf: true }
+    },
+    trapper: {
+      name: "トラッパー",
+      faction: "ピュア",
+      desc: "夜に1人の家へ罠を設置。その人が襲撃されて倒れたら、襲撃者も道連れになる（FeignのTrapper方式）。",
+      nightActionHint: "襲われそうな子の家に罠を仕掛けよう。自分の家にも設置できる。",
+      resultInterpretation: "罠が作動したら朝の報告で分かる。罠はその夜かぎり。",
+      riskNote: "護衛と重なると襲撃自体が防がれて罠は不発。爆弾には反応しない。",
+      nightAction: { type: "trap", priority: 12, allowSelf: true }
+    },
+    doctor: {
+      name: "ドクター",
+      faction: "ピュア",
+      desc: "夜に1人を診察。その人がその夜に襲撃や爆発で倒れたら、朝までに蘇生させる。",
+      nightActionHint: "狙われそうな子を診察しておこう。自分も選べる。",
+      resultInterpretation: "蘇生が起きると朝の報告で公開される（倒れた人の役職は公開されたまま）。",
+      riskNote: "倒れなかった相手では何も起きない。妨害されると蘇生できない。",
+      nightAction: { type: "revive", priority: 38, allowSelf: true }
+    },
+    mouse: {
+      name: "マウス",
+      faction: "ピュア",
+      desc: "能力は昼。ゲーム中1回だけ、議論中に1人の本当の役職を全員に公開できる（FeignのMouse方式）。",
+      nightActionHint: "夜は能力なし。昼の議論で公開ボタンのタイミングを計ろう。",
+      resultInterpretation: "公開された役職は確定情報。フェイクがバレれば追放まっしぐら。",
+      riskNote: "1回きり。誰を公開するかで勝敗が動く。",
+      nightAction: null
+    },
+    politician: {
+      name: "政治家",
+      faction: "ピュア",
+      desc: "能力は投票。自分の票が常に2票分になる（FeignのPolitician方式）。",
+      nightActionHint: "夜は能力なし。昼は投票で決着をつける動きを考えよう。",
+      resultInterpretation: "票が割れそうな場面で特に強い。",
+      riskNote: "票の重さから正体を推測されることもある。",
+      nightAction: null
     },
     clumsySeer: {
       name: "うっかり占い師",
@@ -671,7 +712,7 @@
   const icons = ["🌸", "🪄", "🧁", "🎀", "💫", "🫧", "🍬", "🌙"];
   const ICON_SLUGS = ["luna", "mio", "yui", "kanon", "suzu", "riri", "noa", "ema"];
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
-  const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "police", "lookout"];
+  const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "police", "lookout", "trapper", "doctor", "mouse", "politician"];
 
   let state = {};
 
@@ -766,7 +807,8 @@
         voted: false,
         suspicion: 0,
         lastTarget: null,
-        fakeDisplayRoleKey: roleBag[i] === "baka" ? rand(INNOCENT_ROLE_KEYS) : null
+        fakeDisplayRoleKey: roleBag[i] === "baka" ? rand(INNOCENT_ROLE_KEYS) : null,
+        mouseUsed: false
       })),
       playerId: Math.floor(Math.random() * names.length),
       protectedTargets: new Set(),
@@ -776,7 +818,12 @@
       fakeIntel: {},
       bombs: [],
       bombReport: { explodedVictims: [], fizzled: false },
-      humanBlocked: false
+      humanBlocked: false,
+      trapTargets: new Set(),
+      trapReport: null,
+      doctorTargetId: null,
+      doctorReport: null,
+      revealedRoles: {}
     };
     showRole();
     draw();
@@ -874,6 +921,8 @@
     el("actionBtn").classList.toggle("hidden", state.phase !== "night");
     el("voteBtn").classList.toggle("hidden", state.phase !== "vote");
     el("nextBtn").classList.toggle("hidden", !["morning", "discussion"].includes(state.phase));
+    const meForMouse = state.players?.[state.playerId];
+    el("mouseBtn").classList.toggle("hidden", !(state.phase === "discussion" && meForMouse && getEffectiveRoleKey(meForMouse) === "mouse" && !meForMouse.mouseUsed));
   }
 
   function selectTarget(id) {
@@ -937,6 +986,12 @@
           policeTarget = rand(actors.length ? actors : alive.filter(x => x.id !== p.id))?.id;
         }
         registerAction(p.id, policeTarget, "block");
+      } else if (effectiveRoleKey === "trapper") {
+        const trapTarget = p.id === me.id ? target.id : rand(alive)?.id;
+        if (trapTarget !== undefined) registerAction(p.id, trapTarget);
+      } else if (effectiveRoleKey === "doctor") {
+        const docTarget = p.id === me.id ? target.id : rand(alive)?.id;
+        if (docTarget !== undefined) registerAction(p.id, docTarget);
       } else if (effectiveRoleKey === "lookout") {
         const lookoutTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         registerAction(p.id, lookoutTarget);
@@ -968,7 +1023,7 @@
         fakeActor = rand(fakeSide);
         const fallbackVictims = alive.filter(x => x.id !== fakeActor.id);
         // The faction prefers victims the mimic has identified as power roles.
-        const intelTargets = victims.filter(x => ["apprenticeSeer", "clumsySeer", "guardian", "tracker", "police", "lookout"].includes(state.fakeIntel?.[x.id]));
+        const intelTargets = victims.filter(x => ["apprenticeSeer", "clumsySeer", "guardian", "tracker", "police", "lookout", "doctor", "trapper"].includes(state.fakeIntel?.[x.id]));
         const pool = intelTargets.length ? intelTargets : victims;
         attackTarget = rand(pool.length ? pool : fallbackVictims)?.id;
       }
@@ -1018,7 +1073,8 @@
         investigate: ["🔍 調査", "info"], protect: ["🛡️ 護衛", "protect"],
         track: ["👣 追跡", "info"], attack: ["🗡️ 襲撃", "attack"],
         block: ["✋ 妨害", "info"], spy: ["👀 盗み見", "info"],
-        plant: ["💣 爆弾設置", "bomb"], lookout: ["🔭 見張り", "info"]
+        plant: ["💣 爆弾設置", "bomb"], lookout: ["🔭 見張り", "info"],
+        trap: ["🪤 罠設置", "info"], revive: ["💉 診察", "protect"]
       }[myType];
       if (meta) showCutin(meta[0], `→ ${target.name}`, meta[1]);
     } else {
@@ -1033,6 +1089,8 @@
       showCutin("💣 爆弾が爆発！", `${state.players[vid].name} が巻き込まれた…`, "bomb");
     }
     if (state.bombReport?.fizzled) showCutin("💣 爆弾は不発だった", "護衛が爆発を防いだ", "protect");
+    if (state.trapReport) showCutin("🪤 罠が作動！", "襲撃者が道連れになった", "attack");
+    if (state.doctorReport) showCutin("💉 蘇生した！", `${state.players[state.doctorReport.victimId].name} が助かった`, "protect");
     if (winAfterNight) {
       showCutin(winAfterNight, "", "win");
       celebrate();
@@ -1042,6 +1100,10 @@
   function resolveNightActions(me, selectedTarget, alive) {
     state.bombReport = { explodedVictims: [], fizzled: false };
     state.lastInvestigation = {};
+    state.trapTargets = new Set();
+    state.trapReport = null;
+    state.doctorTargetId = null;
+    state.doctorReport = null;
     const actionTypeOf = (actor) => state.nightActionTypes?.[actor.id] || ROLES[getEffectiveRoleKey(actor)].nightAction?.type;
     const priorityOf = (actor) => {
       const t = actionTypeOf(actor);
@@ -1056,6 +1118,7 @@
 
     const blockedIds = new Set();
     let attackTargetId = null;
+    let attackActorId = null;
     for (const step of actionOrder) {
       const actor = step.actor;
       const target = step.target;
@@ -1120,8 +1183,18 @@
         }
         if (visitTarget) target.lastTarget = visitTarget.id;
         if (actor.id === me.id) actionLog(formatActionLog("track", { actor: ROLES[effectiveRoleKey].name, target: target.name, visitTarget: visitTarget?.name }));
+      } else if (actionType === "trap") {
+        // A baka displaying the trapper sets a trap that never springs.
+        if (actor.roleKey !== "baka") state.trapTargets.add(target.id);
+        if (actor.id === me.id) actionLog(`罠設置 → ${target.name} の家に罠を仕掛けた。`);
+      } else if (actionType === "revive") {
+        // The doctor registers a patient; the revive itself is applied
+        // after all of tonight's deaths are known.
+        if (actor.roleKey !== "baka") state.doctorTargetId = target.id;
+        if (actor.id === me.id) actionLog(`診察 → ${target.name} を診察した。今夜倒れたら蘇生する。`);
       } else if (actionType === "attack") {
         attackTargetId = target.id;
+        attackActorId = actor.id;
       }
     }
 
@@ -1133,6 +1206,16 @@
         state.nightReport = { type: "eliminated", victimId: victim.id };
         actionLog(formatActionLog("attackEliminated", { target: victim.name }));
         actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
+        // Trapper: a trap on the victim's house takes the attacker down too.
+        if (state.trapTargets.has(victim.id) && attackActorId != null) {
+          const attacker = state.players[attackActorId];
+          if (attacker && attacker.alive) {
+            attacker.alive = false;
+            state.trapReport = { attackerId: attacker.id, victimId: victim.id };
+            actionLog(`🪤 ${victim.name} の家の罠が作動！襲撃者も道連れになった！`);
+            actionLog(formatActionLog("roleReveal", { label: "夜", target: attacker.name, role: ROLES[attacker.roleKey].name, faction: ROLES[attacker.roleKey].faction }));
+          }
+        }
       } else {
         state.nightReport = { type: "blocked", victimId: null };
         actionLog(formatActionLog("attackBlocked", { target: victim?.name || "不明" }));
@@ -1161,6 +1244,23 @@
       }
     }
 
+    // Doctor: revive tonight's casualty if they were the doctor's patient.
+    if (state.doctorTargetId != null) {
+      const patient = state.players[state.doctorTargetId];
+      if (patient && !patient.alive) {
+        if (state.nightReport?.type === "eliminated" && state.nightReport.victimId === patient.id) {
+          patient.alive = true;
+          state.nightReport = { type: "revived", victimId: patient.id };
+          state.doctorReport = { victimId: patient.id, cause: "attack" };
+        } else if (state.bombReport.explodedVictims.includes(patient.id)) {
+          patient.alive = true;
+          state.bombReport.explodedVictims = state.bombReport.explodedVictims.filter(id => id !== patient.id);
+          state.doctorReport = { victimId: patient.id, cause: "bomb" };
+        }
+        if (state.doctorReport) actionLog(`💉 しかし間一髪、${patient.name} はドクターの蘇生で助かった！`);
+      }
+    }
+
     cpuNightActions(alive);
   }
 
@@ -1172,6 +1272,25 @@
         if (t) t.suspicion += 0.6;
       }
     }
+  }
+
+  // Mouse: publicly reveal one player's role, once per game. A baka
+  // displaying the mouse announces a fabricated role instead (Insane rule),
+  // and the table reacts to the announcement as if it were true.
+  function revealMouse(actor, target) {
+    actor.mouseUsed = true;
+    let shownRoleKey = target.roleKey;
+    if (actor.roleKey === "baka") {
+      const pool = Object.keys(ROLES).filter(k => k !== "baka");
+      shownRoleKey = rand(pool);
+    }
+    state.revealedRoles[target.id] = shownRoleKey;
+    const shown = ROLES[shownRoleKey];
+    target.suspicion = shown.faction === "ピュア" ? -5 : 8;
+    dialogueLog(`🐭 ${actor.name}「ここでマウス能力！ ${target.name} は… ${shown.name}（${shown.faction}）だよ！」`);
+    actionLog(formatActionLog("roleReveal", { label: "公開", target: target.name, role: shown.name, faction: shown.faction }));
+    showCutin("🐭 役職公開", `${target.name} は ${shown.name}`, "info");
+    draw();
   }
 
   function morningToDiscussion() {
@@ -1215,6 +1334,14 @@
     const alivePlayers = state.players.filter(p => p.alive);
     for (const p of alivePlayers) {
       if (p.id === state.playerId) continue;
+      if (getEffectiveRoleKey(p) === "mouse" && !p.mouseUsed && Math.random() < 0.45) {
+        const others = alivePlayers.filter(q => q.id !== p.id);
+        const tgt = others.slice().sort((a, b) => b.suspicion - a.suspicion)[0];
+        if (tgt) {
+          revealMouse(p, tgt);
+          continue;
+        }
+      }
       const inv = state.lastInvestigation?.[p.id];
       const invTarget = inv ? state.players[inv.targetId] : null;
       let category, lineTarget;
@@ -1265,9 +1392,10 @@
     const target = state.players[state.selectedId];
     if (!target || !target.alive) return alert("投票先を選んでね！");
     const votes = new Map();
-    const addVote = (id) => votes.set(id, (votes.get(id) || 0) + 1);
+    // A politician's ballot counts double (a baka only displays the role).
+    const addVote = (id, voter) => votes.set(id, (votes.get(id) || 0) + (voter?.roleKey === "politician" ? 2 : 1));
 
-    addVote(target.id);
+    addVote(target.id, state.players[state.playerId]);
     state.players[state.playerId].voted = true;
 
     for (const p of alivePlayers()) {
@@ -1275,7 +1403,7 @@
       const candidates = alivePlayers().filter(x => x.id !== p.id);
       candidates.sort((a, b) => (b.suspicion + Math.random()) - (a.suspicion + Math.random()));
       const pick = candidates[0];
-      addVote(pick.id);
+      addVote(pick.id, p);
       p.voted = true;
     }
 
@@ -1483,6 +1611,13 @@
     setupGame();
   };
   el("howBtn").onclick = () => el("howTo").classList.toggle("hidden");
+  el("mouseBtn").onclick = () => {
+    const me = state.players[state.playerId];
+    const target = state.players[state.selectedId];
+    if (!me || getEffectiveRoleKey(me) !== "mouse" || me.mouseUsed) return;
+    if (!target || !target.alive || target.id === me.id) return alert("公開する相手を1人選んでね！");
+    revealMouse(me, target);
+  };
   el("toGameBtn").onclick = () => {
     el("roleScreen").classList.add("hidden");
     el("gameScreen").classList.remove("hidden");
