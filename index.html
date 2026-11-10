@@ -269,7 +269,7 @@
     .stage .wbody img { height: 74px; }
     .stage .walker.speaking .wbody { animation: stageHop 0.45s ease 2; }
     @keyframes stageHop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-13px); } }
-    @media (max-width: 640px) { .stage { height: 80px; } .stage .wbody img { height: 62px; } }
+    @media (max-width: 640px) { .stage { height: 64px; } .stage .wbody img { height: 50px; } }
     .settings-panel { display: grid; gap: 8px; justify-items: center; }
     .settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
     .settings-label { font-weight: 800; font-size: 0.92rem; color: var(--muted); }
@@ -435,7 +435,9 @@
       .player-role-card summary { padding: 6px 0; }
       .player-role-meta { font-size: 0.88rem; }
       .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-      .card { min-height: 0; padding: 8px 6px; border-radius: 12px; }
+      .card { min-height: 0; padding: 8px; border-radius: 12px; display: flex; align-items: center; gap: 8px; text-align: left; }
+      .card .avatar { width: 40px; height: 40px; font-size: 1.2rem; margin: 0; flex: 0 0 auto; }
+      .card-main { min-width: 0; }
       .avatar { width: 52px; height: 52px; font-size: 1.5rem; }
       .name { font-size: 0.92rem; }
       .meta { font-size: 0.74rem; }
@@ -969,9 +971,10 @@
       const revealedRole = p.alive ? "？" : ROLES[p.roleKey].name;
       div.innerHTML = `
         <div class="avatar"><span>${p.icon}</span>${ICON_IMGS[ICON_SLUGS[p.id]] ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[p.id]}" src="${ICON_IMGS[ICON_SLUGS[p.id]]}" alt="${p.name}" onerror="this.remove()">` : ""}</div>
-        <div class="name">${p.name}</div>
-        <div class="meta">役職：${revealedRole}</div>
-        <div class="meta">${p.alive?"生存中":"脱落済み"}</div>
+        <div class="card-main">
+          <div class="name">${p.name}</div>
+          <div class="meta">${revealedRole} ・ ${p.alive ? "生存中" : "脱落済み"}</div>
+        </div>
       `;
       cards.appendChild(div);
     }
