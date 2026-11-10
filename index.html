@@ -420,6 +420,24 @@
       riskNote: "追跡先の行動理由までは分からないため、早とちり注意。",
       nightAction: { type: "track", priority: 30, allowSelf: false }
     },
+    police: {
+      name: "ポリス",
+      faction: "ピュア",
+      desc: "夜に1人を訪ねて、その夜の行動を封じる（FeignのPolice方式）。",
+      nightActionHint: "能力を使いそうな相手を1人選んで足止め。",
+      resultInterpretation: "妨害した相手はその夜、能力を使えない（調査・護衛・追跡・盗み見・爆弾など）。ただしフェイク陣営の襲撃そのものは止められない。",
+      riskNote: "味方の能力者を止めると損。相手の役職読みが大事。",
+      nightAction: { type: "block", priority: 5, allowSelf: false }
+    },
+    lookout: {
+      name: "見張り役",
+      faction: "ピュア",
+      desc: "夜に1人の家を見張り、その夜に訪れた全員が分かる（FeignのLookout方式）。",
+      nightActionHint: "狙われそうな子や怪しい子の家を見張ろう。",
+      resultInterpretation: "訪問者の中に襲撃者や能力者が混ざっている。誰が何をしたかまでは分からない。",
+      riskNote: "訪問＝黒ではない。護衛や調査の訪問も見えてしまう。",
+      nightAction: { type: "lookout", priority: 35, allowSelf: true }
+    },
     clumsySeer: {
       name: "うっかり占い師",
       faction: "ピュア",
@@ -456,6 +474,15 @@
       riskNote: "target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。襲撃実行はフェイク陣営で1回だけ。",
       nightAction: { type: "attack", priority: 40, allowSelf: false }
     },
+    bomber: {
+      name: "ボマー",
+      faction: "ニュートラル",
+      desc: "第三勢力。夜に1人へ爆弾を仕掛け、翌日の夜に爆発する（FeignのBomber方式）。最後の1人になると単独勝利。",
+      nightActionHint: "毎晩だれか1人に爆弾を仕掛けよう。自分以外を全員倒せば勝ち。",
+      resultInterpretation: "爆弾は護衛されている相手には効かない。占われると『ニュートラル』とバレる。",
+      riskNote: "ピュア・フェイクどちらの勝利条件にも数えられない。両陣営から狙われる孤独な役職。",
+      nightAction: { type: "plant", priority: 25, allowSelf: false }
+    },
     baka: {
       name: "バカ",
       faction: "ピュア",
@@ -488,7 +515,7 @@
     noa: "data:image/webp;base64,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",
     ema: "data:image/webp;base64,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"
   };
-  const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager"];
+  const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "police", "lookout"];
 
   let state = {};
 
@@ -547,13 +574,20 @@
     const fakePool = fakeCount === 1
       ? [fixedFakeRoles[Math.floor(Math.random() * fixedFakeRoles.length)]]
       : [...fixedFakeRoles];
-    const innocentPool = [...INNOCENT_ROLE_KEYS];
-    const neutralPool = ["baka"];
+    // Feign-style draw: the seer and the baka are always in, the other
+    // pure-side power roles are drawn, and about half of games also get
+    // the neutral Bomber.
+    const hasBomber = Math.random() < 0.5;
+    const pureSlots = 8 - fakeCount - 1 - (hasBomber ? 1 : 0);
+    const drawPool = INNOCENT_ROLE_KEYS.filter(k => !["apprenticeSeer", "villager"].includes(k))
+      .sort(() => Math.random() - 0.5);
+    const pureRoles = ["apprenticeSeer", ...drawPool.slice(0, Math.max(0, pureSlots - 1))];
     const roleBag = [
       ...fakePool,
-      ...innocentPool,
-      ...neutralPool,
-      ...Array.from({ length: 8 - fakeCount - innocentPool.length - neutralPool.length }, () => "villager")
+      ...(hasBomber ? ["bomber"] : []),
+      "baka",
+      ...pureRoles,
+      ...Array.from({ length: 8 - fakeCount - (hasBomber ? 1 : 0) - 1 - pureRoles.length }, () => "villager")
     ].sort(() => Math.random() - 0.5);
     const assignedFakeCount = roleBag.filter(roleKey => fixedFakeRoles.includes(roleKey)).length;
     if (assignedFakeCount !== fakeCount) {
@@ -581,7 +615,8 @@
       nightReport: { type: "none", victimId: null },
       nightActions: {},
       nightActionTypes: {},
-      fakeIntel: {}
+      fakeIntel: {},
+      bombs: []
     };
     showRole();
     draw();
@@ -730,6 +765,27 @@
       } else if (effectiveRoleKey === "tracker") {
         const trackTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
         registerAction(p.id, trackTarget);
+      } else if (effectiveRoleKey === "police") {
+        let policeTarget;
+        if (p.id === me.id) {
+          policeTarget = target.id;
+        } else {
+          const actors = alive.filter(x => x.id !== p.id && ROLES[getEffectiveRoleKey(x)].nightAction);
+          policeTarget = rand(actors.length ? actors : alive.filter(x => x.id !== p.id))?.id;
+        }
+        registerAction(p.id, policeTarget, "block");
+      } else if (effectiveRoleKey === "lookout") {
+        const lookoutTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
+        registerAction(p.id, lookoutTarget);
+      } else if (effectiveRoleKey === "bomber") {
+        let plantTarget;
+        if (p.id === me.id) {
+          plantTarget = target.id;
+        } else {
+          const unbombed = alive.filter(x => x.id !== p.id && !state.bombs.some(b => b.targetId === x.id));
+          plantTarget = rand(unbombed.length ? unbombed : alive.filter(x => x.id !== p.id))?.id;
+        }
+        registerAction(p.id, plantTarget, "plant");
       }
     }
 
@@ -749,7 +805,7 @@
         fakeActor = rand(fakeSide);
         const fallbackVictims = alive.filter(x => x.id !== fakeActor.id);
         // The faction prefers victims the mimic has identified as power roles.
-        const intelTargets = victims.filter(x => ["apprenticeSeer", "clumsySeer", "guardian", "tracker"].includes(state.fakeIntel?.[x.id]));
+        const intelTargets = victims.filter(x => ["apprenticeSeer", "clumsySeer", "guardian", "tracker", "police", "lookout"].includes(state.fakeIntel?.[x.id]));
         const pool = intelTargets.length ? intelTargets : victims;
         attackTarget = rand(pool.length ? pool : fallbackVictims)?.id;
       }
@@ -774,8 +830,15 @@
     state.nightActionTypes = nightActionTypes;
     resolveNightActions(me, target, alive);
 
-    state.phase = "morning";
     state.selectedId = null;
+    const winAfterNight = checkWin();
+    if (winAfterNight) {
+      state.phase = "end";
+      actionLog(winAfterNight);
+      el("retryBtn").classList.remove("hidden");
+    } else {
+      state.phase = "morning";
+    }
     draw();
   }
 
@@ -804,7 +867,25 @@
         continue;
       }
       if (actionType === "block") {
-        blockedIds.add(target.id);
+        // A baka displaying the police role blocks nobody (Insane rule).
+        if (actor.roleKey !== "baka") blockedIds.add(target.id);
+      } else if (actionType === "plant") {
+        state.bombs.push({ targetId: target.id, explodeDay: state.day + 1 });
+        if (actor.id === me.id) actionLog(`爆弾設置 → ${target.name} に爆弾を仕掛けた…明日の夜に爆発する。`);
+      } else if (actionType === "lookout") {
+        let visitors;
+        if (actor.roleKey === "baka") {
+          // A baka lookout's report is fabricated, like its tracking.
+          const others = alive.filter(x => x.id !== target.id && x.id !== actor.id);
+          visitors = Math.random() < 0.5 || !others.length ? [] : [rand(others)];
+        } else {
+          visitors = Object.entries(state.nightActions)
+            .filter(([a, t]) => Number(a) !== actor.id && t === target.id)
+            .map(([a]) => state.players[Number(a)])
+            .filter(v => v && v.alive);
+        }
+        actor.lastTarget = visitors.length ? visitors[0].id : null;
+        if (actor.id === me.id) actionLog(`見張り → ${target.name} を訪れた人：${visitors.length ? visitors.map(v => v.name).join("、") : "なし"}`);
       } else if (actionType === "spy") {
         state.fakeIntel[target.id] = target.roleKey;
         if (actor.id === me.id) actionLog(`盗み見 → ${target.name} の正体は「${ROLES[target.roleKey].name}」だった。`);
@@ -822,6 +903,7 @@
         }
         if (actor.id === me.id) actionLog(formatActionLog("investigate", { actor: ROLES[effectiveRoleKey].name, target: target.name, result }));
         if (actor.id !== me.id && result === "フェイク") target.suspicion += 1;
+        if (actor.id !== me.id && result === "ニュートラル") target.suspicion += 0.5;
       } else if (actionType === "track") {
         let visitTarget;
         if (actor.roleKey === "baka") {
@@ -854,6 +936,24 @@
       }
     } else {
       state.nightReport = { type: "none", victimId: null };
+    }
+
+    // Bombs planted last night explode now, unless tonight's guardian
+    // is protecting the victim.
+    const exploding = state.bombs.filter(b => b.explodeDay === state.day);
+    if (exploding.length) {
+      state.bombs = state.bombs.filter(b => b.explodeDay > state.day);
+      for (const bomb of exploding) {
+        const victim = state.players[bomb.targetId];
+        if (!victim || !victim.alive) continue;
+        if (state.protectedTargets.has(victim.id)) {
+          actionLog(`💣 ${victim.name} に仕掛けられた爆弾は、護衛のおかげで不発に終わった！`);
+          continue;
+        }
+        victim.alive = false;
+        actionLog(`💣💥 ${victim.name} が爆発に巻き込まれて倒れた…`);
+        actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
+      }
     }
 
     cpuNightActions(alive);
@@ -994,6 +1094,8 @@
     const alive = alivePlayers();
     const pure = alive.filter(p => ROLES[p.roleKey].faction === "ピュア").length;
     const fake = alive.filter(p => ROLES[p.roleKey].faction === "フェイク").length;
+    const bomberAlive = alive.some(p => p.roleKey === "bomber");
+    if (bomberAlive && pure === 0 && fake === 0) return "💣 ボマーの単独勝利！最後の1人になったよ！";
     if (fake === 0) return "🎉 ピュア陣営の勝利！フェイクを全員追放したよ！";
     if (fake >= pure) return "💀 フェイク陣営の勝利…生存者数が同数以上になった。";
     return null;
