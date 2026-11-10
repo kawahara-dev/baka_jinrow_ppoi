@@ -172,6 +172,24 @@
       font-size: 0.72rem;
       font-weight: 700;
     }
+    .parade { position: relative; width: 100%; height: 148px; overflow: hidden; margin: 12px auto 2px; max-width: 600px;
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+      mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent); }
+    .parade::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 30px; z-index: 3;
+      background: linear-gradient(180deg, rgba(245,238,255,0), rgba(245,238,255,0.92) 70%); }
+    .walker { position: absolute; bottom: 8px; left: 0; width: 92px; z-index: 1;
+      animation: walkAcross 34s linear infinite; animation-delay: calc(var(--i) * -4.25s); will-change: left; }
+    .walker img { width: 100%; display: block; position: relative; z-index: 2;
+      animation: techitechi var(--bd, 0.34s) ease-in-out infinite alternate;
+      -webkit-mask-image: linear-gradient(180deg, #000 80%, transparent 99%);
+      mask-image: linear-gradient(180deg, #000 80%, transparent 99%); }
+    .wshadow { position: absolute; left: 14%; right: 14%; bottom: -2px; height: 10px; z-index: 1;
+      background: rgba(120, 80, 160, 0.28); border-radius: 50%; filter: blur(3px);
+      animation: shadowPulse var(--bd, 0.34s) ease-in-out infinite alternate; }
+    @keyframes walkAcross { from { left: -110px; } to { left: 100%; } }
+    @keyframes techitechi { from { transform: translateY(0) rotate(-2.4deg); } to { transform: translateY(-7px) rotate(2.4deg); } }
+    @keyframes shadowPulse { from { transform: scaleX(1); opacity: 0.85; } to { transform: scaleX(0.78); opacity: 0.5; } }
+    @media (prefers-reduced-motion: reduce) { .walker, .walker img, .wshadow { animation: none; } }
     .avatar { font-size: 1.8rem; position: relative; width: 64px; height: 64px; margin: 0 auto; }
     .avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
     .name { font-weight: 700; margin-top: 4px; }
@@ -280,6 +298,16 @@
     <div class="btn-row">
       <button id="startBtn" class="primary">START</button>
       <button id="howBtn" class="secondary">遊び方</button>
+    </div>
+    <div class="parade" aria-hidden="true">
+      <span class="walker" style="--i:0;--bd:0.34s"><span class="wshadow"></span><img data-slug="luna" alt="ルナ"></span>
+      <span class="walker" style="--i:1;--bd:0.38s"><span class="wshadow"></span><img data-slug="mio" alt="ミオ"></span>
+      <span class="walker" style="--i:2;--bd:0.31s"><span class="wshadow"></span><img data-slug="yui" alt="ユイ"></span>
+      <span class="walker" style="--i:3;--bd:0.36s"><span class="wshadow"></span><img data-slug="kanon" alt="カノン"></span>
+      <span class="walker" style="--i:4;--bd:0.33s"><span class="wshadow"></span><img data-slug="suzu" alt="スズ"></span>
+      <span class="walker" style="--i:5;--bd:0.39s"><span class="wshadow"></span><img data-slug="riri" alt="リリ"></span>
+      <span class="walker" style="--i:6;--bd:0.32s"><span class="wshadow"></span><img data-slug="noa" alt="ノア"></span>
+      <span class="walker" style="--i:7;--bd:0.37s"><span class="wshadow"></span><img data-slug="ema" alt="エマ"></span>
     </div>
     <div id="howTo" class="screen hidden" style="max-width:720px;text-align:left;">
       <h3>遊び方</h3>
@@ -966,6 +994,18 @@
     if (fake === 0) return "🎉 ピュア陣営の勝利！フェイクを全員追放したよ！";
     if (fake >= pure) return "💀 フェイク陣営の勝利…生存者数が同数以上になった。";
     return null;
+  }
+
+  // The walking-parade artwork is stored as base64 text files under walk/
+  // (this repository's pipeline cannot carry binary files), so decode them
+  // into data URIs at runtime. If loading fails, the walker quietly leaves.
+  if (typeof fetch === "function") {
+    document.querySelectorAll(".walker img").forEach(img => {
+      fetch(`walk/${img.dataset.slug}.b64`)
+        .then(r => { if (!r.ok) throw new Error("walk asset"); return r.text(); })
+        .then(t => { img.src = `data:image/webp;base64,${t.trim()}`; })
+        .catch(() => img.closest(".walker")?.remove());
+    });
   }
 
   el("startBtn").onclick = () => {
