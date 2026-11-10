@@ -528,7 +528,8 @@
       <p>・夜の解決順：妨害 → 護衛 → 調査・盗み見 → 爆弾設置 → 追跡・見張り → 襲撃 → 爆発（前日の爆弾）。</p>
       <p>・昼は「報告→議論→投票」を順番に進行し、各フェーズで操作が制限されます。</p>
       <p>・ピュア陣営はフェイク全員追放で勝利、フェイク陣営はピュアと同数以上で勝利。</p>
-      <p>・約半分のゲームでは第三勢力「ボマー」も登場。最後の1人になると単独勝利するのでご注意。</p>
+      <p>・約半分のゲームでは第三勢力「ボマー」も登場。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利するのでご注意。</p>
+      <p>・フェイクが1人だけのときは、襲撃に加えて役職の能力（妨害／盗み見）も使える本気モードになる。</p>
       <p>・一部のピュア役職は「うっかり」で結果がズレることあり！</p>
     </div>
   </section>
@@ -607,7 +608,7 @@
         <li><strong>村ガール（ピュア）</strong>：能力なし。議論と投票が主軸。</li>
         <li><strong>フェイクガール（フェイク）</strong>：襲撃しない夜は、ピュア側1人の行動を妨害する。</li>
         <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。襲撃しない夜はピュア側1人の実役職を盗み見する。</li>
-        <li><strong>ボマー（ニュートラル）</strong>：約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になると単独勝利。</li>
+        <li><strong>ボマー（ニュートラル）</strong>：約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</li>
         <li><strong>バカ（ピュア）</strong>：表示された別の役職で行動するが、結果はすべて偽物。脱落時に実役職が公開される。</li>
       </ul>
       <p style="margin-top:8px;">ピュア側の役職（占い師・バカ以外）は毎ゲーム抽選で、登場しないこともあります。フェイク陣営の襲撃は陣営で1回だけ。</p>
@@ -741,7 +742,7 @@
     bomber: {
       name: "ボマー",
       faction: "ニュートラル",
-      desc: "第三勢力。夜に1人へ爆弾を仕掛け、翌日の夜に爆発する（FeignのBomber方式）。最後の1人になると単独勝利。",
+      desc: "第三勢力。夜に1人へ爆弾を仕掛け、翌日の夜に爆発する（FeignのBomber方式）。最後の1人になるか、爆弾で2人以上を倒して生き残ると勝利。",
       nightActionHint: "毎晩だれか1人に爆弾を仕掛けよう。自分以外を全員倒せば勝ち。",
       resultInterpretation: "爆弾は護衛されている相手には効かない。占われると『ニュートラル』とバレる。",
       riskNote: "ピュア・フェイクどちらの勝利条件にも数えられない。両陣営から狙われる孤独な役職。",
@@ -825,7 +826,7 @@
 
   function setupGame() {
     const fakeCount = gameSettings.fakeCount === "random"
-      ? (Math.random() < 0.5 ? 1 : 2)
+      ? (Math.random() < 0.35 ? 1 : 2)
       : Number(gameSettings.fakeCount);
     const fixedFakeRoles = ["fakeGirl", "mimic"];
     const fakePool = fakeCount === 1
@@ -877,6 +878,7 @@
       nightActionTypes: {},
       fakeIntel: {},
       bombs: [],
+      bombKills: 0,
       bombReport: { explodedVictims: [], fizzled: false },
       humanBlocked: false,
       trapTargets: new Set(),
@@ -1021,6 +1023,7 @@
     if (!target || !target.alive) return alert("対象を選んでね！");
 
     state.protectedTargets = new Set();
+    state.loneFakeAbility = null;
     for (const p of alive) p.lastTarget = null;
 
     const nightActions = {};
@@ -1111,6 +1114,23 @@
           registerAction(f.id, rand(actors.length ? actors : victims)?.id, "block");
         }
       }
+
+      // Balance: a lone fake member is heavily outnumbered, so alongside
+      // the faction attack they also use their role ability, auto-targeted
+      // with the same heuristics a CPU partner would use. The ability is
+      // applied during resolution via state.loneFakeAbility.
+      if (fakeSide.length === 1) {
+        const lone = fakeSide[0];
+        if (lone.roleKey === "mimic") {
+          const spyPool = victims.filter(x => x.id !== attackTarget);
+          const spyTarget = rand(spyPool.length ? spyPool : victims)?.id;
+          if (spyTarget !== undefined) state.loneFakeAbility = { actorId: lone.id, type: "spy", targetId: spyTarget };
+        } else if (lone.roleKey === "fakeGirl") {
+          const actors = victims.filter(x => ROLES[getEffectiveRoleKey(x)].nightAction);
+          const blockTarget = rand(actors.length ? actors : victims)?.id;
+          if (blockTarget !== undefined) state.loneFakeAbility = { actorId: lone.id, type: "block", targetId: blockTarget };
+        }
+      }
     }
 
     state.nightActions = nightActions;
@@ -1187,6 +1207,9 @@
       .sort((a, b) => priorityOf(a.actor) - priorityOf(b.actor));
 
     const blockedIds = new Set();
+    // A lone fake girl's extra block applies at block priority, before
+    // any other step resolves.
+    if (state.loneFakeAbility?.type === "block") blockedIds.add(state.loneFakeAbility.targetId);
     let attackTargetId = null;
     let attackActorId = null;
     for (const step of actionOrder) {
@@ -1298,6 +1321,17 @@
       state.nightReport = { type: "none", victimId: null };
     }
 
+    // A lone mimic's extra spy applies here (the intel feeds tomorrow's
+    // targeting), unless the mimic was blocked tonight.
+    if (state.loneFakeAbility?.type === "spy" && !blockedIds.has(state.loneFakeAbility.actorId)) {
+      const spyActor = state.players[state.loneFakeAbility.actorId];
+      const spyTarget = state.players[state.loneFakeAbility.targetId];
+      if (spyActor && spyTarget) {
+        state.fakeIntel[spyTarget.id] = spyTarget.roleKey;
+        if (spyActor.id === me.id) actionLog(`盗み見 → ${spyTarget.name} の正体は「${ROLES[spyTarget.roleKey].name}」だった。`);
+      }
+    }
+
     // Bombs planted last night explode now, unless tonight's guardian
     // is protecting the victim.
     const exploding = state.bombs.filter(b => b.explodeDay === state.day);
@@ -1315,6 +1349,7 @@
         victim.deathCause = "爆発";
         victim.deathDay = state.day;
         state.bombReport.explodedVictims.push(victim.id);
+        state.bombKills = (state.bombKills || 0) + 1;
         actionLog(`💣💥 ${victim.name} が爆発に巻き込まれて倒れた…`);
         actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
       }
@@ -1331,6 +1366,7 @@
         } else if (state.bombReport.explodedVictims.includes(patient.id)) {
           patient.alive = true;
           state.bombReport.explodedVictims = state.bombReport.explodedVictims.filter(id => id !== patient.id);
+          state.bombKills = Math.max(0, (state.bombKills || 0) - 1);
           state.doctorReport = { victimId: patient.id, cause: "bomb" };
         }
         if (state.doctorReport) {
@@ -1593,6 +1629,10 @@
     const fake = alive.filter(p => ROLES[p.roleKey].faction === "フェイク").length;
     const bomberAlive = alive.some(p => p.roleKey === "bomber");
     if (bomberAlive && pure === 0 && fake === 0) return "💣 ボマーの単独勝利！最後の1人になったよ！";
+    // A surviving Bomber who has taken out two or more players with bombs
+    // steals the win at the moment the game would otherwise end.
+    const bomber = alive.find(p => p.roleKey === "bomber");
+    if (bomber && (state.bombKills || 0) >= 2 && (fake === 0 || fake >= pure)) return "💣 ボマーの勝利！爆弾で2人以上を倒し、勝利を横取りした！";
     if (fake === 0) return "🎉 ピュア陣営の勝利！フェイクを全員追放したよ！";
     if (fake >= pure) return "💀 フェイク陣営の勝利…生存者数が同数以上になった。";
     return null;
