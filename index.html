@@ -410,18 +410,18 @@
     fakeGirl: {
       name: "フェイクガール",
       faction: "フェイク",
-      desc: "フェイク陣営として夜に1人を脱落させる。",
+      desc: "フェイク陣営として夜に1人を脱落させる。襲撃しない夜は、ピュア側1人の夜行動を妨害する。",
       nightActionHint: "仲間と相談した想定で、フェイク陣営として襲撃先を1人に絞る。",
-      resultInterpretation: "襲撃が通れば盤面有利、守られると計画を立て直し。",
+      resultInterpretation: "襲撃が通れば盤面有利、守られると計画を立て直し。妨害された相手はその夜、能力を使えない。",
       riskNote: "守り手の防衛先に当たると襲撃失敗。襲撃は陣営で1回だけ。",
       nightAction: { type: "attack", priority: 40, allowSelf: false }
     },
     mimic: {
       name: "なりすまし",
       faction: "フェイク",
-      desc: "調査でピュアに見えることがある。フェイク陣営の襲撃方針にも参加。",
+      desc: "調査でピュアに見えることがある。襲撃しない夜は、ピュア側1人の実役職を盗み見る。得た情報は陣営の襲撃先決定に使われる。",
       nightActionHint: "占いをいなしつつ、フェイク陣営の襲撃先相談に乗る立ち回り。",
-      resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。",
+      resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。盗み見で占い師や守り手が割れると、優先的に狙われる。",
       riskNote: "target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。襲撃実行はフェイク陣営で1回だけ。",
       nightAction: { type: "attack", priority: 40, allowSelf: false }
     },
@@ -548,7 +548,9 @@
       playerId: Math.floor(Math.random() * names.length),
       protectedTargets: new Set(),
       nightReport: { type: "none", victimId: null },
-      nightActions: {}
+      nightActions: {},
+      nightActionTypes: {},
+      fakeIntel: {}
     };
     showRole();
     draw();
@@ -675,9 +677,11 @@
     for (const p of alive) p.lastTarget = null;
 
     const nightActions = {};
-    const registerAction = (actorId, targetId) => {
+    const nightActionTypes = {};
+    const registerAction = (actorId, targetId, type = null) => {
       if (targetId === null || targetId === undefined) return;
       nightActions[actorId] = targetId;
+      if (type) nightActionTypes[actorId] = type;
     };
 
     for (const p of alive) {
@@ -713,12 +717,30 @@
       } else {
         fakeActor = rand(fakeSide);
         const fallbackVictims = alive.filter(x => x.id !== fakeActor.id);
-        attackTarget = rand(victims.length ? victims : fallbackVictims)?.id;
+        // The faction prefers victims the mimic has identified as power roles.
+        const intelTargets = victims.filter(x => ["apprenticeSeer", "clumsySeer", "guardian", "tracker"].includes(state.fakeIntel?.[x.id]));
+        const pool = intelTargets.length ? intelTargets : victims;
+        attackTarget = rand(pool.length ? pool : fallbackVictims)?.id;
       }
       registerAction(fakeActor.id, attackTarget);
+
+      // Feign-style: fake members who are not leading tonight's attack use
+      // their role ability instead. The mimic spies on a player's real role
+      // (feeding the faction's target choice), the fake girl blocks a
+      // pure-side night action.
+      for (const f of fakeSide) {
+        if (f.id === fakeActor.id || f.id === me.id) continue;
+        if (f.roleKey === "mimic") {
+          registerAction(f.id, rand(victims)?.id, "spy");
+        } else if (f.roleKey === "fakeGirl") {
+          const actors = victims.filter(x => ROLES[getEffectiveRoleKey(x)].nightAction);
+          registerAction(f.id, rand(actors.length ? actors : victims)?.id, "block");
+        }
+      }
     }
 
     state.nightActions = nightActions;
+    state.nightActionTypes = nightActionTypes;
     resolveNightActions(me, target, alive);
 
     state.phase = "morning";
@@ -727,18 +749,35 @@
   }
 
   function resolveNightActions(me, selectedTarget, alive) {
+    const actionTypeOf = (actor) => state.nightActionTypes?.[actor.id] || ROLES[getEffectiveRoleKey(actor)].nightAction?.type;
+    const priorityOf = (actor) => {
+      const t = actionTypeOf(actor);
+      if (t === "block") return 5;
+      if (t === "spy") return 15;
+      return ROLES[getEffectiveRoleKey(actor)].nightAction?.priority ?? 40;
+    };
     const actionOrder = Object.entries(state.nightActions)
       .map(([actorId, targetId]) => ({ actor: state.players[Number(actorId)], target: state.players[targetId] }))
       .filter(x => x.actor && x.target && x.actor.alive && x.target.alive)
-      .sort((a, b) => (ROLES[getEffectiveRoleKey(a.actor)].nightAction?.priority ?? 40) - (ROLES[getEffectiveRoleKey(b.actor)].nightAction?.priority ?? 40));
+      .sort((a, b) => priorityOf(a.actor) - priorityOf(b.actor));
 
+    const blockedIds = new Set();
     let attackTargetId = null;
     for (const step of actionOrder) {
       const actor = step.actor;
       const target = step.target;
       const effectiveRoleKey = getEffectiveRoleKey(actor);
-      const actionType = ROLES[effectiveRoleKey].nightAction?.type;
-      if (actionType === "protect") {
+      const actionType = actionTypeOf(actor);
+      if (blockedIds.has(actor.id) && actionType !== "attack") {
+        if (actor.id === me.id) actionLog("誰かに妨害されて、今夜は行動できなかった！");
+        continue;
+      }
+      if (actionType === "block") {
+        blockedIds.add(target.id);
+      } else if (actionType === "spy") {
+        state.fakeIntel[target.id] = target.roleKey;
+        if (actor.id === me.id) actionLog(`盗み見 → ${target.name} の正体は「${ROLES[target.roleKey].name}」だった。`);
+      } else if (actionType === "protect") {
         if (actor.roleKey !== "baka") state.protectedTargets.add(target.id);
         if (actor.id === me.id) actionLog(formatActionLog("protect", { actor: ROLES[effectiveRoleKey].name, target: target.name }));
       } else if (actionType === "investigate") {
