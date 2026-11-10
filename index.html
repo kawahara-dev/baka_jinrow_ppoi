@@ -234,6 +234,18 @@
       background: var(--pink-soft); border-radius: 62% 38% 62% 38% / 52% 62% 38% 48%;
       animation-name: petalFall; animation-timing-function: linear; animation-iteration-count: infinite; }
     @keyframes petalFall { to { transform: translateY(75vh) translateX(34px) rotate(320deg); } }
+    .stage { position: relative; height: 92px; overflow: hidden; border-radius: 14px; margin-bottom: 10px;
+      border: 1px solid #f2e8ff;
+      background: linear-gradient(180deg, #ffeef8 0%, #f3eaff 60%, #e2f6e6 61%, #d3efdb 100%);
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+      mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+      transition: filter 0.8s ease; }
+    body[data-phase="night"] .stage { filter: brightness(0.66) saturate(0.8); }
+    .stage .walker { animation-duration: 26s; }
+    .stage .wbody img { height: 74px; }
+    .stage .walker.speaking .wbody { animation: stageHop 0.45s ease 2; }
+    @keyframes stageHop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-13px); } }
+    @media (max-width: 640px) { .stage { height: 80px; } .stage .wbody img { height: 62px; } }
     .settings-panel { display: grid; gap: 8px; justify-items: center; }
     .settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
     .settings-label { font-weight: 800; font-size: 0.92rem; color: var(--muted); }
@@ -271,7 +283,7 @@
     #actionBtn:not(.hidden), #voteBtn:not(.hidden) { animation: btnPulse 1.8s ease-in-out infinite; }
     @keyframes btnPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255, 111, 179, 0.45); } 50% { box-shadow: 0 0 0 9px rgba(255, 111, 179, 0); } }
     @media (prefers-reduced-motion: reduce) {
-      .petals span, .confetti-piece, .cutin-band, .card, .log p, .shake,
+      .petals span, .confetti-piece, .cutin-band, .card, .log p, .shake, .stage .walker.speaking .wbody,
       #actionBtn:not(.hidden), #voteBtn:not(.hidden) { animation: none !important; }
     }
     .avatar { font-size: 1.8rem; position: relative; width: 64px; height: 64px; margin: 0 auto; }
@@ -496,6 +508,7 @@
       <div class="stat"><div>現在フェーズ</div><div id="phaseText" class="phase-title">夜行動</div></div>
       <div class="stat"><div>あなたの陣営</div><strong id="factionText">-</strong></div>
     </div>
+    <div id="stage" class="stage" aria-hidden="true"></div>
     <details id="inGameRoleCard" class="player-role-card" open>
       <summary>
         <span class="player-role-heading">🪪 あなたの役職カード</span>
@@ -921,6 +934,12 @@
     el("actionBtn").classList.toggle("hidden", state.phase !== "night");
     el("voteBtn").classList.toggle("hidden", state.phase !== "vote");
     el("nextBtn").classList.toggle("hidden", !["morning", "discussion"].includes(state.phase));
+    const stage = el("stage");
+    if (stage) {
+      stage.innerHTML = state.players.filter(p => p.alive).map(p => `
+        <span class="walker" data-player="${p.id}" style="--i:${p.id};--bd:${(0.31 + (p.id % 4) * 0.03).toFixed(2)}s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${ICON_SLUGS[p.id]}" data-frame="a" alt=""><img class="frame-b" data-slug="${ICON_SLUGS[p.id]}" data-frame="b" alt=""></span></span>`).join("");
+      hydrateWalkImages(stage);
+    }
     const meForMouse = state.players?.[state.playerId];
     el("mouseBtn").classList.toggle("hidden", !(state.phase === "discussion" && meForMouse && getEffectiveRoleKey(meForMouse) === "mouse" && !meForMouse.mouseUsed));
   }
@@ -1274,6 +1293,18 @@
     }
   }
 
+  // Make the speaking character hop on the in-game stage.
+  function stageBounce(playerId) {
+    const stage = el("stage");
+    if (!stage || !stage.querySelector) return;
+    const w = stage.querySelector(`.walker[data-player="${playerId}"]`);
+    if (!w) return;
+    w.classList.remove("speaking");
+    void w.offsetWidth;
+    w.classList.add("speaking");
+    later(() => w.classList.remove("speaking"), 1000);
+  }
+
   // Mouse: publicly reveal one player's role, once per game. A baka
   // displaying the mouse announces a fabricated role instead (Insane rule),
   // and the table reacts to the announcement as if it were true.
@@ -1291,6 +1322,7 @@
     actionLog(formatActionLog("roleReveal", { label: "公開", target: target.name, role: shown.name, faction: shown.faction }));
     showCutin("🐭 役職公開", `${target.name} は ${shown.name}`, "info");
     draw();
+    stageBounce(actor.id);
   }
 
   function morningToDiscussion() {
@@ -1377,6 +1409,7 @@
       }
       const nameForLine = lineTarget?.name || target?.name || "みんな";
       dialogueLog(`${p.name}：${line.replaceAll("{target}", nameForLine)}`);
+      stageBounce(p.id);
     }
   }
 
@@ -1558,14 +1591,27 @@
     });
   }
   if (typeof fetch === "function") loadIcons();
-  if (typeof fetch === "function") {
-    document.querySelectorAll(".walker img").forEach(img => {
-      fetch(`walk/${img.dataset.slug}_${img.dataset.frame}.b64`)
+  // Walking sprites are cached so dynamically built walkers (the in-game
+  // stage) can reuse the same data URIs without refetching.
+  const WALK_IMGS = {};
+  function hydrateWalkImages(root) {
+    if (typeof fetch !== "function" || !root || !root.querySelectorAll) return;
+    root.querySelectorAll(".walker img").forEach(img => {
+      const key = `${img.dataset.slug}_${img.dataset.frame}`;
+      if (WALK_IMGS[key]) {
+        img.src = WALK_IMGS[key];
+        return;
+      }
+      fetch(`walk/${key}.b64`)
         .then(r => { if (!r.ok) throw new Error("walk asset"); return r.text(); })
-        .then(t => { img.src = `data:image/webp;base64,${t.trim()}`; })
+        .then(t => {
+          WALK_IMGS[key] = `data:image/webp;base64,${t.trim()}`;
+          img.src = WALK_IMGS[key];
+        })
         .catch(() => img.closest(".walker")?.remove());
     });
   }
+  hydrateWalkImages(document);
 
   // ---- game settings (title screen; persisted in localStorage) ----
   const SETTINGS_KEY = "fakeBloomSettings";
