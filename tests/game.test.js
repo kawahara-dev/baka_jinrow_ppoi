@@ -39,16 +39,50 @@ function craftNight(FB, actions) {
 
 // 素朴な自動プレイヤーで1試合を最後まで回す。夜は生存中の自分以外から
 // 先頭を選び、投票は最も疑念が高い生存者を選ぶ。終了時の state を返す。
-function playFullGame(FB, maxDays = 40) {
+// パス＆プレイでは受け渡し画面と夜の順番入力もボタン経由で進める。
+function playPnpNight(FB, elements) {
+  const s = FB.state;
+  let guard = 0;
+  while (s.phase === "night" && guard++ < 40) {
+    if (s.pnpStep === "nightCover") {
+      elements.get("pnpRevealBtn").onclick();
+    } else if (s.pnpStep === "nightResult") {
+      elements.get("pnpConfirmBtn").onclick();
+    } else if (s.pnpStep === "nightNoAction" || s.pnpStep === "nightFakeConsult") {
+      elements.get("pnpConfirmBtn").onclick();
+    } else if (s.pnpStep === "nightAction") {
+      const player = FB.pnpNightCurrentPlayer();
+      const target = s.players.find((p) => p.alive && p.id !== player.id);
+      s.selectedId = target.id;
+      elements.get("actionBtn").onclick();
+    } else {
+      throw new Error(`夜入力の想定外のステップ: ${s.pnpStep}`);
+    }
+  }
+  assert.ok(s.phase === "morning" || s.phase === "end", `夜が解決されなかった: ${s.phase} / ${s.pnpStep}`);
+}
+
+function playFullGame(FB, elements, maxDays = 40) {
   FB.setupGame();
+  if (FB.state.mode === "pnp") {
+    // 受け渡し画面を全員分進める（最後の確認で夜入力が始まる）。
+    const n = FB.state.humanPlayerIds.length;
+    for (let i = 0; i < n; i++) {
+      elements.get("pnpRevealBtn").onclick();
+      elements.get("pnpConfirmBtn").onclick();
+    }
+  }
   let steps = 0;
   while (FB.state.phase !== "end" && steps++ < maxDays * 4) {
     const s = FB.state;
     const alive = s.players.filter((p) => p.alive);
     const me = s.players[s.playerId];
     if (s.phase === "night") {
-      s.selectedId = alive.find((p) => p.id !== me.id).id;
-      FB.runNight();
+      if (s.mode === "pnp") playPnpNight(FB, elements);
+      else {
+        s.selectedId = alive.find((p) => p.id !== me.id).id;
+        FB.runNight();
+      }
     } else if (s.phase === "morning") {
       FB.morningToDiscussion();
     } else if (s.phase === "discussion") {
@@ -172,7 +206,7 @@ test("フルゲーム: BGM オンでも40日以内に決着する", () => {
   const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, bgm: "on" }, fakeAudio: true });
   elements.get("startBtn").onclick(); // BGM を実際に鳴らしながら1試合回す
   assert.equal(FB.isBgmPlaying(), true);
-  const end = playFullGame(FB);
+  const end = playFullGame(FB, elements);
   assert.equal(end.phase, "end");
   assert.ok(end.day <= 40);
   FB.stopBgm();
@@ -525,7 +559,7 @@ test("フルゲーム: 各種設定で40日以内に必ず決着し、戦績が�
   for (const settings of settingsList) {
     for (let i = 0; i < 10; i++) {
       const { FB, localStorage, elements } = loadGame({ seedSettings: { ...settings, sound: "off" } });
-      const end = playFullGame(FB);
+      const end = playFullGame(FB, elements);
       assert.equal(end.phase, "end", `設定 ${JSON.stringify(settings)} #${i} が終わらなかった`);
       assert.ok(["ピュア", "フェイク", "ニュートラル"].includes(end.winnerFaction));
       assert.ok(end.day <= 40);
@@ -639,7 +673,11 @@ test("パス＆プレイ: 受け渡し画面で全員の役職を順番に確認
     }
   }
   assert.equal(s.pnpIndex, 2);
-  assert.equal(elements.get("pnpScreen").classList.contains("hidden"), true, "全員確認後は受け渡し画面が閉じる");
+  // 受け渡し完了後はそのまま夜行動の順番入力へ（フェーズ2）。
+  // 受け渡し画面は閉じず、夜のカバー画面に切り替わる。
+  assert.equal(elements.get("pnpScreen").classList.contains("hidden"), false, "受け渡し後は夜のカバー画面が出る");
+  assert.equal(s.pnpStep, "nightCover");
+  assert.match(elements.get("pnpCoverText").innerHTML, /夜行動/);
 });
 
 test("パス＆プレイ: 人間の調査結果が行動ログに出ない", () => {
@@ -665,7 +703,7 @@ test("フルゲーム: パス＆プレイで40日以内に決着し、個人情�
   for (const humanCount of ["2", "8"]) {
     for (let i = 0; i < 5; i++) {
       const { FB, elements, localStorage } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount, bomber: "on" } });
-      const end = playFullGame(FB);
+      const end = playFullGame(FB, elements);
       assert.equal(end.phase, "end", `パス＆プレイ ${humanCount}人 #${i} が終わらなかった`);
       assert.ok(end.day <= 40);
       assert.equal(end.myWin, null);
@@ -694,4 +732,124 @@ test("アクセシビリティ: ログは aria-live、設定グループは role
   for (const label of ["フェイク人数", "効果音", "BGM", "難易度", "ボマー", "遊び方", "参加人数"]) {
     assert.ok(html.includes(`role="group" aria-label="${label}"`), `${label} の設定グループ`);
   }
+});
+
+test("パス＆プレイ フェーズ2: 夜行動の順番入力で人間の対象が使われ、結果は本人だけに貯まる", () => {
+  // 単独フェイクの妨害で占い師がブロックされる回があるため、妨害されずに
+  // 調査が通った回で検証する（妨害の対象は CPU 守り手と占い師からランダム）。
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+    FB.setupGame();
+    const s = FB.state;
+    const humans = s.humanPlayerIds.map((id) => s.players[id]);
+    const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+    s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+    humans[0].roleKey = "apprenticeSeer";
+    cpus[0].roleKey = "fakeGirl";
+    cpus[1].roleKey = "guardian";
+    // 受け渡しを全員分進める（最後の確認で夜入力が始まる）
+    for (let i = 0; i < 2; i++) {
+      elements.get("pnpRevealBtn").onclick();
+      elements.get("pnpConfirmBtn").onclick();
+    }
+    assert.equal(s.pnpStep, "nightCover");
+    assert.equal(s.phase, "night");
+    // P1（占い師）の番：カバー→対象選択→決定
+    elements.get("pnpRevealBtn").onclick();
+    assert.equal(s.pnpStep, "nightAction");
+    assert.equal(FB.pnpNightCurrentPlayer().id, humans[0].id);
+    assert.equal(elements.get("pnpTurnBanner").classList.contains("hidden"), false);
+    assert.match(elements.get("pnpTurnBanner").textContent, /見習い占い師/);
+    s.selectedId = cpus[0].id; // フェイクを調査
+    elements.get("actionBtn").onclick();
+    assert.equal(s.pnpNightInputs[humans[0].id], cpus[0].id);
+    // P2（村ガール）の番：能力なし画面で確認だけ
+    assert.equal(s.pnpStep, "nightCover");
+    elements.get("pnpRevealBtn").onclick();
+    assert.equal(s.pnpStep, "nightNoAction");
+    assert.match(elements.get("pnpPlayerRole").innerHTML, /能力がありません/);
+    elements.get("pnpConfirmBtn").onclick();
+    // 夜が解決される
+    assert.equal(s.phase, "morning");
+    const inv = s.lastInvestigation[humans[0].id];
+    if (!inv) continue; // 占い師が妨害された回はやり直し
+    assert.equal(inv.result, "フェイク");
+    assert.equal(inv.targetId, cpus[0].id);
+    // 結果は本人の pnpNightResults に貯まり、公開ログには出ない
+    const mine = s.pnpNightResults[humans[0].id] || [];
+    assert.ok(mine.some((m) => m.includes("判定: フェイク")), `本人の結果: ${mine.join(" / ")}`);
+    const lines = elements.get("actionLog").children.map((c) => c.textContent);
+    assert.ok(!lines.some((l) => l.includes("判定:")), `調査結果が漏れた: ${lines.join(" / ")}`);
+    // 人間の調査は CPU の疑念を上げない（ソロと同じ）
+    assert.equal(cpus[0].suspicion, 0);
+    return;
+  }
+  assert.fail("10回試しても妨害されない夜を引けなかった");
+});
+
+test("パス＆プレイ フェーズ2: 夜結果は次の夜の番で本人だけに表示され、他人には見えない", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  humans[0].roleKey = "apprenticeSeer";
+  // 前夜の結果が貯まっている状態を作る（解決時の蓄積は別テストで確認）
+  s.pnpNightResults[humans[0].id] = ["見習い占い師 → ルナ → 判定: フェイク"];
+  s.phase = "night";
+  FB.startPnpNight();
+  assert.equal(s.pnpStep, "nightCover");
+  // P1の番：カバー→前夜の結果が本人だけに表示される
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightResult");
+  assert.match(elements.get("pnpPlayerRole").innerHTML, /判定: フェイク/);
+  assert.match(elements.get("pnpRoleTitle").textContent, /前夜の結果/);
+  // 結果を見た後は消費される（vm 内の配列なので長さで確認する）
+  elements.get("pnpConfirmBtn").onclick();
+  assert.equal(s.pnpStep, "nightAction");
+  assert.equal(s.pnpNightResults[humans[0].id].length, 0);
+  // P1の入力を済ませ、P2の番へ。P2の画面にP1の結果は出ない
+  s.selectedId = cpus[0].id;
+  elements.get("actionBtn").onclick();
+  assert.equal(s.pnpStep, "nightCover");
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightNoAction");
+  assert.ok(!elements.get("pnpPlayerRole").innerHTML.includes("判定:"));
+});
+
+test("パス＆プレイ フェーズ2: フェイク人間の代表者が入力した襲撃先が使われる", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  humans[0].roleKey = "fakeGirl";
+  humans[1].roleKey = "mimic"; // フェイク人間2人：代表者は humans[0]
+  const victim = cpus[0];
+  // 受け渡しを全員分進める
+  for (let i = 0; i < 2; i++) {
+    elements.get("pnpRevealBtn").onclick();
+    elements.get("pnpConfirmBtn").onclick();
+  }
+  // P1（代表者）の番：襲撃先を入力
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightAction");
+  assert.equal(FB.pnpHumanFakeRep().id, humans[0].id);
+  s.selectedId = victim.id;
+  elements.get("actionBtn").onclick();
+  assert.equal(s.pnpNightInputs[humans[0].id], victim.id);
+  // P2（代表者以外）の番：相談画面で確認だけ
+  assert.equal(s.pnpStep, "nightCover");
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightFakeConsult");
+  assert.match(elements.get("pnpPlayerRole").innerHTML, /相談/);
+  elements.get("pnpConfirmBtn").onclick();
+  // 夜が解決され、入力した襲撃先が倒れる
+  assert.equal(s.phase, "morning");
+  assert.equal(victim.alive, false);
+  assert.equal(victim.deathCause, "襲撃");
+  assert.equal(s.nightReport.type, "eliminated");
+  assert.equal(s.nightReport.victimId, victim.id);
 });
