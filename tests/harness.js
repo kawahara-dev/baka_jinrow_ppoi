@@ -183,6 +183,9 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   morningToDiscussion, discussionToVote, revealMouse, checkWin,
   getEffectiveRoleKey, showResults, buildHighlights, gameSettings,
   draw, paintSettings, roleHtmlFor, startHandoff, showPnpCover, showPnpRole,
+  startPnpNight, showPnpNightCover, showPnpNightTurn, showPnpNightAction,
+  confirmPnpNightAction, advancePnpNight, finishPnpNight,
+  pnpNightCurrentPlayer, pnpHumanFakeRep,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
 };

@@ -369,6 +369,17 @@
       line-height: 1.4;
     }
 
+    /* パス＆プレイの夜入力中、誰の番で何をするかを示す帯。 */
+    .pnp-turn-banner {
+      background: linear-gradient(145deg, #fff5fb 0%, #ffe4f2 100%);
+      border: 2px solid #ffb7db;
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-weight: 800;
+      line-height: 1.5;
+    }
+
 
     .role-guide {
       margin-top: 12px;
@@ -593,7 +604,7 @@
       </div>
     </div>
     <div id="pnpRole" class="hidden">
-      <h2>あなたの役職</h2>
+      <h2 id="pnpRoleTitle">あなたの役職</h2>
       <div id="pnpPlayerRole" class="role-box"></div>
       <div class="control-bar">
         <button id="pnpConfirmBtn" class="primary" style="flex:1 1 auto;min-height:48px;">確認した</button>
@@ -623,6 +634,7 @@
 
     <div class="game-ui">
       <div>
+        <div id="pnpTurnBanner" class="pnp-turn-banner hidden"></div>
         <div id="cards" class="cards"></div>
       </div>
       <aside class="right-panel">
@@ -1103,6 +1115,14 @@
       phase: "night",
       mode: gameSettings.mode,
       pnpIndex: 0,
+      // パス＆プレイの夜入力（フェーズ2）：順番入力のキューと各人の入力、
+      // 個人の夜結果（次の夜の番で本人だけに表示する）。
+      pnpStep: null,
+      pnpNightQueue: [],
+      pnpNightIndex: 0,
+      pnpNightInputs: {},
+      pnpNightResults: {},
+      pnpNightInputPending: null,
       selectedId: null,
       executed: null,
       players: names.map((n, i) => ({
@@ -1183,6 +1203,7 @@
   }
   function startHandoff() {
     state.pnpIndex = 0;
+    state.pnpStep = "handoff";
     el("factionText").textContent = "パス＆プレイ";
     el("titleScreen").classList.add("hidden");
     el("roleScreen").classList.add("hidden");
@@ -1192,18 +1213,155 @@
   }
   function showPnpCover() {
     const player = pnpCurrentPlayer();
+    state.pnpStep = "handoff";
     el("pnpRole").classList.add("hidden");
     el("pnpCover").classList.remove("hidden");
     el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpIndex + 1}（${player.name}）</strong>さんの番です。<br>周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
+    el("pnpRevealBtn").textContent = "タップして役職を見る";
   }
   function showPnpRole() {
     const player = pnpCurrentPlayer();
+    state.pnpStep = "handoff";
     el("pnpCover").classList.add("hidden");
     el("pnpRole").classList.remove("hidden");
+    el("pnpRoleTitle").textContent = "あなたの役職";
     el("pnpPlayerRole").innerHTML = roleHtmlFor(player);
     el("pnpConfirmBtn").textContent = state.pnpIndex + 1 < state.humanPlayerIds.length
       ? "確認した（次の人へ）"
       : "確認した（ゲーム開始）";
+  }
+
+  // ---- pass-and-play: night input (phase 2) ----
+  // 夜は生存中の人間が順番に入力する。カバー画面で端末を渡し、
+  // 各人の番でその人だけに夜行動の入力画面を出す。個人の夜結果は
+  // 公開ログに出さず pnpNightResults に貯め、次の夜の番で本人だけに表示する。
+  function pnpNightCurrentPlayer() {
+    return state.players[state.pnpNightQueue[state.pnpNightIndex]];
+  }
+  // フェイク陣営の人間の中で、襲撃先の入力をする代表者
+  // （人間プレイヤー番号の順で最初の生存中のフェイク人間）。
+  function pnpHumanFakeRep() {
+    if (state.mode !== "pnp") return null;
+    for (const id of state.humanPlayerIds) {
+      const p = state.players[id];
+      if (p?.alive && ["fakeGirl", "mimic"].includes(p.roleKey)) return p;
+    }
+    return null;
+  }
+  function startPnpNight() {
+    state.pnpNightQueue = state.humanPlayerIds.filter(id => state.players[id]?.alive);
+    state.pnpNightIndex = 0;
+    state.pnpNightInputs = {};
+    state.pnpNightInputPending = null;
+    // 脱落した人間の未読の夜結果は破棄する（次の番は来ないため）。
+    for (const id of Object.keys(state.pnpNightResults || {})) {
+      if (!state.players[id]?.alive) delete state.pnpNightResults[id];
+    }
+    if (!state.pnpNightQueue.length) {
+      // 人間が全員脱落：CPU だけで夜を解決する（フェーズ1と同じ）。
+      finishPnpNight();
+      return;
+    }
+    el("gameScreen").classList.add("hidden");
+    el("pnpScreen").classList.remove("hidden");
+    showPnpNightCover();
+  }
+  function showPnpNightCover() {
+    const player = pnpNightCurrentPlayer();
+    state.pnpStep = "nightCover";
+    el("pnpRole").classList.add("hidden");
+    el("pnpCover").classList.remove("hidden");
+    el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpNightIndex + 1}（${player.name}）</strong>さんの番です。<br>夜行動の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
+    el("pnpRevealBtn").textContent = "タップして夜の番を始める";
+  }
+  function showPnpNightTurn() {
+    const player = pnpNightCurrentPlayer();
+    const results = state.pnpNightResults?.[player.id] || [];
+    if (results.length) {
+      // 前夜の結果を本人だけに表示する（公開ログには出さない）。
+      state.pnpStep = "nightResult";
+      el("pnpCover").classList.add("hidden");
+      el("pnpRole").classList.remove("hidden");
+      el("pnpRoleTitle").textContent = "前夜の結果";
+      el("pnpPlayerRole").innerHTML = results.map(r => `<div>${r}</div>`).join("");
+      el("pnpConfirmBtn").textContent = "夜行動へ進む";
+      state.pnpNightResults[player.id] = [];
+    } else {
+      showPnpNightAction();
+    }
+  }
+  function showPnpNightAction() {
+    const player = pnpNightCurrentPlayer();
+    const effectiveKey = getEffectiveRoleKey(player);
+    const role = ROLES[effectiveKey];
+    const rep = pnpHumanFakeRep();
+    const confirmLabel = state.pnpNightIndex + 1 < state.pnpNightQueue.length
+      ? "確認した（次の人へ）"
+      : "確認した（夜行動を終える）";
+    // フェイク陣営の人間が2人いる場合、襲撃入力は代表者1人だけ。
+    // 代表者以外はカバー画面越しに確認する（設計メモ 3.6）。
+    if (ROLES[player.roleKey].faction === "フェイク" && rep && rep.id !== player.id) {
+      state.pnpStep = "nightFakeConsult";
+      el("pnpCover").classList.add("hidden");
+      el("pnpRole").classList.remove("hidden");
+      el("pnpRoleTitle").textContent = "夜行動";
+      el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>フェイクの仲間（${rep.name}）と相談してください。<br>今夜の襲撃先は ${rep.name} が決めます。`;
+      el("pnpConfirmBtn").textContent = confirmLabel;
+      return;
+    }
+    if (!role.nightAction) {
+      // 能力なし（村ガール・マウス・政治家など）の番。
+      state.pnpStep = "nightNoAction";
+      el("pnpCover").classList.add("hidden");
+      el("pnpRole").classList.remove("hidden");
+      el("pnpRoleTitle").textContent = "夜行動";
+      el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>今夜は能力がありません。朝まで静かに過ごしましょう。`;
+      el("pnpConfirmBtn").textContent = confirmLabel;
+      return;
+    }
+    // 能力あり：ゲーム画面で対象を選ぶ。
+    state.pnpStep = "nightAction";
+    state.pnpNightInputPending = player.id;
+    state.playerId = player.id;
+    state.selectedId = null;
+    el("pnpScreen").classList.add("hidden");
+    el("gameScreen").classList.remove("hidden");
+    el("factionText").textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番`;
+    updatePnpTurnBanner(player, role);
+    draw();
+  }
+  function updatePnpTurnBanner(player, role) {
+    const banner = el("pnpTurnBanner");
+    if (!banner) return;
+    banner.textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番 — ${role.name}：${getPhaseHint(role)}`;
+  }
+  function confirmPnpNightAction() {
+    const playerId = state.pnpNightInputPending;
+    if (playerId == null) return;
+    const target = state.players[state.selectedId];
+    if (!target || !target.alive) return alert("対象を選んでね！");
+    state.pnpNightInputs[playerId] = target.id;
+    state.pnpNightInputPending = null;
+    state.selectedId = null;
+    advancePnpNight();
+  }
+  function advancePnpNight() {
+    state.pnpNightIndex += 1;
+    if (state.pnpNightIndex < state.pnpNightQueue.length) {
+      el("gameScreen").classList.add("hidden");
+      el("pnpScreen").classList.remove("hidden");
+      showPnpNightCover();
+    } else {
+      finishPnpNight();
+    }
+  }
+  function finishPnpNight() {
+    state.pnpNightInputPending = null;
+    state.selectedId = null;
+    el("pnpScreen").classList.add("hidden");
+    el("gameScreen").classList.remove("hidden");
+    el("factionText").textContent = "パス＆プレイ";
+    runNight();
   }
 
 
@@ -1287,7 +1445,9 @@
       cards.appendChild(div);
     }
 
-    el("actionBtn").textContent = PHASE_META[state.phase]?.button || "実行";
+    el("actionBtn").textContent = (state.mode === "pnp" && state.pnpNightInputPending != null)
+      ? "この対象で決める"
+      : (PHASE_META[state.phase]?.button || "実行");
     el("actionBtn").classList.toggle("hidden", state.phase !== "night");
     el("voteBtn").classList.toggle("hidden", state.phase !== "vote");
     el("nextBtn").classList.toggle("hidden", !["morning", "discussion"].includes(state.phase));
@@ -1299,6 +1459,9 @@
     }
     const meForMouse = state.players?.[state.playerId];
     el("mouseBtn").classList.toggle("hidden", !(state.mode !== "pnp" && state.phase === "discussion" && meForMouse && getEffectiveRoleKey(meForMouse) === "mouse" && !meForMouse.mouseUsed));
+    // パス＆プレイの夜入力中だけ、誰の番かを示す帯を出す。
+    const pnpBanner = el("pnpTurnBanner");
+    if (pnpBanner) pnpBanner.classList.toggle("hidden", !(state.mode === "pnp" && state.pnpNightInputPending != null));
   }
 
   function selectTarget(id) {
@@ -1326,14 +1489,13 @@
     const alive = alivePlayers();
     let me = state.players[state.playerId];
     if (state.mode === "pnp") {
-      // フェーズ1：人間の夜行動入力はなし。CPU の1人を代表にして
-      // 既存の CPU 分岐で全員の夜行動を決める。
-      const cpuPool = alive.filter(p => !state.humanPlayerIds.includes(p.id));
-      me = rand(cpuPool.length ? cpuPool : alive);
-      if (!me) return;
-      state.playerId = me.id;
-      const targets = alive.filter(p => p.id !== me.id);
-      state.selectedId = rand(targets)?.id;
+      // フェーズ2：人間の夜行動は state.pnpNightInputs に集まっている。
+      // 人間は各自の入力、CPU は従来のヒューリスティクスで対象を決める。
+      // 個人結果は公開ログに出さず pnpNightResults に貯めるため、
+      // ログ用の `me` は該当なしの番兵にする。
+      me = { id: -1 };
+      const fallback = rand(alive);
+      state.selectedId = fallback?.id ?? null;
     }
     const target = state.players[state.selectedId];
     if (!target || !target.alive) return alert("対象を選んでね！");
@@ -1349,53 +1511,64 @@
       nightActions[actorId] = targetId;
       if (type) nightActionTypes[actorId] = type;
     };
+    // 人間が入力した対象（未入力なら undefined → CPU 扱い）。
+    // ソロでは従来通り `me` の選択対象を使う。
+    const inputTargetOf = (p) => state.mode === "pnp" ? state.pnpNightInputs?.[p.id] : undefined;
+    const targetOr = (p, cpuTarget) => {
+      const t = inputTargetOf(p);
+      return t !== undefined ? t : cpuTarget;
+    };
 
     for (const p of alive) {
       const effectiveRoleKey = getEffectiveRoleKey(p);
       if (!ROLES[effectiveRoleKey].nightAction) continue;
       if (effectiveRoleKey === "guardian") {
-        const guardTarget = p.id === me.id ? target.id
+        const guardTarget = targetOr(p, p.id === me.id ? target.id
           : gameSettings.difficulty === "hard"
             ? alive.filter(x => x.id !== p.id).sort((a, b) => a.suspicion - b.suspicion)[0]?.id
-            : rand(alive.filter(x => x.id !== p.id))?.id;
+            : rand(alive.filter(x => x.id !== p.id))?.id);
         if (guardTarget !== undefined) {
           registerAction(p.id, guardTarget);
           if (p.roleKey !== "baka") state.protectedTargets.add(guardTarget);
         }
       } else if (effectiveRoleKey === "apprenticeSeer" || effectiveRoleKey === "clumsySeer") {
-        const inspectTarget = p.id === me.id ? target.id
+        const inspectTarget = targetOr(p, p.id === me.id ? target.id
           : gameSettings.difficulty === "hard"
             ? alive.filter(x => x.id !== p.id).sort((a, b) => b.suspicion - a.suspicion)[0]?.id
-            : rand(alive.filter(x => x.id !== p.id))?.id;
+            : rand(alive.filter(x => x.id !== p.id))?.id);
         registerAction(p.id, inspectTarget);
       } else if (effectiveRoleKey === "tracker") {
-        const trackTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
+        const trackTarget = targetOr(p, p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id);
         registerAction(p.id, trackTarget);
       } else if (effectiveRoleKey === "police") {
-        let policeTarget;
-        if (p.id === me.id) {
-          policeTarget = target.id;
-        } else {
-          const actors = alive.filter(x => x.id !== p.id && ROLES[getEffectiveRoleKey(x)].nightAction);
-          policeTarget = rand(actors.length ? actors : alive.filter(x => x.id !== p.id))?.id;
+        let policeTarget = inputTargetOf(p);
+        if (policeTarget === undefined) {
+          if (p.id === me.id) {
+            policeTarget = target.id;
+          } else {
+            const actors = alive.filter(x => x.id !== p.id && ROLES[getEffectiveRoleKey(x)].nightAction);
+            policeTarget = rand(actors.length ? actors : alive.filter(x => x.id !== p.id))?.id;
+          }
         }
         registerAction(p.id, policeTarget, "block");
       } else if (effectiveRoleKey === "trapper") {
-        const trapTarget = p.id === me.id ? target.id : rand(alive)?.id;
+        const trapTarget = targetOr(p, p.id === me.id ? target.id : rand(alive)?.id);
         if (trapTarget !== undefined) registerAction(p.id, trapTarget);
       } else if (effectiveRoleKey === "doctor") {
-        const docTarget = p.id === me.id ? target.id : rand(alive)?.id;
+        const docTarget = targetOr(p, p.id === me.id ? target.id : rand(alive)?.id);
         if (docTarget !== undefined) registerAction(p.id, docTarget);
       } else if (effectiveRoleKey === "lookout") {
-        const lookoutTarget = p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id;
+        const lookoutTarget = targetOr(p, p.id === me.id ? target.id : rand(alive.filter(x => x.id !== p.id))?.id);
         registerAction(p.id, lookoutTarget);
       } else if (effectiveRoleKey === "bomber") {
-        let plantTarget;
-        if (p.id === me.id) {
-          plantTarget = target.id;
-        } else {
-          const unbombed = alive.filter(x => x.id !== p.id && !state.bombs.some(b => b.targetId === x.id));
-          plantTarget = rand(unbombed.length ? unbombed : alive.filter(x => x.id !== p.id))?.id;
+        let plantTarget = inputTargetOf(p);
+        if (plantTarget === undefined) {
+          if (p.id === me.id) {
+            plantTarget = target.id;
+          } else {
+            const unbombed = alive.filter(x => x.id !== p.id && !state.bombs.some(b => b.targetId === x.id));
+            plantTarget = rand(unbombed.length ? unbombed : alive.filter(x => x.id !== p.id))?.id;
+          }
         }
         registerAction(p.id, plantTarget, "plant");
       }
@@ -1416,7 +1589,16 @@
       };
       let fakeActor;
       let attackTarget;
-      if (fakeSide.includes(me)) {
+      const humanFakeRep = pnpHumanFakeRep();
+      if (humanFakeRep) {
+        // パス＆プレイ：フェイク人間の代表者が入力した襲撃先を使う。
+        // 仲間のフェイクを選んでいたらランダムな被害者に振り替える（ソロと同じ）。
+        fakeActor = humanFakeRep;
+        const input = state.pnpNightInputs?.[humanFakeRep.id];
+        attackTarget = input !== undefined && victims.some(x => x.id === input)
+          ? input
+          : rand(victims)?.id;
+      } else if (fakeSide.includes(me)) {
         // The human player leads the faction attack: use their selected target
         // (fall back to a random victim if they picked a fellow fake member).
         fakeActor = me;
@@ -1530,6 +1712,15 @@
     state.trapReport = null;
     state.doctorTargetId = null;
     state.doctorReport = null;
+    // パス＆プレイ：個人の夜結果は公開ログに出さず、その人の
+    // pnpNightResults にだけ貯める（次の夜の番で本人だけに表示する）。
+    // ソロでは従来通り `me` の結果だけを公開ログに出す。
+    const logFor = (actor, msg) => {
+      if (actor.id === me.id) actionLog(msg);
+      else if (state.mode === "pnp" && state.humanPlayerIds.includes(actor.id)) {
+        (state.pnpNightResults[actor.id] ||= []).push(msg);
+      }
+    };
     const actionTypeOf = (actor) => state.nightActionTypes?.[actor.id] || ROLES[getEffectiveRoleKey(actor)].nightAction?.type;
     const priorityOf = (actor) => {
       const t = actionTypeOf(actor);
@@ -1554,10 +1745,8 @@
       const effectiveRoleKey = getEffectiveRoleKey(actor);
       const actionType = actionTypeOf(actor);
       if (blockedIds.has(actor.id) && actionType !== "attack") {
-        if (actor.id === me.id) {
-          actionLog("誰かに妨害されて、今夜は行動できなかった！");
-          state.humanBlocked = true;
-        }
+        logFor(actor, "誰かに妨害されて、今夜は行動できなかった！");
+        if (actor.id === me.id) state.humanBlocked = true;
         continue;
       }
       if (actionType === "block") {
@@ -1565,7 +1754,7 @@
         if (actor.roleKey !== "baka") blockedIds.add(target.id);
       } else if (actionType === "plant") {
         state.bombs.push({ targetId: target.id, explodeDay: state.day + 1 });
-        if (actor.id === me.id) actionLog(`爆弾設置 → ${target.name} に爆弾を仕掛けた…明日の夜に爆発する。`);
+        logFor(actor, `爆弾設置 → ${target.name} に爆弾を仕掛けた…明日の夜に爆発する。`);
       } else if (actionType === "lookout") {
         let visitors;
         if (actor.roleKey === "baka") {
@@ -1579,13 +1768,13 @@
             .filter(v => v && v.alive);
         }
         actor.lastTarget = visitors.length ? visitors[0].id : null;
-        if (actor.id === me.id) actionLog(`見張り → ${target.name} を訪れた人：${visitors.length ? visitors.map(v => v.name).join("、") : "なし"}`);
+        logFor(actor, `見張り → ${target.name} を訪れた人：${visitors.length ? visitors.map(v => v.name).join("、") : "なし"}`);
       } else if (actionType === "spy") {
         state.fakeIntel[target.id] = target.roleKey;
-        if (actor.id === me.id) actionLog(`盗み見 → ${target.name} の正体は「${ROLES[target.roleKey].name}」だった。`);
+        logFor(actor, `盗み見 → ${target.name} の正体は「${ROLES[target.roleKey].name}」だった。`);
       } else if (actionType === "protect") {
         if (actor.roleKey !== "baka") state.protectedTargets.add(target.id);
-        if (actor.id === me.id) actionLog(formatActionLog("protect", { actor: ROLES[effectiveRoleKey].name, target: target.name }));
+        logFor(actor, formatActionLog("protect", { actor: ROLES[effectiveRoleKey].name, target: target.name }));
       } else if (actionType === "investigate") {
         let result = ROLES[target.roleKey].faction;
         if (actor.roleKey === "baka") {
@@ -1596,15 +1785,18 @@
           if (effectiveRoleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
         }
         state.lastInvestigation[actor.id] = { targetId: target.id, result };
-        if (actor.id === me.id) actionLog(formatActionLog("investigate", { actor: ROLES[effectiveRoleKey].name, target: target.name, result }));
-        if (actor.id !== me.id && result === "フェイク") {
+        logFor(actor, formatActionLog("investigate", { actor: ROLES[effectiveRoleKey].name, target: target.name, result }));
+        // 人間の調査結果は本人の判断材料で、CPU の疑念には反映しない
+        // （ソロで人間の調査が疑念を上げないのと同じ）。
+        const isPrivateInvestigator = state.mode === "pnp" && state.humanPlayerIds.includes(actor.id);
+        if (actor.id !== me.id && !isPrivateInvestigator && result === "フェイク") {
           // Difficulty: CPU investigators build suspicion faster on hard,
           // and sometimes fail to follow up on easy.
           if (gameSettings.difficulty === "hard") target.suspicion += 1.5;
           else if (gameSettings.difficulty === "easy") { if (Math.random() < 0.55) target.suspicion += 1; }
           else target.suspicion += 1;
         }
-        if (actor.id !== me.id && result === "ニュートラル") target.suspicion += 0.5;
+        if (actor.id !== me.id && !isPrivateInvestigator && result === "ニュートラル") target.suspicion += 0.5;
       } else if (actionType === "track") {
         let visitTarget;
         if (actor.roleKey === "baka") {
@@ -1617,16 +1809,16 @@
           visitTarget = visitId !== undefined ? state.players[visitId] : null;
         }
         if (visitTarget) target.lastTarget = visitTarget.id;
-        if (actor.id === me.id) actionLog(formatActionLog("track", { actor: ROLES[effectiveRoleKey].name, target: target.name, visitTarget: visitTarget?.name }));
+        logFor(actor, formatActionLog("track", { actor: ROLES[effectiveRoleKey].name, target: target.name, visitTarget: visitTarget?.name }));
       } else if (actionType === "trap") {
         // A baka displaying the trapper sets a trap that never springs.
         if (actor.roleKey !== "baka") state.trapTargets.add(target.id);
-        if (actor.id === me.id) actionLog(`罠設置 → ${target.name} の家に罠を仕掛けた。`);
+        logFor(actor, `罠設置 → ${target.name} の家に罠を仕掛けた。`);
       } else if (actionType === "revive") {
         // The doctor registers a patient; the revive itself is applied
         // after all of tonight's deaths are known.
         if (actor.roleKey !== "baka") state.doctorTargetId = target.id;
-        if (actor.id === me.id) actionLog(`診察 → ${target.name} を診察した。今夜倒れたら蘇生する。`);
+        logFor(actor, `診察 → ${target.name} を診察した。今夜倒れたら蘇生する。`);
       } else if (actionType === "attack") {
         attackTargetId = target.id;
         attackActorId = actor.id;
@@ -1671,7 +1863,7 @@
       const spyTarget = state.players[state.loneFakeAbility.targetId];
       if (spyActor && spyTarget) {
         state.fakeIntel[spyTarget.id] = spyTarget.roleKey;
-        if (spyActor.id === me.id) actionLog(`盗み見 → ${spyTarget.name} の正体は「${ROLES[spyTarget.roleKey].name}」だった。`);
+        logFor(spyActor, `盗み見 → ${spyTarget.name} の正体は「${ROLES[spyTarget.roleKey].name}」だった。`);
       }
     }
 
@@ -1726,9 +1918,9 @@
 
   function cpuNightActions(alive) {
     for (const p of alive) {
-      // ソロでは人間の追跡ボーナスは付けない（本人が判断するため）。
-      // パス＆プレイでは全員が CPU 扱いなので全員が対象。
-      if (state.mode !== "pnp" && p.id === state.playerId) continue;
+      // 人間の追跡結果は本人の判断材料で、CPU の疑念には反映しない
+      // （ソロと同じ。パス＆プレイでも人間は対象外）。
+      if (state.mode === "pnp" ? state.humanPlayerIds.includes(p.id) : p.id === state.playerId) continue;
       if (p.roleKey === "tracker" && p.lastTarget !== null) {
         const t = state.players[p.lastTarget];
         if (t) t.suspicion += 0.6;
@@ -1919,6 +2111,7 @@
         state.day += 1;
         state.phase = "night";
       }
+      if (state.phase === "night" && state.mode === "pnp") startPnpNight();
       draw();
       return;
     }
@@ -1951,6 +2144,7 @@
       state.players.forEach(p => { p.voted = false; p.suspicion = Math.max(0, p.suspicion - 1); });
       actionLog(formatActionLog("phaseNightStart", { day: state.day }));
     }
+    if (state.phase === "night" && state.mode === "pnp") startPnpNight();
     draw();
   }
 
@@ -2452,18 +2646,28 @@
     el("roleScreen").classList.add("hidden");
     el("gameScreen").classList.remove("hidden");
   };
-  el("pnpRevealBtn").onclick = showPnpRole;
+  el("pnpRevealBtn").onclick = () => {
+    if (state.pnpStep === "nightCover") showPnpNightTurn();
+    else showPnpRole();
+  };
   el("pnpConfirmBtn").onclick = () => {
-    if (state.pnpIndex + 1 < state.humanPlayerIds.length) {
+    if (state.pnpStep === "nightResult") {
+      showPnpNightAction();
+    } else if (state.pnpStep === "nightNoAction" || state.pnpStep === "nightFakeConsult") {
+      advancePnpNight();
+    } else if (state.pnpIndex + 1 < state.humanPlayerIds.length) {
       state.pnpIndex += 1;
       showPnpCover();
     } else {
-      el("pnpScreen").classList.add("hidden");
-      el("gameScreen").classList.remove("hidden");
-      draw();
+      // 受け渡し完了 → 夜行動の順番入力へ（フェーズ2）。
+      startPnpNight();
     }
   };
-  el("actionBtn").onclick = runNight;
+  el("actionBtn").onclick = () => {
+    // パス＆プレイの夜入力中は、その人の対象を記録して次へ進む。
+    if (state.mode === "pnp" && state.pnpNightInputPending != null) confirmPnpNightAction();
+    else runNight();
+  };
   el("voteBtn").onclick = doVote;
   el("nextBtn").onclick = () => {
     if (state.phase === "morning") morningToDiscussion();
