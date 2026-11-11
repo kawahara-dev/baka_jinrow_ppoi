@@ -102,7 +102,7 @@ function loadGame({ seedSettings } = {}) {
 ;globalThis.__FB__ = {
   ROLES, PHASE_META, setupGame, runNight, resolveNightActions, doVote,
   morningToDiscussion, discussionToVote, revealMouse, checkWin,
-  getEffectiveRoleKey, showResults, gameSettings,
+  getEffectiveRoleKey, showResults, buildHighlights, gameSettings,
   get state() { return state; },
 };
 `;

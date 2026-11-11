@@ -247,6 +247,8 @@
       border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 12px 28px rgba(92, 52, 140, 0.12); }
     .result-title { margin: 0 0 4px; font-size: 1.25rem; font-weight: 900; text-align: center; }
     .result-sub { margin: 0 0 12px; text-align: center; font-weight: 800; color: var(--muted); }
+    .result-highlights { display: grid; gap: 4px; margin: 0 0 12px; }
+    .result-highlight { background: #fff7e6; border: 1px solid #ffe1a8; border-radius: 10px; padding: 6px 10px; font-size: 0.88rem; font-weight: 800; color: #7a4d00; text-align: center; }
     .result-rows { display: grid; gap: 6px; }
     .result-row { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center;
       background: #fff; border: 1px solid #f6ecff; border-radius: 12px; padding: 6px 10px; }
@@ -594,6 +596,7 @@
     <section id="resultPanel" class="result-panel hidden">
       <h3 id="resultTitle" class="result-title"></h3>
       <p id="resultSub" class="result-sub"></p>
+      <div id="resultHighlights" class="result-highlights"></div>
       <div id="resultRows" class="result-rows"></div>
     </section>
 
@@ -892,6 +895,8 @@
       fakeIntel: {},
       bombs: [],
       bombKills: 0,
+      revives: 0,
+      guardSaves: 0,
       bombReport: { explodedVictims: [], fizzled: false },
       humanBlocked: false,
       trapTargets: new Set(),
@@ -1347,6 +1352,7 @@
           }
         }
       } else {
+        if (victim && victim.alive && state.protectedTargets.has(victim.id)) state.guardSaves = (state.guardSaves || 0) + 1;
         state.nightReport = { type: "blocked", victimId: null };
         actionLog(formatActionLog("attackBlocked", { target: victim?.name || "不明" }));
       }
@@ -1405,6 +1411,7 @@
         if (state.doctorReport) {
           patient.deathCause = null;
           patient.deathDay = null;
+          state.revives = (state.revives || 0) + 1;
           actionLog(`💉 しかし間一髪、${patient.name} はドクターの蘇生で助かった！`);
         }
       }
@@ -1628,6 +1635,24 @@
     draw();
   }
 
+  // End-of-game highlights: 1-2 lines summarising the match's notable
+  // moments (bomb kills, traps, revives, guardian saves) for the results
+  // panel. Trap kills are derived from deathCause; revives and guard saves
+  // are counted in state because a revived / protected player leaves no trace.
+  function buildHighlights() {
+    const lines = [];
+    const bomber = state.players.find(p => p.roleKey === "bomber");
+    const bombKills = state.bombKills || 0;
+    const trapKills = state.players.filter(p => p.deathCause === "罠").length;
+    if (bomber && bombKills >= 2) lines.push(`💣 ${bomber.name}の爆弾で${bombKills}人が倒れた！`);
+    if (trapKills > 0) lines.push(`🪤 罠が${trapKills}回作動し、襲撃者を道連れにした`);
+    if ((state.revives || 0) > 0) lines.push(`💉 ドクターの蘇生で${state.revives}人が助かった`);
+    if ((state.guardSaves || 0) > 0) lines.push(`🛡️ 護衛が${state.guardSaves}回、襲撃を防いだ`);
+    if (bomber && bombKills === 1) lines.push(`💣 ${bomber.name}の爆弾で1人が倒れた`);
+    if (lines.length === 0) lines.push(`📅 ${state.day}日目で決着`);
+    return lines.slice(0, 2);
+  }
+
   // End-of-game results: winner, your outcome, and the full roster with
   // real roles, factions, and how each player fell.
   function showResults(winText) {
@@ -1638,6 +1663,7 @@
     state.myWin = ROLES[me.roleKey].faction === winnerFaction;
     el("resultTitle").textContent = winText;
     el("resultSub").textContent = `あなたは「${ROLES[me.roleKey].name}」（${ROLES[me.roleKey].faction}）で ${state.myWin ? "勝利！" : "敗北…"}`;
+    el("resultHighlights").innerHTML = buildHighlights().map(h => `<div class="result-highlight">${h}</div>`).join("");
     el("resultRows").innerHTML = state.players.map(p => {
       const role = ROLES[p.roleKey];
       const displayNote = p.roleKey === "baka" && p.fakeDisplayRoleKey ? `（表示：${ROLES[p.fakeDisplayRoleKey].name}）` : "";

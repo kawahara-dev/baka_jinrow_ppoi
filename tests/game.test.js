@@ -289,6 +289,82 @@ test("revealMouse: フェイクを公開すると疑念が上がり、ピュア�
   assert.equal(villager.suspicion, -5);
 });
 
+test("buildHighlights: 名場面を最大2行でまとめ、なければ日数で締める", () => {
+  const { FB } = loadGame({ seedSettings: { ...BASE_SETTINGS, bomber: "on" } });
+  FB.setupGame();
+  const s = FB.state;
+  const bomber = s.players.find((p) => p.roleKey === "bomber");
+  assert.ok(bomber, "ボマーがいるはず");
+
+  // 何も起きていない試合 → 日数のフォールバック1行
+  assert.equal(FB.buildHighlights().join("\n"), `📅 ${s.day}日目で決着`);
+
+  // 爆弾2キル・罠・蘇生・護衛が全部起きた試合 → 優先度の高い2行だけ
+  s.bombKills = 2;
+  s.players[0].deathCause = "罠";
+  s.revives = 1;
+  s.guardSaves = 3;
+  const top = FB.buildHighlights();
+  assert.equal(top.length, 2);
+  assert.match(top[0], new RegExp(`💣 ${bomber.name}の爆弾で2人が倒れた`));
+  assert.match(top[1], /🪤 罠が1回作動/);
+
+  // 爆弾1キルだけ → 1行で出る
+  s.bombKills = 1;
+  s.players[0].deathCause = null;
+  s.revives = 0;
+  s.guardSaves = 0;
+  assert.equal(FB.buildHighlights().join("\n"), `💣 ${bomber.name}の爆弾で1人が倒れた`);
+
+  // 蘇生と護衛だけ → 両方出る
+  s.bombKills = 0;
+  s.revives = 2;
+  s.guardSaves = 1;
+  assert.equal(FB.buildHighlights().join("\n"), "💉 ドクターの蘇生で2人が助かった\n🛡️ 護衛が1回、襲撃を防いだ");
+});
+
+test("resolveNightActions: 罠・蘇生・護衛がハイライト用カウンタに残る", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+
+  // 罠：襲撃者が「罠」で倒れ、ハイライトに罠の行が出る
+  FB.setupGame();
+  let others = resetToVillagers(FB);
+  let me = humanOf(FB);
+  me.roleKey = "trapper";
+  let fake = others[0];
+  fake.roleKey = "fakeGirl";
+  let victim = others[1];
+  let s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.match(FB.buildHighlights().join("\n"), /🪤 罠が1回作動/);
+
+  // 蘇生：revives が1になり、ハイライトに蘇生の行が出る
+  FB.setupGame();
+  others = resetToVillagers(FB);
+  me = humanOf(FB);
+  me.roleKey = "doctor";
+  fake = others[0];
+  fake.roleKey = "fakeGirl";
+  victim = others[1];
+  s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.equal(s.revives, 1);
+  assert.match(FB.buildHighlights().join("\n"), /💉 ドクターの蘇生で1人が助かった/);
+
+  // 護衛：guardSaves が1になり、ハイライトに護衛の行が出る
+  FB.setupGame();
+  others = resetToVillagers(FB);
+  me = humanOf(FB);
+  me.roleKey = "guardian";
+  fake = others[0];
+  fake.roleKey = "fakeGirl";
+  victim = others[1];
+  s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.equal(s.guardSaves, 1);
+  assert.match(FB.buildHighlights().join("\n"), /🛡️ 護衛が1回、襲撃を防いだ/);
+});
+
 test("フルゲーム: 各種設定で40日以内に必ず決着し、戦績が記録される", () => {
   const settingsList = [
     { fakeCount: "1", bomber: "off", difficulty: "easy" },
@@ -297,11 +373,13 @@ test("フルゲーム: 各種設定で40日以内に必ず決着し、戦績が�
   ];
   for (const settings of settingsList) {
     for (let i = 0; i < 10; i++) {
-      const { FB, localStorage } = loadGame({ seedSettings: { ...settings, sound: "off" } });
+      const { FB, localStorage, elements } = loadGame({ seedSettings: { ...settings, sound: "off" } });
       const end = playFullGame(FB);
       assert.equal(end.phase, "end", `設定 ${JSON.stringify(settings)} #${i} が終わらなかった`);
       assert.ok(["ピュア", "フェイク", "ニュートラル"].includes(end.winnerFaction));
       assert.ok(end.day <= 40);
+      // 結果画面のハイライト欄が空でないこと（フォールバック行でもよい）
+      assert.ok(elements.get("resultHighlights").innerHTML.length > 0);
       const stats = JSON.parse(localStorage.getItem("fakeBloomStats"));
       assert.equal(stats.games, 1);
       assert.equal(stats.wins, end.myWin ? 1 : 0);
