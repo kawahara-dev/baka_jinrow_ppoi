@@ -25,11 +25,18 @@ function makeElement(id) {
     _attributes: {},
     _listeners: {},
     classList: {
-      add() {},
-      remove() {},
-      toggle() {},
-      contains() { return false; },
+      // 実際の classList と同じく状態を保持する。テストから表示・非表示
+      // （hidden クラスの有無）を検証できるようにする。
+      add(...names) { for (const n of names) el._classes.add(n); },
+      remove(...names) { for (const n of names) el._classes.delete(n); },
+      toggle(name, force) {
+        const on = force === undefined ? !el._classes.has(name) : !!force;
+        if (on) el._classes.add(name); else el._classes.delete(name);
+        return on;
+      },
+      contains(name) { return el._classes.has(name); },
     },
+    _classes: new Set(),
     appendChild(child) { el.children.push(child); return child; },
     remove() {},
     setAttribute(name, value) { el._attributes[name] = String(value); },
@@ -175,7 +182,7 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   ROLES, PHASE_META, CHAR_TALK, charTalkPool, pickTalkLine, setupGame, runNight, resolveNightActions, doVote,
   morningToDiscussion, discussionToVote, revealMouse, checkWin,
   getEffectiveRoleKey, showResults, buildHighlights, gameSettings,
-  draw, paintSettings,
+  draw, paintSettings, roleHtmlFor, startHandoff, showPnpCover, showPnpRole,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
 };

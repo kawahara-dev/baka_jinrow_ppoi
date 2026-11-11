@@ -592,11 +592,106 @@ test("アクセシビリティ: 設定ボタンは aria-pressed で選択状態�
   assert.equal(buttons[2].getAttribute("aria-pressed"), "true");
 });
 
+test("gameSettings: パス＆プレイ設定の既定値と不正値の扱い", () => {
+  const def = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.equal(def.FB.gameSettings.mode, "solo");
+  assert.equal(def.FB.gameSettings.humanCount, "2");
+  const pnp = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "5" } });
+  assert.equal(pnp.FB.gameSettings.mode, "pnp");
+  assert.equal(pnp.FB.gameSettings.humanCount, "5");
+  const bad = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "party", humanCount: "9" } });
+  assert.equal(bad.FB.gameSettings.mode, "solo");
+  assert.equal(bad.FB.gameSettings.humanCount, "2");
+});
+
+test("paintSettings: 参加人数の行はパス＆プレイのときだけ表示される", () => {
+  const solo = loadGame({ seedSettings: BASE_SETTINGS });
+  solo.FB.paintSettings();
+  assert.equal(solo.elements.get("humanCountRow").classList.contains("hidden"), true);
+  const pnp = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp" } });
+  pnp.FB.paintSettings();
+  assert.equal(pnp.elements.get("humanCountRow").classList.contains("hidden"), false);
+});
+
+test("パス＆プレイ: 受け渡し画面で全員の役職を順番に確認できる", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "3" } });
+  FB.setupGame();
+  const s = FB.state;
+  assert.equal(s.mode, "pnp");
+  assert.equal(s.humanPlayerIds.length, 3);
+  assert.equal(new Set(s.humanPlayerIds).size, 3);
+  assert.equal(s.pnpIndex, 0);
+  // ソロの役職画面は出ない（showRole が呼ばれず playerRole 要素も作られない）
+  assert.equal(elements.has("playerRole"), false);
+  for (let i = 0; i < 3; i++) {
+    const player = s.players[s.humanPlayerIds[i]];
+    const cover = elements.get("pnpCoverText").innerHTML;
+    assert.ok(cover.includes(`P${i + 1}`), `カバー画面は P${i + 1} を示す`);
+    assert.ok(cover.includes(player.name), "カバー画面はキャラ名を示す");
+    assert.ok(!cover.includes(FB.ROLES[player.roleKey].name), "カバー画面に役職名は出ない");
+    elements.get("pnpRevealBtn").onclick();
+    const roleHtml = elements.get("pnpPlayerRole").innerHTML;
+    assert.ok(roleHtml.includes(player.name), "役職画面は本人の名前を示す");
+    assert.ok(roleHtml.includes(FB.ROLES[player.roleKey].name), "役職画面は本人の役職を示す");
+    elements.get("pnpConfirmBtn").onclick();
+    if (i < 2) {
+      assert.equal(elements.get("pnpRole").classList.contains("hidden"), true, "確認後は次の人のカバー画面に戻る");
+    }
+  }
+  assert.equal(s.pnpIndex, 2);
+  assert.equal(elements.get("pnpScreen").classList.contains("hidden"), true, "全員確認後は受け渡し画面が閉じる");
+});
+
+test("パス＆プレイ: 人間の調査結果が行動ログに出ない", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
+  for (let i = 0; i < 10; i++) {
+    FB.setupGame();
+    const s = FB.state;
+    const humans = s.humanPlayerIds.map((id) => s.players[id]);
+    const others = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+    s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+    humans[0].roleKey = "apprenticeSeer";
+    others[0].roleKey = "fakeGirl";
+    FB.runNight();
+    assert.equal(s.phase, "morning");
+    const lines = elements.get("actionLog").children.map((c) => c.textContent);
+    assert.ok(!lines.some((l) => l.includes("判定:")), `調査結果が漏れた: ${lines.join(" / ")}`);
+    assert.ok(!lines.some((l) => l.includes("の正体は")));
+  }
+});
+
+test("フルゲーム: パス＆プレイで40日以内に決着し、個人情報が漏れず戦績も汚れない", () => {
+  const PRIVATE_MARKERS = [/判定:/, /の正体は/, /を訪れた人/, /訪問先/, /罠設置 →/, /診察 →/, /爆弾設置 →/, /妨害されて/, /→ 防衛$/];
+  for (const humanCount of ["2", "8"]) {
+    for (let i = 0; i < 5; i++) {
+      const { FB, elements, localStorage } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount, bomber: "on" } });
+      const end = playFullGame(FB);
+      assert.equal(end.phase, "end", `パス＆プレイ ${humanCount}人 #${i} が終わらなかった`);
+      assert.ok(end.day <= 40);
+      assert.equal(end.myWin, null);
+      assert.match(elements.get("resultSub").textContent, /パス＆プレイ/);
+      assert.ok(!elements.get("resultRows").innerHTML.includes("（あなた）"), "結果画面に（あなた）が出ない");
+      assert.equal(localStorage.getItem("fakeBloomStats"), null, "パス＆プレイでソロ戦績が記録されない");
+      const actionLines = elements.get("actionLog").children.map((c) => c.textContent);
+      for (const line of actionLines) {
+        for (const marker of PRIVATE_MARKERS) {
+          assert.ok(!marker.test(line), `行動ログに個人情報が漏れた: ${line}`);
+        }
+      }
+      const humanNames = end.humanPlayerIds.map((id) => end.players[id].name);
+      const talkLines = elements.get("dialogueLog").children.map((c) => c.textContent);
+      for (const line of talkLines) {
+        assert.ok(!humanNames.some((n) => line.startsWith(`${n}：`)), `人間の自動セリフが漏れた: ${line}`);
+      }
+    }
+  }
+});
+
 test("アクセシビリティ: ログは aria-live、設定グループは role=group を持つ", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   assert.match(html, /<div id="dialogueLog" class="log" aria-live="polite">/);
   assert.match(html, /<div id="actionLog" class="log" aria-live="polite">/);
-  for (const label of ["フェイク人数", "効果音", "BGM", "難易度", "ボマー"]) {
+  for (const label of ["フェイク人数", "効果音", "BGM", "難易度", "ボマー", "遊び方", "参加人数"]) {
     assert.ok(html.includes(`role="group" aria-label="${label}"`), `${label} の設定グループ`);
   }
 });

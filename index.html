@@ -518,6 +518,25 @@
           <button type="button" data-value="off">なし</button>
         </div>
       </div>
+      <div class="settings-row">
+        <span class="settings-label">遊び方</span>
+        <div class="seg" data-setting="mode" role="group" aria-label="遊び方">
+          <button type="button" data-value="solo">ソロ</button>
+          <button type="button" data-value="pnp">パス＆プレイ</button>
+        </div>
+      </div>
+      <div class="settings-row hidden" id="humanCountRow">
+        <span class="settings-label">参加人数（人間）</span>
+        <div class="seg" data-setting="humanCount" role="group" aria-label="参加人数">
+          <button type="button" data-value="2">2人</button>
+          <button type="button" data-value="3">3人</button>
+          <button type="button" data-value="4">4人</button>
+          <button type="button" data-value="5">5人</button>
+          <button type="button" data-value="6">6人</button>
+          <button type="button" data-value="7">7人</button>
+          <button type="button" data-value="8">8人</button>
+        </div>
+      </div>
     </div>
     <div class="stats-panel">
       <div class="stats-head">📊 戦績</div>
@@ -553,6 +572,7 @@
       <p>・約半分のゲームでは第三勢力「ボマー」も登場。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利するのでご注意。</p>
       <p>・フェイクが1人だけのときは、襲撃に加えて役職の能力（妨害／盗み見）も使える本気モードになる。</p>
       <p>・一部のピュア役職は「うっかり」で結果がズレることあり！</p>
+      <p>・パス＆プレイでは2〜8人で1台の端末を回して遊べます。役職は受け渡し画面で順番に確認し、夜行動と投票はCPUが行います。</p>
     </div>
   </section>
 
@@ -561,6 +581,23 @@
     <div id="playerRole" class="role-box"></div>
     <div class="control-bar">
       <button id="toGameBtn" class="primary" style="flex:1 1 auto;min-height:48px;">ゲーム開始</button>
+    </div>
+  </section>
+
+  <section id="pnpScreen" class="screen hidden">
+    <div id="pnpCover">
+      <h2>📱 端末を渡してください</h2>
+      <p id="pnpCoverText"></p>
+      <div class="control-bar">
+        <button id="pnpRevealBtn" class="primary" style="flex:1 1 auto;min-height:48px;">タップして役職を見る</button>
+      </div>
+    </div>
+    <div id="pnpRole" class="hidden">
+      <h2>あなたの役職</h2>
+      <div id="pnpPlayerRole" class="role-box"></div>
+      <div class="control-bar">
+        <button id="pnpConfirmBtn" class="primary" style="flex:1 1 auto;min-height:48px;">確認した</button>
+      </div>
     </div>
   </section>
 
@@ -1064,6 +1101,8 @@
     state = {
       day: 1,
       phase: "night",
+      mode: gameSettings.mode,
+      pnpIndex: 0,
       selectedId: null,
       executed: null,
       players: names.map((n, i) => ({
@@ -1099,7 +1138,12 @@
       doctorReport: null,
       revealedRoles: {}
     };
-    showRole();
+    // パス＆プレイ：人間プレイヤーをランダムに選ぶ。ソロでは従来通り1人。
+    state.humanPlayerIds = gameSettings.mode === "pnp"
+      ? [...Array(8).keys()].sort(() => Math.random() - 0.5).slice(0, Number(gameSettings.humanCount))
+      : [state.playerId];
+    if (gameSettings.mode === "pnp") startHandoff();
+    else showRole();
     draw();
     el("dialogueLog").innerHTML = "";
     el("actionLog").innerHTML = "";
@@ -1107,38 +1151,73 @@
     actionLog("ゲーム開始！夜行動からスタートだよ。");
   }
 
-  function showRole() {
-    const me = state.players[state.playerId];
-    const r = ROLES[me.roleKey];
-    const fakeRoleName = me.roleKey === "baka" ? ROLES[me.fakeDisplayRoleKey]?.name : null;
-    el("playerRole").innerHTML = `
-      <strong>${me.name} の役職：${r.name}</strong><br>
+  // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
+  // 受け渡し画面で共通して使う。
+  function roleHtmlFor(player) {
+    const r = ROLES[player.roleKey];
+    const fakeRoleName = player.roleKey === "baka" ? ROLES[player.fakeDisplayRoleKey]?.name : null;
+    return `
+      <strong>${player.name} の役職：${r.name}</strong><br>
       陣営：${r.faction}<br>
       説明：${r.desc}<br>
       ${fakeRoleName ? `偽表示ロール：${fakeRoleName}<br>` : ""}
       夜の推奨行動：${r.nightActionHint}<br>
       結果の見方：${r.resultInterpretation}<br>
       注意：${r.riskNote}<br>
-      ${getAlliesLineForRole()}
+      ${getAlliesLineForRole(player)}
     `;
-    el("factionText").textContent = r.faction;
+  }
+
+  function showRole() {
+    const me = state.players[state.playerId];
+    el("playerRole").innerHTML = roleHtmlFor(me);
+    el("factionText").textContent = ROLES[me.roleKey].faction;
     updateInGameRoleCard();
   }
 
+  // ---- pass-and-play: role handoff (phase 1) ----
+  // ゲーム開始時、各人間プレイヤーがカバー画面越しに順番に役職を確認する。
+  // 夜行動と投票は CPU のみで行い、人間は役職確認だけの最小構成。
+  function pnpCurrentPlayer() {
+    return state.players[state.humanPlayerIds[state.pnpIndex]];
+  }
+  function startHandoff() {
+    state.pnpIndex = 0;
+    el("factionText").textContent = "パス＆プレイ";
+    el("titleScreen").classList.add("hidden");
+    el("roleScreen").classList.add("hidden");
+    el("gameScreen").classList.add("hidden");
+    el("pnpScreen").classList.remove("hidden");
+    showPnpCover();
+  }
+  function showPnpCover() {
+    const player = pnpCurrentPlayer();
+    el("pnpRole").classList.add("hidden");
+    el("pnpCover").classList.remove("hidden");
+    el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpIndex + 1}（${player.name}）</strong>さんの番です。<br>周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
+  }
+  function showPnpRole() {
+    const player = pnpCurrentPlayer();
+    el("pnpCover").classList.add("hidden");
+    el("pnpRole").classList.remove("hidden");
+    el("pnpPlayerRole").innerHTML = roleHtmlFor(player);
+    el("pnpConfirmBtn").textContent = state.pnpIndex + 1 < state.humanPlayerIds.length
+      ? "確認した（次の人へ）"
+      : "確認した（ゲーム開始）";
+  }
 
-  function getFakeAlliesText() {
-    const me = state.players[state.playerId];
-    if (!me || ROLES[me.roleKey].faction !== "フェイク") return "";
-    const allies = state.players.filter(p => p.id !== me.id && ROLES[p.roleKey].faction === "フェイク");
+
+  function getFakeAlliesText(player) {
+    if (!player || ROLES[player.roleKey].faction !== "フェイク") return "";
+    const allies = state.players.filter(p => p.id !== player.id && ROLES[p.roleKey].faction === "フェイク");
     if (!allies.length) return "なし";
     return allies.map(p => p.name).join("、");
   }
 
 
-  function getAlliesLineForRole() {
-    const me = state.players[state.playerId];
-    if (!me || ROLES[me.roleKey].faction !== "フェイク") return "";
-    return `フェイク仲間：${getFakeAlliesText()}`;
+  function getAlliesLineForRole(player) {
+    if (!player || ROLES[player.roleKey].faction !== "フェイク") return "";
+    return `フェイク仲間：${getFakeAlliesText(player)}`;
   }
   function getPhaseHint(role) {
     if (state.phase === "night") {
@@ -1163,7 +1242,7 @@
     el("roleCardFaction").textContent = role.faction;
     el("roleCardPhaseHint").textContent = getPhaseHint(role);
     el("roleCardRisk").textContent = role.riskNote;
-    const alliesText = getFakeAlliesText();
+    const alliesText = getFakeAlliesText(me);
     const alliesRow = el("roleCardAllies").closest("div");
     el("roleCardAllies").textContent = alliesText;
     alliesRow.classList.toggle("hidden", !alliesText);
@@ -1174,6 +1253,8 @@
     el("dayText").textContent = state.day;
     el("phaseText").textContent = PHASE_META[state.phase].label;
     updateInGameRoleCard();
+    // パス＆プレイでは役職カードを出さない（1人の役職が全員に見えてしまうため）。
+    el("inGameRoleCard").classList.toggle("hidden", state.mode === "pnp");
 
     const cards = el("cards"); cards.innerHTML = "";
     let cardIndex = 0;
@@ -1217,7 +1298,7 @@
       hydrateWalkImages(stage);
     }
     const meForMouse = state.players?.[state.playerId];
-    el("mouseBtn").classList.toggle("hidden", !(state.phase === "discussion" && meForMouse && getEffectiveRoleKey(meForMouse) === "mouse" && !meForMouse.mouseUsed));
+    el("mouseBtn").classList.toggle("hidden", !(state.mode !== "pnp" && state.phase === "discussion" && meForMouse && getEffectiveRoleKey(meForMouse) === "mouse" && !meForMouse.mouseUsed));
   }
 
   function selectTarget(id) {
@@ -1242,8 +1323,18 @@
   }
 
   function runNight() {
-    const me = state.players[state.playerId];
     const alive = alivePlayers();
+    let me = state.players[state.playerId];
+    if (state.mode === "pnp") {
+      // フェーズ1：人間の夜行動入力はなし。CPU の1人を代表にして
+      // 既存の CPU 分岐で全員の夜行動を決める。
+      const cpuPool = alive.filter(p => !state.humanPlayerIds.includes(p.id));
+      me = rand(cpuPool.length ? cpuPool : alive);
+      if (!me) return;
+      state.playerId = me.id;
+      const targets = alive.filter(p => p.id !== me.id);
+      state.selectedId = rand(targets)?.id;
+    }
     const target = state.players[state.selectedId];
     if (!target || !target.alive) return alert("対象を選んでね！");
 
@@ -1375,7 +1466,9 @@
     state.nightActions = nightActions;
     state.nightActionTypes = nightActionTypes;
     state.humanBlocked = false;
-    resolveNightActions(me, target, alive);
+    // パス＆プレイでは個人の夜結果をログに出さない（resolveNightActions
+    // は me の結果だけログするため、該当なしの番兵を渡す）。
+    resolveNightActions(state.mode === "pnp" ? { id: -1 } : me, target, alive);
 
     state.selectedId = null;
     const winAfterNight = checkWin();
@@ -1394,20 +1487,24 @@
   // Dramatise the night as a short cut-in recap. Only outcomes the game
   // already announces publicly are shown; who acted stays secret.
   function nightCutins(me, target, winAfterNight) {
-    const myType = state.nightActionTypes?.[me.id] || ROLES[getEffectiveRoleKey(me)].nightAction?.type;
-    if (state.humanBlocked) {
-      showCutin("✋ 妨害された！", "今夜は行動できなかった…", "attack");
-    } else if (myType) {
-      const meta = {
-        investigate: ["🔍 調査", "info"], protect: ["🛡️ 護衛", "protect"],
-        track: ["👣 追跡", "info"], attack: ["🗡️ 襲撃", "attack"],
-        block: ["✋ 妨害", "info"], spy: ["👀 盗み見", "info"],
-        plant: ["💣 爆弾設置", "bomb"], lookout: ["🔭 見張り", "info"],
-        trap: ["🪤 罠設置", "info"], revive: ["💉 診察", "protect"]
-      }[myType];
-      if (meta) showCutin(meta[0], `→ ${target.name}`, meta[1]);
-    } else {
-      showCutin("🌙 夜行動", "あなたは静かに夜を過ごした", "phase");
+    // パス＆プレイでは個人の夜行動カットインは出さない（誰が何をしたか
+    // が全員に見えてしまうため）。公開済みの結果だけを出す。
+    if (state.mode !== "pnp") {
+      const myType = state.nightActionTypes?.[me.id] || ROLES[getEffectiveRoleKey(me)].nightAction?.type;
+      if (state.humanBlocked) {
+        showCutin("✋ 妨害された！", "今夜は行動できなかった…", "attack");
+      } else if (myType) {
+        const meta = {
+          investigate: ["🔍 調査", "info"], protect: ["🛡️ 護衛", "protect"],
+          track: ["👣 追跡", "info"], attack: ["🗡️ 襲撃", "attack"],
+          block: ["✋ 妨害", "info"], spy: ["👀 盗み見", "info"],
+          plant: ["💣 爆弾設置", "bomb"], lookout: ["🔭 見張り", "info"],
+          trap: ["🪤 罠設置", "info"], revive: ["💉 診察", "protect"]
+        }[myType];
+        if (meta) showCutin(meta[0], `→ ${target.name}`, meta[1]);
+      } else {
+        showCutin("🌙 夜行動", "あなたは静かに夜を過ごした", "phase");
+      }
     }
     if (state.nightReport?.type === "eliminated") {
       showCutin("🌙 夜の襲撃", `${state.players[state.nightReport.victimId].name} が倒れた…`, "attack");
@@ -1629,7 +1726,9 @@
 
   function cpuNightActions(alive) {
     for (const p of alive) {
-      if (p.id === state.playerId) continue;
+      // ソロでは人間の追跡ボーナスは付けない（本人が判断するため）。
+      // パス＆プレイでは全員が CPU 扱いなので全員が対象。
+      if (state.mode !== "pnp" && p.id === state.playerId) continue;
       if (p.roleKey === "tracker" && p.lastTarget !== null) {
         const t = state.players[p.lastTarget];
         if (t) t.suspicion += 0.6;
@@ -1709,7 +1808,9 @@
     };
     const alivePlayers = state.players.filter(p => p.alive);
     for (const p of alivePlayers) {
-      if (p.id === state.playerId) continue;
+      // パス＆プレイでは人間の発言は口頭で行う。自動セリフは CPU のみ
+      // （人間の調査結果などが自動セリフで漏れるのを防ぐ）。
+      if (state.mode === "pnp" ? state.humanPlayerIds.includes(p.id) : p.id === state.playerId) continue;
       if (getEffectiveRoleKey(p) === "mouse" && !p.mouseUsed && Math.random() < 0.45) {
         const others = alivePlayers.filter(q => q.id !== p.id);
         const tgt = others.slice().sort((a, b) => b.suspicion - a.suspicion)[0];
@@ -1764,6 +1865,19 @@
   }
 
   function doVote() {
+    if (state.mode === "pnp") {
+      // フェーズ1：人間の投票入力はなし。CPU の1人を代表にして
+      // 既存の CPU 投票ロジックで1票を入れる。
+      const alive = alivePlayers();
+      const cpuPool = alive.filter(p => !state.humanPlayerIds.includes(p.id));
+      const voter = rand(cpuPool.length ? cpuPool : alive);
+      if (!voter) return;
+      state.playerId = voter.id;
+      const jitter = gameSettings.difficulty === "easy" ? 3.2 : gameSettings.difficulty === "hard" ? 0.1 : 1;
+      const candidates = alive.filter(x => x.id !== voter.id);
+      candidates.sort((a, b) => (b.suspicion + Math.random() * jitter) - (a.suspicion + Math.random() * jitter));
+      state.selectedId = candidates[0]?.id;
+    }
     const target = state.players[state.selectedId];
     if (!target || !target.alive) return alert("投票先を選んでね！");
     const votes = new Map();
@@ -1865,9 +1979,11 @@
       : winText.includes("フェイク陣営の勝利") ? "フェイク" : "ニュートラル";
     state.winnerFaction = winnerFaction;
     const me = state.players[state.playerId];
-    state.myWin = ROLES[me.roleKey].faction === winnerFaction;
+    state.myWin = state.mode === "pnp" ? null : ROLES[me.roleKey].faction === winnerFaction;
     el("resultTitle").textContent = winText;
-    el("resultSub").textContent = `あなたは「${ROLES[me.roleKey].name}」（${ROLES[me.roleKey].faction}）で ${state.myWin ? "勝利！" : "敗北…"}`;
+    el("resultSub").textContent = state.mode === "pnp"
+      ? `パス＆プレイ（人間${state.humanPlayerIds.length}人）で遊びました。`
+      : `あなたは「${ROLES[me.roleKey].name}」（${ROLES[me.roleKey].faction}）で ${state.myWin ? "勝利！" : "敗北…"}`;
     el("resultHighlights").innerHTML = buildHighlights().map(h => `<div class="result-highlight">${h}</div>`).join("");
     el("resultRows").innerHTML = state.players.map(p => {
       const role = ROLES[p.roleKey];
@@ -1877,12 +1993,14 @@
       const img = ICON_IMGS[ICON_SLUGS[p.id]];
       return `<div class="result-row ${p.alive ? "" : "dead"}">
         <div class="avatar"><span>${p.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${p.name}">` : ""}</div>
-        <div><div class="result-name">${p.name}${p.id === state.playerId ? "（あなた）" : ""}<span class="faction-chip ${chipClass}">${role.faction}</span></div>
+        <div><div class="result-name">${p.name}${state.mode === "pnp" ? "" : (p.id === state.playerId ? "（あなた）" : "")}<span class="faction-chip ${chipClass}">${role.faction}</span></div>
         <div class="result-role">${role.name}${displayNote}</div></div>
         <div class="result-status">${status}</div>
       </div>`;
     }).join("");
-    recordStats(winText);
+    // パス＆プレイの戦績はソロと分ける（フェーズ4で別キーに分離予定）。
+    // それまではソロの戦績を汚さないよう記録しない。
+    if (state.mode !== "pnp") recordStats(winText);
     sfx(state.myWin ? "win" : "lose");
     const panel = el("resultPanel");
     panel.classList.remove("hidden");
@@ -2262,7 +2380,7 @@
   // ---- game settings (title screen; persisted in localStorage) ----
   const SETTINGS_KEY = "fakeBloomSettings";
   const gameSettings = (() => {
-    const fallback = { fakeCount: "random", bomber: "random", sound: "on", difficulty: "normal", bgm: "off" };
+    const fallback = { fakeCount: "random", bomber: "random", sound: "on", difficulty: "normal", bgm: "off", mode: "solo", humanCount: "2" };
     try {
       const raw = typeof localStorage !== "undefined" ? localStorage.getItem(SETTINGS_KEY) : null;
       if (!raw) return { ...fallback };
@@ -2272,7 +2390,9 @@
         bomber: ["random", "on", "off"].includes(parsed.bomber) ? parsed.bomber : fallback.bomber,
         sound: ["on", "off"].includes(parsed.sound) ? parsed.sound : fallback.sound,
         difficulty: ["easy", "normal", "hard"].includes(parsed.difficulty) ? parsed.difficulty : fallback.difficulty,
-        bgm: ["on", "off"].includes(parsed.bgm) ? parsed.bgm : fallback.bgm
+        bgm: ["on", "off"].includes(parsed.bgm) ? parsed.bgm : fallback.bgm,
+        mode: ["solo", "pnp"].includes(parsed.mode) ? parsed.mode : fallback.mode,
+        humanCount: ["2", "3", "4", "5", "6", "7", "8"].includes(parsed.humanCount) ? parsed.humanCount : fallback.humanCount
       };
     } catch {
       return { ...fallback };
@@ -2292,6 +2412,9 @@
       b.setAttribute("aria-pressed", String(active));
     });
     });
+    // 参加人数はパス＆プレイのときだけ表示する。
+    const humanCountRow = document.getElementById("humanCountRow");
+    if (humanCountRow) humanCountRow.classList.toggle("hidden", gameSettings.mode !== "pnp");
   }
   document.querySelectorAll(".seg button").forEach(b => {
     b.addEventListener("click", () => {
@@ -2312,7 +2435,9 @@
     initAudio();
     if (gameSettings.bgm === "on") startBgm();
     el("titleScreen").classList.add("hidden");
-    el("roleScreen").classList.remove("hidden");
+    // ソロは役職画面へ、パス＆プレイは setupGame 内の startHandoff が
+    // 受け渡し画面を出す。
+    if (gameSettings.mode !== "pnp") el("roleScreen").classList.remove("hidden");
     setupGame();
   };
   el("howBtn").onclick = () => el("howTo").classList.toggle("hidden");
@@ -2327,6 +2452,17 @@
     el("roleScreen").classList.add("hidden");
     el("gameScreen").classList.remove("hidden");
   };
+  el("pnpRevealBtn").onclick = showPnpRole;
+  el("pnpConfirmBtn").onclick = () => {
+    if (state.pnpIndex + 1 < state.humanPlayerIds.length) {
+      state.pnpIndex += 1;
+      showPnpCover();
+    } else {
+      el("pnpScreen").classList.add("hidden");
+      el("gameScreen").classList.remove("hidden");
+      draw();
+    }
+  };
   el("actionBtn").onclick = runNight;
   el("voteBtn").onclick = doVote;
   el("nextBtn").onclick = () => {
@@ -2335,9 +2471,10 @@
   };
   el("retryBtn").onclick = () => {
     el("retryBtn").classList.add("hidden");
-    setupGame();
-    el("roleScreen").classList.remove("hidden");
     el("gameScreen").classList.add("hidden");
+    setupGame();
+    // パス＆プレイは startHandoff が受け渡し画面を出す。ソロは役職画面へ。
+    if (gameSettings.mode !== "pnp") el("roleScreen").classList.remove("hidden");
   };
 })();
 </script>
