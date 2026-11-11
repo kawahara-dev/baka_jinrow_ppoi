@@ -1,0 +1,310 @@
+// Fake Bloom の自動テスト。依存なし（Node 18+ の node:test を使用）。
+// 実行方法: リポジトリのルートで `node --test tests/`
+"use strict";
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { loadGame } = require("./harness");
+
+const BASE_SETTINGS = { fakeCount: "2", bomber: "off", sound: "off", difficulty: "normal" };
+
+// 全員を村ガールに戻す（役職固定テストの土台）。人間以外のプレイヤーを返す。
+function resetToVillagers(FB) {
+  const s = FB.state;
+  s.players.forEach((p) => {
+    p.roleKey = "villager";
+    p.fakeDisplayRoleKey = null;
+    p.alive = true;
+    p.suspicion = 0;
+  });
+  return s.players.filter((p) => p.id !== FB.state.playerId);
+}
+
+function humanOf(FB) {
+  return FB.state.players[FB.state.playerId];
+}
+
+// resolveNightActions を直接呼ぶための夜行動の下ごしらえ。
+function craftNight(FB, actions) {
+  const s = FB.state;
+  s.nightActions = actions;
+  s.nightActionTypes = {};
+  s.protectedTargets = new Set();
+  s.bombs = [];
+  s.loneFakeAbility = null;
+  return s;
+}
+
+// 素朴な自動プレイヤーで1試合を最後まで回す。夜は生存中の自分以外から
+// 先頭を選び、投票は最も疑念が高い生存者を選ぶ。終了時の state を返す。
+function playFullGame(FB, maxDays = 40) {
+  FB.setupGame();
+  let steps = 0;
+  while (FB.state.phase !== "end" && steps++ < maxDays * 4) {
+    const s = FB.state;
+    const alive = s.players.filter((p) => p.alive);
+    const me = s.players[s.playerId];
+    if (s.phase === "night") {
+      s.selectedId = alive.find((p) => p.id !== me.id).id;
+      FB.runNight();
+    } else if (s.phase === "morning") {
+      FB.morningToDiscussion();
+    } else if (s.phase === "discussion") {
+      FB.discussionToVote();
+    } else if (s.phase === "vote") {
+      const candidates = alive
+        .filter((p) => p.id !== me.id)
+        .sort((a, b) => b.suspicion - a.suspicion);
+      s.selectedId = candidates[0].id;
+      FB.doVote();
+    } else {
+      throw new Error(`未知のフェーズ: ${s.phase}`);
+    }
+  }
+  return FB.state;
+}
+
+test("setupGame: 8人・バカ1人・占い師1人・フェイク人数が設定通り", () => {
+  for (const fakeCount of ["1", "2"]) {
+    const { FB } = loadGame({ seedSettings: { ...BASE_SETTINGS, fakeCount } });
+    FB.setupGame();
+    const s = FB.state;
+    assert.equal(s.players.length, 8);
+    assert.ok(s.players.every((p) => p.alive));
+    assert.equal(s.phase, "night");
+    assert.equal(s.day, 1);
+    assert.ok(s.playerId >= 0 && s.playerId < 8);
+    const count = (k) => s.players.filter((p) => p.roleKey === k).length;
+    assert.equal(count("baka"), 1);
+    assert.equal(count("apprenticeSeer"), 1);
+    assert.equal(count("fakeGirl") + count("mimic"), Number(fakeCount));
+    assert.equal(count("bomber"), 0);
+    const baka = s.players.find((p) => p.roleKey === "baka");
+    assert.ok(FB.ROLES[baka.fakeDisplayRoleKey]);
+    assert.equal(FB.ROLES[baka.fakeDisplayRoleKey].faction, "ピュア");
+  }
+});
+
+test("setupGame: ランダム設定でも構成が崩れない", () => {
+  for (let i = 0; i < 20; i++) {
+    const { FB } = loadGame({ seedSettings: { fakeCount: "random", bomber: "random", sound: "off", difficulty: "normal" } });
+    FB.setupGame();
+    const s = FB.state;
+    const count = (k) => s.players.filter((p) => p.roleKey === k).length;
+    const fakes = count("fakeGirl") + count("mimic");
+    assert.ok(fakes === 1 || fakes === 2);
+    assert.ok(count("bomber") === 0 || count("bomber") === 1);
+    assert.equal(count("baka"), 1);
+    assert.equal(s.players.length, 8);
+  }
+});
+
+test("gameSettings: 保存された設定が読まれ、不正な値は初期値に戻る", () => {
+  const { FB } = loadGame({ seedSettings: { fakeCount: "1", bomber: "on", sound: "off", difficulty: "hard" } });
+  assert.equal(FB.gameSettings.fakeCount, "1");
+  assert.equal(FB.gameSettings.bomber, "on");
+  assert.equal(FB.gameSettings.difficulty, "hard");
+  const bad = loadGame({ seedSettings: { fakeCount: "9", bomber: "maybe", sound: "loud", difficulty: "extreme" } });
+  assert.equal(bad.FB.gameSettings.fakeCount, "random");
+  assert.equal(bad.FB.gameSettings.bomber, "random");
+  assert.equal(bad.FB.gameSettings.sound, "on");
+  assert.equal(bad.FB.gameSettings.difficulty, "normal");
+});
+
+test("getEffectiveRoleKey: バカは表示役職、それ以外は本来の役職", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const baka = s.players.find((p) => p.roleKey === "baka");
+  assert.equal(FB.getEffectiveRoleKey(baka), baka.fakeDisplayRoleKey);
+  const seer = s.players.find((p) => p.roleKey === "apprenticeSeer");
+  assert.equal(FB.getEffectiveRoleKey(seer), "apprenticeSeer");
+});
+
+test("checkWin: 勝敗条件", () => {
+  const { FB } = loadGame({ seedSettings: { ...BASE_SETTINGS, bomber: "on" } });
+  const killAll = (faction) =>
+    FB.state.players
+      .filter((p) => FB.ROLES[p.roleKey].faction === faction)
+      .forEach((p) => { p.alive = false; });
+
+  FB.setupGame();
+  assert.equal(FB.checkWin(), null);
+
+  // フェイク全滅 → ピュア勝利
+  killAll("フェイク");
+  assert.match(FB.checkWin(), /ピュア陣営の勝利/);
+
+  // ピュアがフェイクと同数以下 → フェイク勝利
+  FB.setupGame();
+  FB.state.players
+    .filter((p) => FB.ROLES[p.roleKey].faction === "ピュア")
+    .slice(0, 5)
+    .forEach((p) => { p.alive = false; });
+  assert.match(FB.checkWin(), /フェイク陣営の勝利/);
+
+  // ボマーだけ生存 → ボマーの単独勝利
+  FB.setupGame();
+  FB.state.players
+    .filter((p) => p.roleKey !== "bomber")
+    .forEach((p) => { p.alive = false; });
+  assert.match(FB.checkWin(), /ボマーの単独勝利/);
+
+  // ボマーが爆弾で2人以上倒して生き残り、フェイク全滅 → 横取り勝利
+  FB.setupGame();
+  FB.state.bombKills = 2;
+  killAll("フェイク");
+  assert.match(FB.checkWin(), /横取り/);
+});
+
+test("resolveNightActions: 守り手が襲撃を防ぐ／防げなければ脱落する", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "guardian";
+  const fake = others[0];
+  fake.roleKey = "fakeGirl";
+  const victim = others[1];
+  const alive = FB.state.players.filter((p) => p.alive);
+
+  // 守り手が被害者を守っている場合
+  let s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, alive);
+  assert.equal(victim.alive, true);
+  assert.equal(s.nightReport.type, "blocked");
+
+  // 守り手がいない場合（夜行動を立て直す）
+  victim.alive = true;
+  s = craftNight(FB, { [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, alive);
+  assert.equal(victim.alive, false);
+  assert.equal(victim.deathCause, "襲撃");
+  assert.equal(s.nightReport.type, "eliminated");
+});
+
+test("resolveNightActions: 罠は襲撃者を道連れにし、ドクターは蘇生する", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+
+  // 罠
+  FB.setupGame();
+  let others = resetToVillagers(FB);
+  let me = humanOf(FB);
+  me.roleKey = "trapper";
+  let fake = others[0];
+  fake.roleKey = "fakeGirl";
+  let victim = others[1];
+  let s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.equal(victim.alive, false);
+  assert.equal(fake.alive, false);
+  assert.equal(fake.deathCause, "罠");
+  assert.ok(s.trapReport);
+
+  // 蘇生
+  FB.setupGame();
+  others = resetToVillagers(FB);
+  me = humanOf(FB);
+  me.roleKey = "doctor";
+  fake = others[0];
+  fake.roleKey = "fakeGirl";
+  victim = others[1];
+  s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.equal(victim.alive, true);
+  assert.equal(s.nightReport.type, "revived");
+  assert.ok(s.doctorReport);
+});
+
+test("resolveNightActions: 見習い占い師の調査はフェイクを正しく見抜く", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  for (let i = 0; i < 20; i++) {
+    FB.setupGame();
+    const others = resetToVillagers(FB);
+    const me = humanOf(FB);
+    me.roleKey = "apprenticeSeer";
+    const fake = others[0];
+    fake.roleKey = "fakeGirl";
+    const s = craftNight(FB, { [me.id]: fake.id });
+    FB.resolveNightActions(me, fake, FB.state.players.filter((p) => p.alive));
+    assert.equal(s.lastInvestigation[me.id].result, "フェイク");
+    assert.equal(s.lastInvestigation[me.id].targetId, fake.id);
+  }
+});
+
+test("resolveNightActions: なりすましは調査でピュアに化けることがある", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  const results = new Set();
+  for (let i = 0; i < 60; i++) {
+    FB.setupGame();
+    const others = resetToVillagers(FB);
+    const me = humanOf(FB);
+    me.roleKey = "apprenticeSeer";
+    const mimic = others[0];
+    mimic.roleKey = "mimic";
+    const s = craftNight(FB, { [me.id]: mimic.id });
+    FB.resolveNightActions(me, mimic, FB.state.players.filter((p) => p.alive));
+    results.add(s.lastInvestigation[me.id].result);
+  }
+  // 65%でピュアに化けるため、両方の結果が出るはず
+  assert.ok(results.has("ピュア"));
+  assert.ok(results.has("フェイク"));
+});
+
+test("resolveNightActions: バカの占い結果は偽物（両方の判定が出る）", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  const results = new Set();
+  for (let i = 0; i < 60; i++) {
+    FB.setupGame();
+    const others = resetToVillagers(FB);
+    const me = humanOf(FB);
+    me.roleKey = "baka";
+    me.fakeDisplayRoleKey = "apprenticeSeer";
+    const target = others[0];
+    const s = craftNight(FB, { [me.id]: target.id });
+    FB.resolveNightActions(me, target, FB.state.players.filter((p) => p.alive));
+    results.add(s.lastInvestigation[me.id].result);
+  }
+  assert.ok(results.has("ピュア"));
+  assert.ok(results.has("フェイク"));
+});
+
+test("revealMouse: フェイクを公開すると疑念が上がり、ピュアだと下がる", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "mouse";
+  const fake = others[0];
+  fake.roleKey = "fakeGirl";
+  const villager = others[1];
+  FB.revealMouse(me, fake);
+  assert.equal(FB.state.revealedRoles[fake.id], "fakeGirl");
+  assert.equal(fake.suspicion, 8);
+  assert.equal(me.mouseUsed, true);
+
+  me.mouseUsed = false;
+  FB.revealMouse(me, villager);
+  assert.equal(FB.state.revealedRoles[villager.id], "villager");
+  assert.equal(villager.suspicion, -5);
+});
+
+test("フルゲーム: 各種設定で40日以内に必ず決着し、戦績が記録される", () => {
+  const settingsList = [
+    { fakeCount: "1", bomber: "off", difficulty: "easy" },
+    { fakeCount: "2", bomber: "on", difficulty: "normal" },
+    { fakeCount: "random", bomber: "random", difficulty: "hard" },
+  ];
+  for (const settings of settingsList) {
+    for (let i = 0; i < 10; i++) {
+      const { FB, localStorage } = loadGame({ seedSettings: { ...settings, sound: "off" } });
+      const end = playFullGame(FB);
+      assert.equal(end.phase, "end", `設定 ${JSON.stringify(settings)} #${i} が終わらなかった`);
+      assert.ok(["ピュア", "フェイク", "ニュートラル"].includes(end.winnerFaction));
+      assert.ok(end.day <= 40);
+      const stats = JSON.parse(localStorage.getItem("fakeBloomStats"));
+      assert.equal(stats.games, 1);
+      assert.equal(stats.wins, end.myWin ? 1 : 0);
+    }
+  }
+});
