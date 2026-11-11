@@ -4,6 +4,8 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { loadGame } = require("./harness");
 
 const BASE_SETTINGS = { fakeCount: "2", bomber: "off", sound: "off", difficulty: "normal" };
@@ -533,5 +535,68 @@ test("フルゲーム: 各種設定で40日以内に必ず決着し、戦績が�
       assert.equal(stats.games, 1);
       assert.equal(stats.wins, end.myWin ? 1 : 0);
     }
+  }
+});
+
+test("アクセシビリティ: プレイヤーカードはキーボードで選べる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const cards = elements.get("cards").children;
+  assert.equal(cards.length, 8);
+  const me = s.players[s.playerId];
+  // 生存カードは role=button・tabIndex=0・名前と状態を含む aria-label を持つ
+  for (const card of cards) {
+    assert.equal(card.getAttribute("role"), "button");
+    assert.equal(card.tabIndex, 0);
+    assert.match(card.getAttribute("aria-label"), /生存中/);
+  }
+  // Enter / Space で対象選択（夜フェーズ）。自分以外を選ぶ。
+  const target = s.players.find((p) => p.id !== me.id);
+  const card = cards[target.id];
+  card.dispatch("keydown", { key: "Enter", preventDefault() {} });
+  assert.equal(s.selectedId, target.id);
+  s.selectedId = null;
+  card.dispatch("keydown", { key: " ", preventDefault() {} });
+  assert.equal(s.selectedId, target.id);
+  // 関係ないキーは何もしない
+  s.selectedId = null;
+  card.dispatch("keydown", { key: "a", preventDefault() {} });
+  assert.equal(s.selectedId, null);
+
+  // 脱落したカードはタブ移動から外れ、aria-disabled になる
+  target.alive = false;
+  FB.draw();
+  const deadCard = elements.get("cards").children[target.id];
+  assert.equal(deadCard.tabIndex, -1);
+  assert.equal(deadCard.getAttribute("aria-disabled"), "true");
+  assert.match(deadCard.getAttribute("aria-label"), /脱落済み/);
+});
+
+test("アクセシビリティ: 設定ボタンは aria-pressed で選択状態を示す", () => {
+  const { FB, sandbox } = loadGame({ seedSettings: { ...BASE_SETTINGS, difficulty: "hard", sound: "off" } });
+  // paintSettings が読む .seg をスタブで用意する（静的 HTML のボタン相当）。
+  const mkBtn = (value) => ({
+    dataset: { value },
+    classList: { toggle() {}, add() {}, remove() {}, contains() { return false; } },
+    _attrs: {},
+    setAttribute(k, v) { this._attrs[k] = String(v); },
+    getAttribute(k) { return this._attrs[k] ?? null; },
+  });
+  const buttons = [mkBtn("easy"), mkBtn("normal"), mkBtn("hard")];
+  const seg = { dataset: { setting: "difficulty" }, querySelectorAll: () => buttons };
+  sandbox.document.querySelectorAll = (sel) => (sel === ".seg" ? [seg] : []);
+  FB.paintSettings();
+  assert.equal(buttons[0].getAttribute("aria-pressed"), "false");
+  assert.equal(buttons[1].getAttribute("aria-pressed"), "false");
+  assert.equal(buttons[2].getAttribute("aria-pressed"), "true");
+});
+
+test("アクセシビリティ: ログは aria-live、設定グループは role=group を持つ", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  assert.match(html, /<div id="dialogueLog" class="log" aria-live="polite">/);
+  assert.match(html, /<div id="actionLog" class="log" aria-live="polite">/);
+  for (const label of ["フェイク人数", "効果音", "BGM", "難易度", "ボマー"]) {
+    assert.ok(html.includes(`role="group" aria-label="${label}"`), `${label} の設定グループ`);
   }
 });
