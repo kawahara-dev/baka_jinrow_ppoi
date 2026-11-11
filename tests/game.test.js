@@ -111,6 +111,71 @@ test("gameSettings: 保存された設定が読まれ、不正な値は初期値
   assert.equal(bad.FB.gameSettings.difficulty, "normal");
 });
 
+test("gameSettings: BGM は既定オフ、古い保存データでもオフになる", () => {
+  const on = loadGame({ seedSettings: { ...BASE_SETTINGS, bgm: "on" } });
+  assert.equal(on.FB.gameSettings.bgm, "on");
+  const bad = loadGame({ seedSettings: { ...BASE_SETTINGS, bgm: "loud" } });
+  assert.equal(bad.FB.gameSettings.bgm, "off");
+  // bgm キー自体がない古い設定（PR #40 時点の保存データ）→ 後方互換でオフ
+  const legacy = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.equal(legacy.FB.gameSettings.bgm, "off");
+});
+
+test("BGM: AudioContext が無ければ安全な no-op、あればコードが鳴り始める", () => {
+  // Node の vm サンドボックスに AudioContext は無い → 壊れず false を返す
+  const noAudio = loadGame({ seedSettings: { ...BASE_SETTINGS, bgm: "on" } });
+  assert.equal(noAudio.FB.startBgm(), false);
+  assert.equal(noAudio.FB.isBgmPlaying(), false);
+  assert.doesNotThrow(() => noAudio.FB.stopBgm());
+
+  // FakeAudioContext あり：START 押下で BGM が始まり、2回目は重複しない
+  const { FB, elements, FakeAudioContext } = loadGame({
+    seedSettings: { ...BASE_SETTINGS, bgm: "on" },
+    fakeAudio: true,
+  });
+  FakeAudioContext.instances.length = 0;
+  elements.get("startBtn").onclick();
+  assert.equal(FB.isBgmPlaying(), true);
+  assert.equal(FakeAudioContext.instances.length, 1);
+  const ctx = FakeAudioContext.instances[0];
+  assert.equal(ctx.createdOscillators.length, 4, "最初のコードは4声");
+  assert.equal(FB.startBgm(), false, "再生中の再スタートは無視される");
+  assert.equal(ctx.createdOscillators.length, 4, "再スタートで声は増えない");
+  // START をもう一度押すと initAudio が既存の AudioContext を resume する
+  elements.get("startBtn").onclick();
+  assert.ok(ctx.resumed, "AudioContext が resume される");
+  assert.equal(ctx.createdOscillators.length, 4, "START 再押下でも声は増えない");
+
+  // 停止するとフラグが落ち、再開できる
+  FB.stopBgm();
+  assert.equal(FB.isBgmPlaying(), false);
+  assert.equal(FB.startBgm(), true);
+  assert.equal(FB.isBgmPlaying(), true);
+  FB.stopBgm();
+});
+
+test("BGM: コード進行は4コード・各4声・可聴域の周波数", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.equal(FB.BGM_CHORDS.length, 4);
+  for (const chord of FB.BGM_CHORDS) {
+    assert.equal(chord.length, 4);
+    for (const freq of chord) {
+      assert.equal(typeof freq, "number");
+      assert.ok(freq >= 100 && freq <= 1000, `周波数 ${freq} が可聴域`);
+    }
+  }
+});
+
+test("フルゲーム: BGM オンでも40日以内に決着する", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, bgm: "on" }, fakeAudio: true });
+  elements.get("startBtn").onclick(); // BGM を実際に鳴らしながら1試合回す
+  assert.equal(FB.isBgmPlaying(), true);
+  const end = playFullGame(FB);
+  assert.equal(end.phase, "end");
+  assert.ok(end.day <= 40);
+  FB.stopBgm();
+});
+
 test("getEffectiveRoleKey: バカは表示役職、それ以外は本来の役職", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   FB.setupGame();

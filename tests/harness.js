@@ -39,7 +39,53 @@ function makeElement(id) {
   return el;
 }
 
-function createSandbox(seedSettings) {
+// AudioContext の最小スタブ。BGM の発音パス（oscillator / gain の生成・
+ // 接続・開始・停止）が壊れていないことを、ブラウザ無しで確認するため。
+// 生成したノード数とインスタンスを記録する。
+class FakeAudioContext {
+  constructor() {
+    this.currentTime = 0;
+    this.state = "running";
+    this.sampleRate = 44100;
+    this.destination = {};
+    this.createdOscillators = [];
+    this.createdGains = [];
+    this.resumed = false;
+    FakeAudioContext.instances.push(this);
+  }
+  resume() { this.resumed = true; return Promise.resolve(); }
+  createOscillator() {
+    const osc = {
+      type: "sine",
+      frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+      connect() { return osc; },
+      start() {}, stop() {},
+    };
+    this.createdOscillators.push(osc);
+    return osc;
+  }
+  createGain() {
+    const g = {
+      gain: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+      connect() { return g; },
+      disconnect() {},
+    };
+    this.createdGains.push(g);
+    return g;
+  }
+  createBuffer() { return { getChannelData: () => new Float32Array(10) }; }
+  createBufferSource() {
+    const src = { buffer: null, connect() { return src; }, start() {}, stop() {} };
+    return src;
+  }
+  createBiquadFilter() {
+    const f = { type: "lowpass", frequency: { value: 0 }, connect() { return f; } };
+    return f;
+  }
+}
+FakeAudioContext.instances = [];
+
+function createSandbox(seedSettings, { fakeAudio = false } = {}) {
   const elements = new Map();
   const storage = new Map();
   const alerts = [];
@@ -83,12 +129,14 @@ function createSandbox(seedSettings) {
   };
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
+  if (fakeAudio) sandbox.AudioContext = FakeAudioContext;
   return { sandbox, alerts, elements, localStorage };
 }
 
 // index.html を読み込んでゲームを実行し、内部 API とスタブを返す。
-// seedSettings: タイトル画面の設定（fakeCount / bomber / sound / difficulty）。
-function loadGame({ seedSettings } = {}) {
+// seedSettings: タイトル画面の設定（fakeCount / bomber / sound / difficulty / bgm）。
+// fakeAudio: true なら FakeAudioContext を差し込み、BGM の発音パスを検証できる。
+function loadGame({ seedSettings, fakeAudio } = {}) {
   const root = path.resolve(__dirname, "..");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const m = html.match(/<script>([\s\S]*?)<\/script>/);
@@ -104,12 +152,13 @@ function loadGame({ seedSettings } = {}) {
   morningToDiscussion, discussionToVote, revealMouse, checkWin,
   getEffectiveRoleKey, showResults, buildHighlights, gameSettings,
   get state() { return state; },
+  BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
 };
 `;
-  const { sandbox, alerts, elements, localStorage } = createSandbox(seedSettings);
+  const { sandbox, alerts, elements, localStorage } = createSandbox(seedSettings, { fakeAudio });
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox, { filename: "index.html<script>" });
-  return { FB: sandbox.__FB__, alerts, elements, localStorage, sandbox };
+  return { FB: sandbox.__FB__, alerts, elements, localStorage, sandbox, FakeAudioContext };
 }
 
 module.exports = { loadGame };

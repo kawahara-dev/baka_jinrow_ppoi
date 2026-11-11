@@ -496,6 +496,13 @@
         </div>
       </div>
       <div class="settings-row">
+        <span class="settings-label">BGM</span>
+        <div class="seg" data-setting="bgm">
+          <button type="button" data-value="on">オン</button>
+          <button type="button" data-value="off">オフ</button>
+        </div>
+      </div>
+      <div class="settings-row">
         <span class="settings-label">難易度</span>
         <div class="seg" data-setting="difficulty">
           <button type="button" data-value="easy">かんたん</button>
@@ -2174,10 +2181,75 @@
     } catch { /* sound is decorative; never let it break the game */ }
   }
 
+  // ---- quiet ambient BGM loop (WebAudio synth, no audio assets) ----
+  // ゆったりしたパッドのコード進行を 6 秒ごとに重ねて鳴らす。効果音とは
+  // 別のマスターゲインで、音量は控えめ。設定は既定オフ。
+  const BGM_CHORDS = [
+    [261.63, 329.63, 392.00, 493.88], // Cmaj7
+    [220.00, 261.63, 329.63, 392.00], // Am7
+    [174.61, 220.00, 261.63, 329.63], // Fmaj7
+    [196.00, 246.94, 293.66, 392.00], // G (add9 風)
+  ];
+  const BGM_CHORD_MS = 6000;
+  let bgmTimer = null;
+  let bgmGain = null;
+  let bgmStep = 0;
+  let bgmOn = false;
+  function playBgmChord(freqs) {
+    if (!audioCtx || !bgmGain) return;
+    const t0 = audioCtx.currentTime;
+    const dur = BGM_CHORD_MS / 1000 + 2; // 次のコードと 2 秒クロスフェード
+    freqs.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator();
+      osc.type = i % 2 ? "triangle" : "sine";
+      osc.frequency.setValueAtTime(freq, t0);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.05, t0 + 2.0);
+      g.gain.setValueAtTime(0.05, t0 + dur - 2.0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g).connect(bgmGain);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.05);
+    });
+  }
+  function startBgm() {
+    if (bgmOn || !audioCtx || gameSettings.bgm !== "on") return false;
+    try {
+      if (!bgmGain) {
+        bgmGain = audioCtx.createGain();
+        bgmGain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        bgmGain.connect(audioCtx.destination);
+      }
+      bgmOn = true;
+      const step = () => {
+        if (!bgmOn) return;
+        playBgmChord(BGM_CHORDS[bgmStep % BGM_CHORDS.length]);
+        bgmStep++;
+        bgmTimer = setTimeout(step, BGM_CHORD_MS);
+      };
+      step();
+      return true;
+    } catch {
+      bgmOn = false;
+      return false;
+    }
+  }
+  function stopBgm() {
+    bgmOn = false;
+    if (bgmTimer) { clearTimeout(bgmTimer); bgmTimer = null; }
+    // 鳴り中のコードは自分のエンベロープで消える。マスターだけ速めに絞る。
+    try {
+      if (bgmGain && audioCtx) bgmGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.8);
+    } catch { /* decorative; never let it break the game */ }
+    bgmGain = null;
+  }
+  function isBgmPlaying() { return bgmOn; }
+
   // ---- game settings (title screen; persisted in localStorage) ----
   const SETTINGS_KEY = "fakeBloomSettings";
   const gameSettings = (() => {
-    const fallback = { fakeCount: "random", bomber: "random", sound: "on", difficulty: "normal" };
+    const fallback = { fakeCount: "random", bomber: "random", sound: "on", difficulty: "normal", bgm: "off" };
     try {
       const raw = typeof localStorage !== "undefined" ? localStorage.getItem(SETTINGS_KEY) : null;
       if (!raw) return { ...fallback };
@@ -2186,7 +2258,8 @@
         fakeCount: ["random", "1", "2"].includes(parsed.fakeCount) ? parsed.fakeCount : fallback.fakeCount,
         bomber: ["random", "on", "off"].includes(parsed.bomber) ? parsed.bomber : fallback.bomber,
         sound: ["on", "off"].includes(parsed.sound) ? parsed.sound : fallback.sound,
-        difficulty: ["easy", "normal", "hard"].includes(parsed.difficulty) ? parsed.difficulty : fallback.difficulty
+        difficulty: ["easy", "normal", "hard"].includes(parsed.difficulty) ? parsed.difficulty : fallback.difficulty,
+        bgm: ["on", "off"].includes(parsed.bgm) ? parsed.bgm : fallback.bgm
       };
     } catch {
       return { ...fallback };
@@ -2210,12 +2283,17 @@
       gameSettings[key] = b.dataset.value;
       saveSettings();
       paintSettings();
+      if (key === "bgm") {
+        initAudio();
+        if (b.dataset.value === "on") startBgm(); else stopBgm();
+      }
     });
   });
   paintSettings();
 
   el("startBtn").onclick = () => {
     initAudio();
+    if (gameSettings.bgm === "on") startBgm();
     el("titleScreen").classList.add("hidden");
     el("roleScreen").classList.remove("hidden");
     setupGame();
