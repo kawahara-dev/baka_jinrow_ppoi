@@ -1123,6 +1123,11 @@
       pnpNightInputs: {},
       pnpNightResults: {},
       pnpNightInputPending: null,
+      // パス＆プレイの投票入力（フェーズ3）：夜と同じく順番入力。
+      pnpVoteQueue: [],
+      pnpVoteIndex: 0,
+      pnpVoteInputs: {},
+      pnpVoteInputPending: null,
       selectedId: null,
       executed: null,
       players: names.map((n, i) => ({
@@ -1299,14 +1304,25 @@
       ? "確認した（次の人へ）"
       : "確認した（夜行動を終える）";
     // フェイク陣営の人間が2人いる場合、襲撃入力は代表者1人だけ。
-    // 代表者以外はカバー画面越しに確認する（設計メモ 3.6）。
+    // 代表者以外は襲撃先の合意確認をしてから、自分の能力（盗み見・妨害）
+    // の対象を入力する（設計メモ 3.6、フェーズ3）。
+    // 代表者はキューで他のフェイク人間より前に並ぶため、ここに来る時点で
+    // 代表者の入力は済んでいる。念のため未入力なら従来の相談画面にする。
     if (ROLES[player.roleKey].faction === "フェイク" && rep && rep.id !== player.id) {
-      state.pnpStep = "nightFakeConsult";
+      const repInput = state.pnpNightInputs?.[rep.id];
+      const repTarget = repInput !== undefined ? state.players[repInput] : null;
       el("pnpCover").classList.add("hidden");
       el("pnpRole").classList.remove("hidden");
       el("pnpRoleTitle").textContent = "夜行動";
-      el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>フェイクの仲間（${rep.name}）と相談してください。<br>今夜の襲撃先は ${rep.name} が決めます。`;
-      el("pnpConfirmBtn").textContent = confirmLabel;
+      if (repTarget) {
+        state.pnpStep = "nightFakeAgree";
+        el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>フェイクの仲間（${rep.name}）が今夜の襲撃先に <strong>${repTarget.name}</strong> を選びました。<br>この襲撃先で合意しますか？`;
+        el("pnpConfirmBtn").textContent = "合意する（能力入力へ）";
+      } else {
+        state.pnpStep = "nightFakeConsult";
+        el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>フェイクの仲間（${rep.name}）と相談してください。<br>今夜の襲撃先は ${rep.name} が決めます。`;
+        el("pnpConfirmBtn").textContent = "相談した（能力入力へ）";
+      }
       return;
     }
     if (!role.nightAction) {
@@ -1330,10 +1346,29 @@
     updatePnpTurnBanner(player, role);
     draw();
   }
-  function updatePnpTurnBanner(player, role) {
+  function updatePnpTurnBanner(player, role, hintOverride) {
     const banner = el("pnpTurnBanner");
     if (!banner) return;
-    banner.textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番 — ${role.name}：${getPhaseHint(role)}`;
+    banner.textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番 — ${role.name}：${hintOverride || getPhaseHint(role)}`;
+  }
+  // フェイク非代表者の能力入力（フェーズ3）：襲撃の合意確認のあと、
+  // 盗み見（なりすまし）・妨害（フェイクガール）の対象を自分で選ぶ。
+  // 入力は confirmPnpNightAction と同じ経路で記録される。
+  function showPnpFakeAbility() {
+    const player = pnpNightCurrentPlayer();
+    const isMimic = player.roleKey === "mimic";
+    state.pnpStep = "nightFakeAbility";
+    state.pnpNightInputPending = player.id;
+    state.playerId = player.id;
+    state.selectedId = null;
+    el("pnpScreen").classList.add("hidden");
+    el("gameScreen").classList.remove("hidden");
+    el("factionText").textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番`;
+    updatePnpTurnBanner(player, ROLES[player.roleKey],
+      isMimic
+        ? "盗み見：相手の本当の役職を調べる（フェイクの仲間は選べないよ）"
+        : "妨害：相手の夜行動を止める（フェイクの仲間は選べないよ）");
+    draw();
   }
   function confirmPnpNightAction() {
     const playerId = state.pnpNightInputPending;
@@ -1364,11 +1399,104 @@
     runNight();
   }
 
+  // ---- pass-and-play: vote input (phase 3) ----
+  // 投票も夜行動と同じく、生存中の人間がカバー画面付きで順番に入力する。
+  // 他人の投票先は画面にもログにも出ない。集計は tallyVotes で現行通り。
+  function pnpVoteCurrentPlayer() {
+    return state.players[state.pnpVoteQueue[state.pnpVoteIndex]];
+  }
+  function startPnpVote() {
+    state.pnpVoteQueue = state.humanPlayerIds.filter(id => state.players[id]?.alive);
+    state.pnpVoteIndex = 0;
+    state.pnpVoteInputs = {};
+    state.pnpVoteInputPending = null;
+    if (!state.pnpVoteQueue.length) {
+      // 人間が全員脱落：CPU だけで投票を解決する。
+      finishPnpVote();
+      return;
+    }
+    el("gameScreen").classList.add("hidden");
+    el("pnpScreen").classList.remove("hidden");
+    showPnpVoteCover();
+  }
+  function showPnpVoteCover() {
+    const player = pnpVoteCurrentPlayer();
+    state.pnpStep = "voteCover";
+    el("pnpRole").classList.add("hidden");
+    el("pnpCover").classList.remove("hidden");
+    el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpVoteIndex + 1}（${player.name}）</strong>さんの番です。<br>投票の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
+    el("pnpRevealBtn").textContent = "タップして投票の番を始める";
+  }
+  function showPnpVoteTurn() {
+    const player = pnpVoteCurrentPlayer();
+    state.pnpStep = "voteAction";
+    state.pnpVoteInputPending = player.id;
+    state.playerId = player.id;
+    state.selectedId = null;
+    el("pnpScreen").classList.add("hidden");
+    el("gameScreen").classList.remove("hidden");
+    el("factionText").textContent = `P${state.pnpVoteIndex + 1}（${player.name}）の番`;
+    const banner = el("pnpTurnBanner");
+    if (banner) banner.textContent = `P${state.pnpVoteIndex + 1}（${player.name}）の番 — 投票：${getPhaseHint(ROLES[player.roleKey])}`;
+    draw();
+  }
+  function confirmPnpVoteAction() {
+    const playerId = state.pnpVoteInputPending;
+    if (playerId == null) return;
+    const target = state.players[state.selectedId];
+    if (!target || !target.alive || target.id === playerId) return alert("投票先を選んでね！");
+    state.pnpVoteInputs[playerId] = target.id;
+    state.pnpVoteInputPending = null;
+    state.selectedId = null;
+    advancePnpVote();
+  }
+  function advancePnpVote() {
+    state.pnpVoteIndex += 1;
+    if (state.pnpVoteIndex < state.pnpVoteQueue.length) {
+      el("gameScreen").classList.add("hidden");
+      el("pnpScreen").classList.remove("hidden");
+      showPnpVoteCover();
+    } else {
+      finishPnpVote();
+    }
+  }
+  function finishPnpVote() {
+    state.pnpVoteInputPending = null;
+    state.selectedId = null;
+    el("pnpScreen").classList.add("hidden");
+    el("gameScreen").classList.remove("hidden");
+    el("factionText").textContent = "パス＆プレイ";
+    const votes = new Map();
+    const alive = alivePlayers();
+    for (const p of alive) {
+      p.voted = true;
+      if (state.humanPlayerIds.includes(p.id)) {
+        // 人間の投票：入力がなければ CPU と同じ疑念ベースで選ぶ。
+        let targetId = state.pnpVoteInputs?.[p.id];
+        if (targetId === undefined || !state.players[targetId]?.alive || targetId === p.id) {
+          targetId = cpuVotePick(p, alive)?.id;
+        }
+        if (targetId !== undefined) addVoteTo(votes, targetId, p);
+      } else {
+        const pick = cpuVotePick(p, alive);
+        if (pick) addVoteTo(votes, pick.id, p);
+      }
+    }
+    tallyVotes(votes);
+  }
+
 
   function getFakeAlliesText(player) {
     if (!player || ROLES[player.roleKey].faction !== "フェイク") return "";
     const allies = state.players.filter(p => p.id !== player.id && ROLES[p.roleKey].faction === "フェイク");
     if (!allies.length) return "なし";
+    // パス＆プレイでは仲間確認のため P 番号も付ける（誰と相談すればよいか分かるように）。
+    if (state.mode === "pnp") {
+      return allies.map(p => {
+        const idx = state.humanPlayerIds.indexOf(p.id);
+        return idx >= 0 ? `P${idx + 1}（${p.name}）` : p.name;
+      }).join("、");
+    }
     return allies.map(p => p.name).join("、");
   }
 
@@ -1449,6 +1577,9 @@
       ? "この対象で決める"
       : (PHASE_META[state.phase]?.button || "実行");
     el("actionBtn").classList.toggle("hidden", state.phase !== "night");
+    el("voteBtn").textContent = (state.mode === "pnp" && state.pnpVoteInputPending != null)
+      ? "この相手に投票する"
+      : "投票する";
     el("voteBtn").classList.toggle("hidden", state.phase !== "vote");
     el("nextBtn").classList.toggle("hidden", !["morning", "discussion"].includes(state.phase));
     const stage = el("stage");
@@ -1459,9 +1590,9 @@
     }
     const meForMouse = state.players?.[state.playerId];
     el("mouseBtn").classList.toggle("hidden", !(state.mode !== "pnp" && state.phase === "discussion" && meForMouse && getEffectiveRoleKey(meForMouse) === "mouse" && !meForMouse.mouseUsed));
-    // パス＆プレイの夜入力中だけ、誰の番かを示す帯を出す。
+    // パス＆プレイの夜・投票の入力中だけ、誰の番かを示す帯を出す。
     const pnpBanner = el("pnpTurnBanner");
-    if (pnpBanner) pnpBanner.classList.toggle("hidden", !(state.mode === "pnp" && state.pnpNightInputPending != null));
+    if (pnpBanner) pnpBanner.classList.toggle("hidden", !(state.mode === "pnp" && (state.pnpNightInputPending != null || state.pnpVoteInputPending != null)));
   }
 
   function selectTarget(id) {
@@ -1473,6 +1604,9 @@
       const me = state.players[state.playerId];
       const canSelectSelf = !!ROLES[me.roleKey].nightAction?.allowSelf;
       if (id === state.playerId && !canSelectSelf) return;
+      // フェイク能力の入力中はフェイクの仲間を選べない（盗み見・妨害の対象は非フェイク）。
+      if (state.mode === "pnp" && state.pnpStep === "nightFakeAbility"
+        && ROLES[target.roleKey].faction === "フェイク") return;
       state.selectedId = id;
       draw();
       return;
@@ -1618,13 +1752,17 @@
       // Feign-style: fake members who are not leading tonight's attack use
       // their role ability instead. The mimic spies on a player's real role
       // (feeding the faction's target choice), the fake girl blocks a
-      // pure-side night action.
+      // pure-side night action. In pass-and-play, a human non-representative
+      // fake enters the ability target on their night turn (phase 3);
+      // an invalid target (e.g. a fellow fake) falls back to the CPU choice.
       for (const f of fakeSide) {
         if (f.id === fakeActor.id || f.id === me.id) continue;
+        const abilityInput = inputTargetOf(f);
+        const abilityTargetIsVictim = abilityInput !== undefined && victims.some(x => x.id === abilityInput);
         if (f.roleKey === "mimic") {
-          registerAction(f.id, rand(victims)?.id, "spy");
+          registerAction(f.id, abilityTargetIsVictim ? abilityInput : rand(victims)?.id, "spy");
         } else if (f.roleKey === "fakeGirl") {
-          registerAction(f.id, pickBlockTarget(), "block");
+          registerAction(f.id, abilityTargetIsVictim ? abilityInput : pickBlockTarget(), "block");
         }
       }
 
@@ -2054,42 +2192,50 @@
     state.players.forEach(p => p.voted = false);
     actionLog(formatActionLog("voteGuide", { label: "投票" }));
     draw();
+    // パス＆プレイ（フェーズ3）：人間の投票は順番入力で行う。
+    if (state.mode === "pnp") startPnpVote();
+  }
+
+  // 投票の集計（政治家の2票分を含む）。ソロの doVote とパス＆プレイの
+  // finishPnpVote で共通。票の入れ方は呼び出し側で決める。
+  // A politician's ballot counts double (a baka only displays the role).
+  function addVoteTo(votes, targetId, voter) {
+    votes.set(targetId, (votes.get(targetId) || 0) + (voter?.roleKey === "politician" ? 2 : 1));
+  }
+  // CPU の投票先：疑念が高い相手を選び、難易度でブレ幅を変える。
+  function cpuVotePick(voter, alive) {
+    const voteJitter = gameSettings.difficulty === "easy" ? 3.2 : gameSettings.difficulty === "hard" ? 0.1 : 1;
+    const candidates = alive.filter(x => x.id !== voter.id);
+    candidates.sort((a, b) => (b.suspicion + Math.random() * voteJitter) - (a.suspicion + Math.random() * voteJitter));
+    return candidates[0];
   }
 
   function doVote() {
     if (state.mode === "pnp") {
-      // フェーズ1：人間の投票入力はなし。CPU の1人を代表にして
-      // 既存の CPU 投票ロジックで1票を入れる。
-      const alive = alivePlayers();
-      const cpuPool = alive.filter(p => !state.humanPlayerIds.includes(p.id));
-      const voter = rand(cpuPool.length ? cpuPool : alive);
-      if (!voter) return;
-      state.playerId = voter.id;
-      const jitter = gameSettings.difficulty === "easy" ? 3.2 : gameSettings.difficulty === "hard" ? 0.1 : 1;
-      const candidates = alive.filter(x => x.id !== voter.id);
-      candidates.sort((a, b) => (b.suspicion + Math.random() * jitter) - (a.suspicion + Math.random() * jitter));
-      state.selectedId = candidates[0]?.id;
+      // パス＆プレイ（フェーズ3）：投票は順番入力で行う。
+      // 投票ボタンはその人の番のときだけ押せる。
+      if (state.pnpVoteInputPending != null) confirmPnpVoteAction();
+      return;
     }
     const target = state.players[state.selectedId];
     if (!target || !target.alive) return alert("投票先を選んでね！");
     const votes = new Map();
-    // A politician's ballot counts double (a baka only displays the role).
-    const addVote = (id, voter) => votes.set(id, (votes.get(id) || 0) + (voter?.roleKey === "politician" ? 2 : 1));
 
-    addVote(target.id, state.players[state.playerId]);
+    addVoteTo(votes, target.id, state.players[state.playerId]);
     state.players[state.playerId].voted = true;
 
-    // Difficulty: CPU votes follow suspicion closely on hard, loosely on easy.
-    const voteJitter = gameSettings.difficulty === "easy" ? 3.2 : gameSettings.difficulty === "hard" ? 0.1 : 1;
     for (const p of alivePlayers()) {
       if (p.id === state.playerId) continue;
-      const candidates = alivePlayers().filter(x => x.id !== p.id);
-      candidates.sort((a, b) => (b.suspicion + Math.random() * voteJitter) - (a.suspicion + Math.random() * voteJitter));
-      const pick = candidates[0];
-      addVote(pick.id, p);
+      const pick = cpuVotePick(p, alivePlayers());
+      if (pick) addVoteTo(votes, pick.id, p);
       p.voted = true;
     }
 
+    tallyVotes(votes);
+  }
+
+  // 投票の集計と追放・勝敗・翌日への遷移（doVote から抽出）。
+  function tallyVotes(votes) {
     let max = -1;
     let topIds = [];
     for (const [id, c] of votes.entries()) {
@@ -2648,13 +2794,17 @@
   };
   el("pnpRevealBtn").onclick = () => {
     if (state.pnpStep === "nightCover") showPnpNightTurn();
+    else if (state.pnpStep === "voteCover") showPnpVoteTurn();
     else showPnpRole();
   };
   el("pnpConfirmBtn").onclick = () => {
     if (state.pnpStep === "nightResult") {
       showPnpNightAction();
-    } else if (state.pnpStep === "nightNoAction" || state.pnpStep === "nightFakeConsult") {
+    } else if (state.pnpStep === "nightNoAction") {
       advancePnpNight();
+    } else if (state.pnpStep === "nightFakeConsult" || state.pnpStep === "nightFakeAgree") {
+      // フェイク非代表者：合意確認のあと、能力の対象を入力する（フェーズ3）。
+      showPnpFakeAbility();
     } else if (state.pnpIndex + 1 < state.humanPlayerIds.length) {
       state.pnpIndex += 1;
       showPnpCover();
