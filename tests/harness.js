@@ -100,7 +100,7 @@ function loadGame({ seedSettings } = {}) {
   src = src.replace(/\}\)\(\);\s*$/, "");
   src += `
 ;globalThis.__FB__ = {
-  ROLES, PHASE_META, setupGame, runNight, resolveNightActions, doVote,
+  ROLES, PHASE_META, CHAR_TALK, charTalkPool, pickTalkLine, setupGame, runNight, resolveNightActions, doVote,
   morningToDiscussion, discussionToVote, revealMouse, checkWin,
   getEffectiveRoleKey, showResults, buildHighlights, gameSettings,
   get state() { return state; },
