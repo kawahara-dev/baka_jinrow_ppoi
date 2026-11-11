@@ -12,7 +12,6 @@ const vm = require("vm");
 function makeElement(id) {
   const el = {
     id: id || "",
-    innerHTML: "",
     textContent: "",
     className: "",
     dataset: {},
@@ -21,7 +20,10 @@ function makeElement(id) {
     scrollTop: 0,
     scrollHeight: 0,
     offsetWidth: 0,
+    tabIndex: -1,
     onclick: null,
+    _attributes: {},
+    _listeners: {},
     classList: {
       add() {},
       remove() {},
@@ -30,12 +32,34 @@ function makeElement(id) {
     },
     appendChild(child) { el.children.push(child); return child; },
     remove() {},
-    addEventListener() {},
+    setAttribute(name, value) { el._attributes[name] = String(value); },
+    getAttribute(name) { return name in el._attributes ? el._attributes[name] : null; },
+    removeAttribute(name) { delete el._attributes[name]; },
+    addEventListener(type, fn) {
+      if (!el._listeners[type]) el._listeners[type] = [];
+      el._listeners[type].push(fn);
+    },
+    // テストからイベントを発火させるためのヘルパー。
+    dispatch(type, event = {}) {
+      for (const fn of el._listeners[type] || []) fn(event);
+    },
     querySelector() { return null; },
     querySelectorAll() { return []; },
     closest() { return el; },
     scrollIntoView() {},
   };
+  // 実 DOM と同じく innerHTML = "" は子要素を消す。カードやログの
+  // 再描画で children が溜まり続けるのを防ぐ。
+  let _innerHTML = "";
+  Object.defineProperty(el, "innerHTML", {
+    get() { return _innerHTML; },
+    set(v) {
+      _innerHTML = String(v);
+      if (_innerHTML === "") el.children.length = 0;
+    },
+    enumerable: true,
+    configurable: true,
+  });
   return el;
 }
 
@@ -151,6 +175,7 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   ROLES, PHASE_META, CHAR_TALK, charTalkPool, pickTalkLine, setupGame, runNight, resolveNightActions, doVote,
   morningToDiscussion, discussionToVote, revealMouse, checkWin,
   getEffectiveRoleKey, showResults, buildHighlights, gameSettings,
+  draw, paintSettings,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
 };

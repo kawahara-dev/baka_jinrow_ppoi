@@ -482,7 +482,7 @@
     <div class="settings-panel" role="group" aria-label="ゲーム設定">
       <div class="settings-row">
         <span class="settings-label">フェイク人数</span>
-        <div class="seg" data-setting="fakeCount">
+        <div class="seg" data-setting="fakeCount" role="group" aria-label="フェイク人数">
           <button type="button" data-value="random">ランダム</button>
           <button type="button" data-value="1">1人</button>
           <button type="button" data-value="2">2人</button>
@@ -490,21 +490,21 @@
       </div>
       <div class="settings-row">
         <span class="settings-label">効果音</span>
-        <div class="seg" data-setting="sound">
+        <div class="seg" data-setting="sound" role="group" aria-label="効果音">
           <button type="button" data-value="on">オン</button>
           <button type="button" data-value="off">オフ</button>
         </div>
       </div>
       <div class="settings-row">
         <span class="settings-label">BGM</span>
-        <div class="seg" data-setting="bgm">
+        <div class="seg" data-setting="bgm" role="group" aria-label="BGM">
           <button type="button" data-value="on">オン</button>
           <button type="button" data-value="off">オフ</button>
         </div>
       </div>
       <div class="settings-row">
         <span class="settings-label">難易度</span>
-        <div class="seg" data-setting="difficulty">
+        <div class="seg" data-setting="difficulty" role="group" aria-label="難易度">
           <button type="button" data-value="easy">かんたん</button>
           <button type="button" data-value="normal">ふつう</button>
           <button type="button" data-value="hard">つよい</button>
@@ -512,7 +512,7 @@
       </div>
       <div class="settings-row">
         <span class="settings-label">ボマー</span>
-        <div class="seg" data-setting="bomber">
+        <div class="seg" data-setting="bomber" role="group" aria-label="ボマー">
           <button type="button" data-value="random">ランダム</button>
           <button type="button" data-value="on">あり</button>
           <button type="button" data-value="off">なし</button>
@@ -591,11 +591,11 @@
       <aside class="right-panel">
         <div class="screen">
           <h3>セリフ</h3>
-          <div id="dialogueLog" class="log"></div>
+          <div id="dialogueLog" class="log" aria-live="polite"></div>
         </div>
         <div class="screen">
           <h3>行動ログ</h3>
-          <div id="actionLog" class="log"></div>
+          <div id="actionLog" class="log" aria-live="polite"></div>
         </div>
       </aside>
     </div>
@@ -1183,6 +1183,19 @@
       div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""}`;
       div.onclick = () => selectTarget(p.id);
       const revealedRole = p.alive ? "？" : ROLES[p.roleKey].name;
+      // カードは div だが選択操作の本体なので、キーボードからも選べるようにする。
+      // :focus-visible の枠線は CSS 済み（button/.card/summary）。
+      div.setAttribute("role", "button");
+      div.setAttribute("aria-label", `${p.name}、${revealedRole}、${p.alive ? "生存中" : "脱落済み"}`);
+      if (p.alive) {
+        div.tabIndex = 0;
+        div.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectTarget(p.id); }
+        });
+      } else {
+        div.tabIndex = -1;
+        div.setAttribute("aria-disabled", "true");
+      }
       div.innerHTML = `
         <div class="avatar"><span>${p.icon}</span>${ICON_IMGS[ICON_SLUGS[p.id]] ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[p.id]}" src="${ICON_IMGS[ICON_SLUGS[p.id]]}" alt="${p.name}" onerror="this.remove()">` : ""}</div>
         <div class="card-main">
@@ -2273,7 +2286,11 @@
   function paintSettings() {
     document.querySelectorAll(".seg").forEach(seg => {
       const key = seg.dataset.setting;
-      seg.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.value === gameSettings[key]));
+      seg.querySelectorAll("button").forEach(b => {
+      const active = b.dataset.value === gameSettings[key];
+      b.classList.toggle("active", active);
+      b.setAttribute("aria-pressed", String(active));
+    });
     });
   }
   document.querySelectorAll(".seg button").forEach(b => {
