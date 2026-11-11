@@ -365,6 +365,90 @@ test("resolveNightActions: 罠・蘇生・護衛がハイライト用カウン�
   assert.match(FB.buildHighlights().join("\n"), /🛡️ 護衛が1回、襲撃を防いだ/);
 });
 
+test("CHAR_TALK: 8人全員が全カテゴリの口調バリエーションを持つ", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const names = FB.state.players.map((p) => p.name);
+  assert.deepEqual(Object.keys(FB.CHAR_TALK).sort(), [...names].sort());
+  const tiered = ["defense", "pressure"];
+  const flatWithTarget = ["claimFake", "claimWhite", "claimNeutral"];
+  const flatWithoutTarget = ["tracker", "observe", "bomb", "guardian", "endgame"];
+  for (const name of names) {
+    const talk = FB.CHAR_TALK[name];
+    for (const cat of tiered) {
+      for (const tier of ["low", "mid", "high"]) {
+        const pool = talk[cat][tier];
+        assert.ok(Array.isArray(pool) && pool.length > 0, `${name} ${cat}.${tier}`);
+        for (const line of pool) {
+          assert.equal(typeof line, "string");
+          assert.ok(line.length > 0);
+          assert.ok(line.includes("{target}"), `${name} ${cat}.${tier} には {target} が必要`);
+        }
+      }
+    }
+    for (const cat of flatWithTarget) {
+      assert.ok(Array.isArray(talk[cat]) && talk[cat].length > 0, `${name} ${cat}`);
+      for (const line of talk[cat]) assert.ok(line.includes("{target}"), `${name} ${cat} には {target} が必要`);
+    }
+    for (const cat of flatWithoutTarget) {
+      assert.ok(Array.isArray(talk[cat]) && talk[cat].length > 0, `${name} ${cat}`);
+      for (const line of talk[cat]) assert.ok(!line.includes("{target}"), `${name} ${cat} に {target} は不要`);
+    }
+  }
+});
+
+test("pickTalkLine: キャラ固有のセリフと共通テンプレートの両方が選ばれる", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const player = FB.state.players.find((p) => p.id !== FB.state.playerId);
+  const charPool = FB.CHAR_TALK[player.name].observe;
+  const genericPool = ["共通セリフ1", "共通セリフ2"];
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) seen.add(FB.pickTalkLine(player, "observe", null, genericPool));
+  assert.ok(charPool.some((l) => seen.has(l)), "キャラ固有のセリフが選ばれる");
+  assert.ok(genericPool.some((l) => seen.has(l)), "共通テンプレートも選ばれる");
+  // 段位付きカテゴリもキャラプールから選ばれる
+  const seenTiered = new Set();
+  for (let i = 0; i < 200; i++) seenTiered.add(FB.pickTalkLine(player, "defense", "high", ["共通の高セリフ"]));
+  assert.ok(FB.CHAR_TALK[player.name].defense.high.some((l) => seenTiered.has(l)));
+  // 知らない名前のキャラは共通テンプレートだけ
+  const stranger = { name: "知らない子" };
+  for (let i = 0; i < 20; i++) assert.ok(genericPool.includes(FB.pickTalkLine(stranger, "observe", null, genericPool)));
+});
+
+test("morningToDiscussion: 議論ログにキャラ別セリフが出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const names = FB.state.players.map((p) => p.name);
+  // {target} を全キャラ名で置換したキャラ別セリフの集合を作る。
+  const charLines = new Set();
+  for (const talk of Object.values(FB.CHAR_TALK)) {
+    const collect = (pool) => pool.forEach((l) => names.forEach((n) => charLines.add(l.replaceAll("{target}", n))));
+    for (const tier of ["low", "mid", "high"]) { collect(talk.defense[tier]); collect(talk.pressure[tier]); }
+    for (const cat of ["tracker", "observe", "claimFake", "claimWhite", "claimNeutral", "bomb", "guardian", "endgame"]) collect(talk[cat]);
+  }
+  let sawCharLine = false;
+  let totalLines = 0;
+  for (let i = 0; i < 15; i++) {
+    FB.setupGame();
+    const s = FB.state;
+    const alive = s.players.filter((p) => p.alive);
+    s.selectedId = alive.find((p) => p.id !== s.playerId).id;
+    FB.runNight();
+    if (s.phase !== "morning") continue;
+    const before = elements.get("dialogueLog").children.length;
+    FB.morningToDiscussion();
+    const lines = elements.get("dialogueLog").children.slice(before).map((c) => c.textContent);
+    totalLines += lines.length;
+    for (const line of lines) {
+      const said = line.slice(line.indexOf("：") + 1);
+      if (charLines.has(said)) sawCharLine = true;
+    }
+  }
+  assert.ok(totalLines > 0, "議論ログが出る");
+  assert.ok(sawCharLine, "キャラ別セリフが議論ログに出る");
+});
+
 test("フルゲーム: 各種設定で40日以内に必ず決着し、戦績が記録される", () => {
   const settingsList = [
     { fakeCount: "1", bomber: "off", difficulty: "easy" },

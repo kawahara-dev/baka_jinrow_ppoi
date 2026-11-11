@@ -787,6 +787,193 @@
   const icons = ["🌸", "🪄", "🧁", "🎀", "💫", "🫧", "🍬", "🌙"];
   const ICON_SLUGS = ["luna", "mio", "yui", "kanon", "suzu", "riri", "noa", "ema"];
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
+
+  // Character voice (キャラ別セリフ第1弾): each of the 8 girls speaks in her
+  // own tone during discussion. Shape mirrors `templates` inside
+  // morningToDiscussion: defense/pressure are tiered (low/mid/high), the
+  // rest are flat arrays. A character line is used ~60% of the time when
+  // one exists; the shared templates stay as the fallback.
+  const CHAR_TALK = {
+    "ルナ": {
+      defense: {
+        low: ["{target} は大丈夫だよ！いつも通りだし", "{target} を疑うのはまだ早いよ！"],
+        mid: ["{target}、ちょっと気になるけど…まだ決めつけないでおこう", "{target} の様子、なんか変だったかも？"],
+        high: ["{target}、絶対怪しいよ！みんな、見てたでしょ", "{target} は今日落とすべきだと思う！"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫そうだよ、安心して", "{target} に圧をかけるのはまだ早いって"],
+        mid: ["{target}、昨夜のこと教えてよ！", "{target} は何か知ってそうだよね"],
+        high: ["{target}、正直に言って！昨夜何してたの", "{target} を信じきれないよ…説明して！"]
+      },
+      tracker: ["昨夜は誰も見なかったなぁ…静かだったよ"],
+      observe: ["まだ情報が少ないね。話を聞こうよ", "まずはみんなの話を聞きたいな"],
+      claimFake: ["占いの結果…{target} がフェイクだったよ！", "{target}、占いで黒って出たの。信じて！"],
+      claimWhite: ["{target} は白だったよ！安心してね", "占いでは {target} はピュアだったよ"],
+      claimNeutral: ["{target}、どっちでもないみたい…第三勢力かも", "{target} はニュートラル判定だったよ"],
+      bomb: ["爆弾って怖いよね…ボマーを早く見つけよう！"],
+      guardian: ["昨夜の襲撃、防げてよかったね！"],
+      endgame: ["人数が少ないよ…一票を大事にいこう"]
+    },
+    "ミオ": {
+      defense: {
+        low: ["{target} は怪しくないの。星がそう言ってるの", "{target} のオーラは白いの"],
+        mid: ["{target}、ちょっと影が見えるの…", "{target} の運命、少し曇ってるの"],
+        high: ["{target} の影は真っ黒なの。間違いないの", "星の導きよ…{target} がフェイクなの"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫なの。心配ないの", "{target} を疑うのはまだ早いの"],
+        mid: ["{target}、昨夜のことを話すの。月が見てるの", "{target} は何か隠してるの"],
+        high: ["{target}、嘘は星にバレるの。正直に言うの", "{target} を信じられないの…"]
+      },
+      tracker: ["昨夜は誰の気配もなかったの。静かな夜だったの"],
+      observe: ["まだ星の声が小さいの。もう少し待つの", "情報が少ないの。様子を見るの"],
+      claimFake: ["占いの水晶が告げたの…{target} がフェイクなの", "私の占いでは {target} は黒なの"],
+      claimWhite: ["{target} は白なの。星が微笑んでるの", "占いでは {target} はピュアなの"],
+      claimNeutral: ["{target}、どっちの陣営でもないの。不思議なの", "{target} は第三勢力の気配なの"],
+      bomb: ["爆弾の気配…ボマーがいるの、気をつけるの"],
+      guardian: ["昨夜の襲撃、誰かが防いだの。よかったの"],
+      endgame: ["もう人数が少ないの…星に祈るしかないの"]
+    },
+    "ユイ": {
+      defense: {
+        low: ["{target} は大丈夫だよぉ。いつも通りだよぉ", "{target} を疑うのはかわいそうだよぉ"],
+        mid: ["{target}、ちょっと気になるなぁ…", "{target} の様子、少し変だったかもぉ"],
+        high: ["{target} は怪しいよぉ…怖いなぁ", "{target}、今日は落としたほうがいいかもぉ"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫そうだよぉ", "{target} に厳しくするのはまだ早いよぉ"],
+        mid: ["{target}、昨夜のこと教えてほしいなぁ", "{target} は何か知ってそうだよぉ"],
+        high: ["{target}、正直に言ってほしいなぁ…", "{target} を信じきれないよぉ…"]
+      },
+      tracker: ["昨夜は誰も見なかったよぉ。静かだったなぁ"],
+      observe: ["まだよくわからないなぁ。話を聞こうよぉ", "様子見でいいかなぁ…"],
+      claimFake: ["占いの結果なんだけどぉ…{target} がフェイクだったよぉ", "{target}、占いで黒って出ちゃったよぉ"],
+      claimWhite: ["{target} は白だったよぉ。よかったねぇ", "占いでは {target} はピュアだったよぉ"],
+      claimNeutral: ["{target}、どっちでもないみたいだよぉ…", "{target} は第三勢力かもぉ…"],
+      bomb: ["爆弾って怖いよぉ…ボマー、早く見つけたいなぁ"],
+      guardian: ["昨夜の襲撃、防げてよかったよぉ…"],
+      endgame: ["人数が少ないよぉ…慎重にいこうねぇ"]
+    },
+    "カノン": {
+      defense: {
+        low: ["{target} は怪しくありませんわ。ご安心なさいませ", "{target} を疑うのは時期尚早ですわ"],
+        mid: ["{target}、少々気になりますわね", "{target} の態度、少し不審ですわ"],
+        high: ["{target} は非常に怪しいですわ。今日落とすべきですわ", "{target} が黒であることは明白ですわ"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫ですわ。ご心配なく", "{target} に圧をかけるのはまだ早いですわ"],
+        mid: ["{target}、昨夜のことをお話しなさい", "{target} は何かご存知のようですわね"],
+        high: ["{target}、正直にお答えなさい。昨夜何をしていたのかしら", "{target} を信じることはできませんわ"]
+      },
+      tracker: ["昨夜は誰もお見かけしませんでしたわ。静かな夜でした"],
+      observe: ["まだ情報が不足していますわ。お話を伺いましょう", "まずは皆様のお話を聞くべきですわね"],
+      claimFake: ["占いの結果ですわ…{target} がフェイクでしたわ", "私の占いでは {target} は黒ですわ"],
+      claimWhite: ["{target} は白でしたわ。ご安心くださいませ", "占いでは {target} はピュアでしたわ"],
+      claimNeutral: ["{target}、どちらでもないようですわ。第三勢力かしら", "{target} はニュートラル判定でしたわ"],
+      bomb: ["爆弾とは恐ろしいことですわ…ボマーを早く見つけませんと"],
+      guardian: ["昨夜の襲撃を防げたのは大きいですわね"],
+      endgame: ["人数が少なくなりましたわ…一票を慎重に使いましょう"]
+    },
+    "スズ": {
+      defense: {
+        low: ["{target} は白だ。疑う理由はない", "{target} は普通だ。様子見でいい"],
+        mid: ["{target}、少し気になるな", "{target} の動きが引っかかる"],
+        high: ["{target} は黒だ。今日落とす", "{target}、間違いなく怪しい"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫だ。放っておけ", "{target} はまだいい。急ぐな"],
+        mid: ["{target}、昨夜のことを話せ", "{target} は何か知ってるはずだ"],
+        high: ["{target}、昨夜何してた。言え", "{target} は信用できない"]
+      },
+      tracker: ["昨夜は誰も見てない。静かだった"],
+      observe: ["情報が足りない。聞くしかない", "まだ決めるな。様子見だ"],
+      claimFake: ["占いの結果。{target} はフェイクだ", "{target}、黒だ。信じろ"],
+      claimWhite: ["{target} は白だ。安心しろ", "占いでは {target} はピュアだ"],
+      claimNeutral: ["{target} はどっちでもない。第三勢力だ", "{target}、ニュートラル判定だ"],
+      bomb: ["爆弾か。ボマーを早く見つける"],
+      guardian: ["昨夜の襲撃、防げたのは大きい"],
+      endgame: ["人数が少ない。外したら終わりだ"]
+    },
+    "リリ": {
+      defense: {
+        low: ["{target} は白い雲みたいだよぉ。怪しくないよぉ", "{target} を疑うのはまだ早いかなぁ"],
+        mid: ["{target}、なんだかもやもやするなぁ…", "{target} の色、ちょっと曇ってるかもぉ"],
+        high: ["{target} は真っ黒な雲だよぉ…怖いなぁ", "{target}、今日落としたほうがいいかもぉ"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫そうだよぉ。ふわふわしてるよぉ", "{target} に圧をかけるのはまだ早いかなぁ"],
+        mid: ["{target}、昨夜のこと教えてほしいなぁ。夢で見たの？", "{target} は何か知ってそうだよぉ"],
+        high: ["{target}、正直に言ってほしいなぁ…雲の上から見てるよぉ", "{target} を信じきれないかなぁ…"]
+      },
+      tracker: ["昨夜は誰も見なかったなぁ。夢みたいに静かだったよぉ"],
+      observe: ["まだよくわからないなぁ。ふわふわしてるよぉ", "様子見がいいかなぁ…雲の流れを見ようよぉ"],
+      claimFake: ["占いの結果なんだけどぉ…{target} がフェイクだったよぉ", "{target}、夢の中で黒って見えたよぉ"],
+      claimWhite: ["{target} は白い雲みたいだったよぉ。よかったねぇ", "占いでは {target} はピュアだったよぉ"],
+      claimNeutral: ["{target}、どっちでもないみたいだよぉ…不思議な色だよぉ", "{target} は第三勢力かもぉ…"],
+      bomb: ["爆弾って怖いなぁ…ボマー、早く見つけたいよぉ"],
+      guardian: ["昨夜の襲撃、防げてよかったなぁ…ほっとしたよぉ"],
+      endgame: ["人数が少ないなぁ…慎重にいこうねぇ"]
+    },
+    "ノア": {
+      defense: {
+        low: ["{target} は大丈夫だよ！信じてあげようよ", "{target} を疑うのはまだ早いじゃん！"],
+        mid: ["{target}、ちょっと怪しいかも…", "{target} の様子、なんか変じゃん？"],
+        high: ["{target}、絶対怪しいじゃん！今日落とそうよ", "{target} は黒だよ！みんな見てたでしょ"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫そうじゃん。放っておこうよ", "{target} に圧をかけるのはまだ早いって"],
+        mid: ["{target}、昨夜のこと教えてよ！", "{target} は何か知ってそうじゃん"],
+        high: ["{target}、正直に言いなよ！昨夜何してたの", "{target} を信じきれないよ…説明してよ！"]
+      },
+      tracker: ["昨夜は誰も見なかったよ。静かだったな"],
+      observe: ["まだ情報が少ないよ。話を聞こうよ", "まずはみんなの話を聞きたいな"],
+      claimFake: ["占いの結果…{target} がフェイクだったよ！", "{target}、占いで黒って出たよ。信じて！"],
+      claimWhite: ["{target} は白だったよ！安心してね", "占いでは {target} はピュアだったよ"],
+      claimNeutral: ["{target}、どっちでもないみたい…第三勢力かも", "{target} はニュートラル判定だったよ"],
+      bomb: ["爆弾って怖すぎる…ボマーを早く見つけようよ！"],
+      guardian: ["昨夜の襲撃、防げてよかったね！"],
+      endgame: ["人数が少ないよ…一票を大事にいこう"]
+    },
+    "エマ": {
+      defense: {
+        low: ["{target} は怪しくないわ。様子を見るのがいいわね", "{target} を疑う根拠はまだ薄いわ"],
+        mid: ["{target}、少し気になるわね", "{target} の行動に違和感があるわ"],
+        high: ["{target} はかなり怪しいわ。今日落とすべきね", "{target} の票の動きが不自然よ"]
+      },
+      pressure: {
+        low: ["{target} は大丈夫そうね。急ぐ必要はないわ", "{target} に圧をかけるのはまだ早いわね"],
+        mid: ["{target}、昨夜の行動を説明してちょうだい", "{target} は何か知っているはずよ"],
+        high: ["{target}、昨夜何をしていたのか正直に言って", "{target} を信じきるのは難しいわね"]
+      },
+      tracker: ["昨夜は誰も見なかったわ。静かだったわね"],
+      observe: ["まだ情報が少ないわね。話を聞きましょう", "まずは全員の話を聞くべきね"],
+      claimFake: ["占いの結果よ…{target} がフェイクだったわ", "私の占いでは {target} は黒よ"],
+      claimWhite: ["{target} は白だったわ。安心してちょうだい", "占いでは {target} はピュアだったわ"],
+      claimNeutral: ["{target}、どっちの陣営でもないわね。第三勢力かしら", "{target} はニュートラル判定だったわ"],
+      bomb: ["爆弾か…ボマーを早く見つけないと全員危ないわ"],
+      guardian: ["昨夜の襲撃を防げたのは大きいわね"],
+      endgame: ["人数が少ないわ…一票が重いわね。慎重にいきましょう"]
+    }
+  };
+
+  // Character-specific pool for one discussion category (tiered pools take
+  // a tier). Returns null when the character has no line for it.
+  function charTalkPool(name, category, tier) {
+    const char = CHAR_TALK[name];
+    if (!char) return null;
+    const pool = char[category];
+    if (Array.isArray(pool)) return pool;
+    if (pool && tier) return pool[tier] || null;
+    return null;
+  }
+
+  // Pick a discussion line: prefer the speaker's own voice (~60%) and fall
+  // back to the shared template pool otherwise.
+  function pickTalkLine(player, category, tier, genericPool) {
+    const charPool = charTalkPool(player.name, category, tier);
+    if (charPool && charPool.length && Math.random() < 0.6) return rand(charPool);
+    return rand(genericPool);
+  }
   const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "police", "lookout", "trapper", "doctor", "mouse", "politician"];
 
   let state = {};
@@ -1537,12 +1724,10 @@
       }
       let line;
       if (Array.isArray(templates[category])) {
-        const pool = templates[category];
-        line = pool[Math.floor(Math.random() * pool.length)];
+        line = pickTalkLine(p, category, null, templates[category]);
       } else {
         const tier = suspicionTier((lineTarget || target)?.suspicion || 0);
-        const pool = templates[category][tier];
-        line = pool[Math.floor(Math.random() * pool.length)];
+        line = pickTalkLine(p, category, tier, templates[category][tier]);
       }
       const nameForLine = lineTarget?.name || target?.name || "みんな";
       dialogueLog(`${p.name}：${line.replaceAll("{target}", nameForLine)}`);
