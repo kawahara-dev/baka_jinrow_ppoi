@@ -48,8 +48,16 @@ function playPnpNight(FB, elements) {
       elements.get("pnpRevealBtn").onclick();
     } else if (s.pnpStep === "nightResult") {
       elements.get("pnpConfirmBtn").onclick();
-    } else if (s.pnpStep === "nightNoAction" || s.pnpStep === "nightFakeConsult") {
+    } else if (s.pnpStep === "nightNoAction") {
       elements.get("pnpConfirmBtn").onclick();
+    } else if (s.pnpStep === "nightFakeConsult" || s.pnpStep === "nightFakeAgree") {
+      // 合意確認のあと、能力の対象入力へ進む（フェーズ3）。
+      elements.get("pnpConfirmBtn").onclick();
+    } else if (s.pnpStep === "nightFakeAbility") {
+      const player = FB.pnpNightCurrentPlayer();
+      const target = s.players.find((p) => p.alive && p.id !== player.id && FB.ROLES[p.roleKey].faction !== "フェイク");
+      s.selectedId = target.id;
+      elements.get("actionBtn").onclick();
     } else if (s.pnpStep === "nightAction") {
       const player = FB.pnpNightCurrentPlayer();
       const target = s.players.find((p) => p.alive && p.id !== player.id);
@@ -60,6 +68,25 @@ function playPnpNight(FB, elements) {
     }
   }
   assert.ok(s.phase === "morning" || s.phase === "end", `夜が解決されなかった: ${s.phase} / ${s.pnpStep}`);
+}
+
+// パス＆プレイの投票入力を自動で回す。生存中の人間が順番に投票する。
+function playPnpVote(FB, elements) {
+  const s = FB.state;
+  let guard = 0;
+  while (s.phase === "vote" && guard++ < 40) {
+    if (s.pnpStep === "voteCover") {
+      elements.get("pnpRevealBtn").onclick();
+    } else if (s.pnpStep === "voteAction") {
+      const player = FB.pnpVoteCurrentPlayer();
+      const target = s.players.find((p) => p.alive && p.id !== player.id);
+      s.selectedId = target.id;
+      elements.get("voteBtn").onclick();
+    } else {
+      throw new Error(`投票入力の想定外のステップ: ${s.pnpStep}`);
+    }
+  }
+  assert.ok(s.phase === "night" || s.phase === "end", `投票が解決されなかった: ${s.phase} / ${s.pnpStep}`);
 }
 
 function playFullGame(FB, elements, maxDays = 40) {
@@ -88,11 +115,14 @@ function playFullGame(FB, elements, maxDays = 40) {
     } else if (s.phase === "discussion") {
       FB.discussionToVote();
     } else if (s.phase === "vote") {
-      const candidates = alive
-        .filter((p) => p.id !== me.id)
-        .sort((a, b) => b.suspicion - a.suspicion);
-      s.selectedId = candidates[0].id;
-      FB.doVote();
+      if (s.mode === "pnp") playPnpVote(FB, elements);
+      else {
+        const candidates = alive
+          .filter((p) => p.id !== me.id)
+          .sort((a, b) => b.suspicion - a.suspicion);
+        s.selectedId = candidates[0].id;
+        FB.doVote();
+      }
     } else {
       throw new Error(`未知のフェーズ: ${s.phase}`);
     }
@@ -840,16 +870,163 @@ test("パス＆プレイ フェーズ2: フェイク人間の代表者が入力�
   s.selectedId = victim.id;
   elements.get("actionBtn").onclick();
   assert.equal(s.pnpNightInputs[humans[0].id], victim.id);
-  // P2（代表者以外）の番：相談画面で確認だけ
+  // P2（代表者以外）の番：合意画面で襲撃先を確認する（フェーズ3で相談画面から変更）
   assert.equal(s.pnpStep, "nightCover");
   elements.get("pnpRevealBtn").onclick();
-  assert.equal(s.pnpStep, "nightFakeConsult");
-  assert.match(elements.get("pnpPlayerRole").innerHTML, /相談/);
+  assert.equal(s.pnpStep, "nightFakeAgree");
+  assert.match(elements.get("pnpPlayerRole").innerHTML, /合意/);
+  assert.ok(elements.get("pnpPlayerRole").innerHTML.includes(victim.name), "合意画面は襲撃先を示す");
+  // 合意のあと、能力（盗み見）の対象を入力する
   elements.get("pnpConfirmBtn").onclick();
+  assert.equal(s.pnpStep, "nightFakeAbility");
+  s.selectedId = cpus[1].id;
+  elements.get("actionBtn").onclick();
+  assert.equal(s.pnpNightInputs[humans[1].id], cpus[1].id);
   // 夜が解決され、入力した襲撃先が倒れる
   assert.equal(s.phase, "morning");
   assert.equal(victim.alive, false);
   assert.equal(victim.deathCause, "襲撃");
   assert.equal(s.nightReport.type, "eliminated");
   assert.equal(s.nightReport.victimId, victim.id);
+});
+
+test("パス＆プレイ フェーズ3: フェイク仲間の表示に P 番号が付く", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  humans[0].roleKey = "fakeGirl";
+  humans[1].roleKey = "mimic";
+  // P1 の役職画面を開く（受け渡し画面）。
+  elements.get("pnpRevealBtn").onclick();
+  const roleHtml = elements.get("pnpPlayerRole").innerHTML;
+  assert.ok(roleHtml.includes(`フェイク仲間：P2（${humans[1].name}）`), `仲間確認: ${roleHtml}`);
+});
+
+test("パス＆プレイ フェーズ3: フェイク非代表者は襲撃先に合意し、能力の対象を入力する", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  humans[0].roleKey = "fakeGirl"; // 代表者（humanPlayerIds の先頭）
+  humans[1].roleKey = "mimic"; // 非代表者：盗み見の対象を入力する
+  const victim = cpus[0];
+  const spyTarget = cpus[1];
+  // 受け渡しを全員分進める
+  for (let i = 0; i < 2; i++) {
+    elements.get("pnpRevealBtn").onclick();
+    elements.get("pnpConfirmBtn").onclick();
+  }
+  // P1（代表者）の番：襲撃先を入力
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightAction");
+  s.selectedId = victim.id;
+  elements.get("actionBtn").onclick();
+  assert.equal(s.pnpNightInputs[humans[0].id], victim.id);
+  // P2（非代表者）の番：合意画面に代表者の襲撃先が出る
+  assert.equal(s.pnpStep, "nightCover");
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightFakeAgree");
+  assert.match(elements.get("pnpPlayerRole").innerHTML, /合意/);
+  assert.ok(elements.get("pnpPlayerRole").innerHTML.includes(victim.name), "合意画面は襲撃先を示す");
+  // 合意すると能力入力画面へ
+  elements.get("pnpConfirmBtn").onclick();
+  assert.equal(s.pnpStep, "nightFakeAbility");
+  assert.match(elements.get("pnpTurnBanner").textContent, /盗み見/);
+  // フェイクの仲間は能力の対象に選べない
+  FB.selectTarget(humans[0].id);
+  assert.equal(s.selectedId, null, "フェイクの仲間は能力の対象に選べない");
+  FB.selectTarget(spyTarget.id);
+  assert.equal(s.selectedId, spyTarget.id);
+  elements.get("actionBtn").onclick();
+  assert.equal(s.pnpNightInputs[humans[1].id], spyTarget.id);
+  // 夜が解決され、襲撃先が倒れ、盗み見の対象が記録される
+  assert.equal(s.phase, "morning");
+  assert.equal(victim.alive, false);
+  assert.equal(victim.deathCause, "襲撃");
+  assert.equal(s.nightActions[humans[1].id], spyTarget.id);
+  assert.equal(s.fakeIntel[spyTarget.id], spyTarget.roleKey);
+  // 盗み見の結果は本人の夜結果に貯まり、公開ログに出ない
+  const mine = s.pnpNightResults[humans[1].id] || [];
+  assert.ok(mine.some((m) => m.includes("正体は")), `本人の盗み見結果: ${mine.join(" / ")}`);
+  const lines = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(!lines.some((l) => l.includes("正体は")), `盗み見の結果が漏れた: ${lines.join(" / ")}`);
+});
+
+test("パス＆プレイ フェーズ3: 投票の順番入力で人間の票が集計に使われる", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "3", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  cpus[0].roleKey = "fakeGirl"; // 夜に襲撃するフェイク（全員村人だと夜1で即勝利するため）
+  // 受け渡しを全員分進める（最後の確認で夜入力が始まる）
+  for (let i = 0; i < 3; i++) {
+    elements.get("pnpRevealBtn").onclick();
+    elements.get("pnpConfirmBtn").onclick();
+  }
+  // 夜は全員能力なしで進む
+  playPnpNight(FB, elements);
+  assert.equal(s.phase, "morning");
+  FB.morningToDiscussion();
+  // 投票先：フェイクの CPU を人間全員で狙う。CPU の票も同じ相手へ向くよう
+  // 疑念を上げておく（難易度 normal のブレ幅 1 より十分大きい）。
+  const target = cpus[0];
+  target.suspicion = 10;
+  FB.discussionToVote();
+  assert.equal(s.phase, "vote");
+  assert.equal(s.pnpStep, "voteCover");
+  assert.equal(elements.get("pnpScreen").classList.contains("hidden"), false);
+  const aliveHumans = s.humanPlayerIds.filter((id) => s.players[id].alive);
+  for (const humanId of aliveHumans) {
+    const player = s.players[humanId];
+    const cover = elements.get("pnpCoverText").innerHTML;
+    assert.ok(cover.includes(player.name), "投票カバーは番の人の名前を示す");
+    assert.ok(!cover.includes(target.name), "投票カバーに投票先は出ない");
+    elements.get("pnpRevealBtn").onclick();
+    assert.equal(s.pnpStep, "voteAction");
+    assert.equal(FB.pnpVoteCurrentPlayer().id, player.id);
+    assert.equal(elements.get("voteBtn").textContent, "この相手に投票する");
+    assert.equal(elements.get("pnpTurnBanner").classList.contains("hidden"), false);
+    assert.match(elements.get("pnpTurnBanner").textContent, /投票/);
+    // 自分への投票は選べない
+    s.selectedId = player.id;
+    elements.get("voteBtn").onclick();
+    assert.equal(s.pnpVoteInputs[player.id], undefined, "自分への投票は記録されない");
+    assert.equal(s.pnpStep, "voteAction", "無効な投票では番が進まない");
+    s.selectedId = target.id;
+    elements.get("voteBtn").onclick();
+    assert.equal(s.pnpVoteInputs[player.id], target.id);
+  }
+  // 全員分が終わると集計され、狙った相手が追放される
+  assert.equal(target.alive, false);
+  assert.equal(target.deathCause, "追放");
+  assert.equal(s.phase, "end", "フェイクを追放してピュア陣営の勝利");
+});
+
+test("tallyVotes: 政治家の票は2票分で、パス＆プレイの集計でも反映される", () => {
+  const { FB } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  humans[0].roleKey = "politician";
+  cpus[0].roleKey = "fakeGirl";
+  const targetA = cpus[0];
+  const targetB = cpus[1];
+  s.phase = "vote";
+  const votes = new Map();
+  FB.addVoteTo(votes, targetA.id, humans[0]); // 政治家：2票
+  FB.addVoteTo(votes, targetB.id, humans[1]); // 1票
+  FB.tallyVotes(votes);
+  // 政治家の2票がなければ同数で追放なしになる
+  assert.equal(targetA.alive, false);
+  assert.equal(targetA.deathCause, "追放");
+  assert.equal(targetB.alive, true);
+  assert.equal(s.phase, "end", "フェイクを追放してピュア陣営の勝利");
 });

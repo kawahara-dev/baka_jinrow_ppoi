@@ -185,7 +185,10 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   draw, paintSettings, roleHtmlFor, startHandoff, showPnpCover, showPnpRole,
   startPnpNight, showPnpNightCover, showPnpNightTurn, showPnpNightAction,
   confirmPnpNightAction, advancePnpNight, finishPnpNight,
-  pnpNightCurrentPlayer, pnpHumanFakeRep,
+  pnpNightCurrentPlayer, pnpHumanFakeRep, showPnpFakeAbility,
+  startPnpVote, showPnpVoteCover, showPnpVoteTurn,
+  confirmPnpVoteAction, advancePnpVote, finishPnpVote,
+  pnpVoteCurrentPlayer, tallyVotes, cpuVotePick, addVoteTo, selectTarget,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
 };
