@@ -22,6 +22,11 @@ function makeElement(id) {
     offsetWidth: 0,
     tabIndex: -1,
     onclick: null,
+    // focus() はフォーカス移動の検証用に記録する（実 DOM の activeElement
+    // までは再現しないが、どの要素へ移ったかは _focused で判定できる）。
+    _focused: false,
+    focus() { el._focused = true; },
+    blur() { el._focused = false; },
     _attributes: {},
     _listeners: {},
     classList: {
@@ -191,7 +196,7 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   confirmPnpVoteAction, advancePnpVote, finishPnpVote,
   pnpVoteCurrentPlayer, tallyVotes, cpuVotePick, addVoteTo, selectTarget,
   pnpCpuTalkCap, startDiscussTimer, stopDiscussTimer, discussTimerTick,
-  recordPnpStats, loadPnpStats, renderPnpStats,
+  recordPnpStats, loadPnpStats, renderPnpStats, focusEl,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
 };
