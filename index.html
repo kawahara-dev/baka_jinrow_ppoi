@@ -420,13 +420,13 @@
     @keyframes cardIn { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
     .log p { animation: logIn 0.25s ease both; }
     @keyframes logIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-    #actionBtn:not(.hidden), #voteBtn:not(.hidden) { animation: btnPulse 1.8s ease-in-out infinite; }
+    #actionBtn:not(.hidden), #voteBtn:not(.hidden), #nextBtn.vote-ready:not(.hidden) { animation: btnPulse 1.8s ease-in-out infinite; }
     @keyframes btnPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255, 111, 179, 0.45); } 50% { box-shadow: 0 0 0 9px rgba(255, 111, 179, 0); } }
     @media (prefers-reduced-motion: reduce) {
       .petals span, .confetti-piece, .cutin-band, .card, .log p, .shake, .stage .walker.speaking .wbody,
       .stage .walker, .stage .walker .wbody, .stage.flash-red, .speech-bubble,
       .result-row.winner .avatar, .result-row.loser .avatar,
-      #actionBtn:not(.hidden), #voteBtn:not(.hidden) { animation: none !important; }
+      #actionBtn:not(.hidden), #voteBtn:not(.hidden), #nextBtn.vote-ready:not(.hidden) { animation: none !important; }
     }
     .avatar { font-size: 1.8rem; position: relative; width: 64px; height: 64px; margin: 0 auto; }
     .avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
@@ -505,6 +505,17 @@
       font-weight: 800;
       text-align: center;
       line-height: 1.5;
+    }
+    /* 残り30秒以下は警告色、時間切れはさらに強い赤で目立たせる。 */
+    .discuss-timer.timer-low {
+      background: linear-gradient(145deg, #fff3f3 0%, #ffe3e3 100%);
+      border-color: #ff8a8a;
+      color: #b3261e;
+    }
+    .discuss-timer.timer-expired {
+      background: linear-gradient(145deg, #ffe1e1 0%, #ffc9c9 100%);
+      border-color: #e5484d;
+      color: #a11d21;
     }
 
 
@@ -2451,14 +2462,23 @@
   function renderDiscussTimer() {
     const box = el("discussTimer");
     if (!box) return;
+    const nextBtn = el("nextBtn");
     if (state.mode !== "pnp" || state.phase !== "discussion" || !(Number(gameSettings.discussTimer) > 0)) {
       box.classList.add("hidden");
+      box.classList.remove("timer-low", "timer-expired");
+      if (nextBtn) nextBtn.classList.remove("vote-ready");
       return;
     }
     box.classList.remove("hidden");
-    box.textContent = discussSecondsLeft > 0
-      ? `🗣️ 議論タイマー 残り ${formatDiscussTime(discussSecondsLeft)}`
-      : "⏰ 時間切れ！「議論を終えて投票へ」を押してね";
+    // 残り30秒以下は警告色、時間切れは投票ボタンもパルスさせて目立たせる。
+    const expired = discussSecondsLeft <= 0;
+    const low = !expired && discussSecondsLeft <= 30;
+    box.classList.toggle("timer-low", low);
+    box.classList.toggle("timer-expired", expired);
+    if (nextBtn) nextBtn.classList.toggle("vote-ready", expired);
+    box.textContent = expired
+      ? "⏰ 時間切れ！「議論を終えて投票へ」を押してね"
+      : `🗣️ 議論タイマー 残り ${formatDiscussTime(discussSecondsLeft)}`;
   }
   function discussTimerTick() {
     if (state.mode !== "pnp" || state.phase !== "discussion") { discussTimerId = null; return; }
@@ -2486,7 +2506,12 @@
     discussTimerId = null;
     discussSecondsLeft = 0;
     const box = el("discussTimer");
-    if (box) box.classList.add("hidden");
+    if (box) {
+      box.classList.add("hidden");
+      box.classList.remove("timer-low", "timer-expired");
+    }
+    const nextBtn = el("nextBtn");
+    if (nextBtn) nextBtn.classList.remove("vote-ready");
   }
 
   // パス＆プレイの議論で発言する CPU の上限（フェーズ4）。人間は口頭で

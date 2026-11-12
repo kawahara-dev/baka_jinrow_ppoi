@@ -1407,6 +1407,42 @@ test("議論タイマー: パス＆プレイの議論で残り時間が表示さ
   assert.equal(s.phase, "vote");
 });
 
+test("議論タイマー: 残り30秒以下で警告色になり、時間切れで投票ボタンが目立つ", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", discussTimer: "60" } });
+  FB.setupGame();
+  const s = FB.state;
+  s.phase = "morning";
+  FB.morningToDiscussion();
+  const box = elements.get("discussTimer");
+  const nextBtn = elements.get("nextBtn");
+  // 開始直後（残り60秒）は警告なし
+  assert.equal(box.classList.contains("timer-low"), false);
+  assert.equal(box.classList.contains("timer-expired"), false);
+  assert.equal(nextBtn.classList.contains("vote-ready"), false);
+  // 29秒進めて残り31秒：まだ警告なし
+  for (let i = 0; i < 29; i++) FB.discussTimerTick();
+  assert.match(box.textContent, /残り 0:31/);
+  assert.equal(box.classList.contains("timer-low"), false);
+  // 残り30秒で警告色が付く
+  FB.discussTimerTick();
+  assert.match(box.textContent, /残り 0:30/);
+  assert.equal(box.classList.contains("timer-low"), true);
+  assert.equal(box.classList.contains("timer-expired"), false);
+  assert.equal(nextBtn.classList.contains("vote-ready"), false);
+  // 時間切れで投票ボタンが目立ち、タイマーも時間切れ色になる
+  for (let i = 0; i < 30; i++) FB.discussTimerTick();
+  assert.match(box.textContent, /時間切れ/);
+  assert.equal(box.classList.contains("timer-low"), false);
+  assert.equal(box.classList.contains("timer-expired"), true);
+  assert.equal(nextBtn.classList.contains("vote-ready"), true);
+  assert.equal(s.phase, "discussion", "時間切れでも自動で投票へは進まない");
+  // 投票へ進むと強調がすべて外れる
+  FB.discussionToVote();
+  assert.equal(box.classList.contains("hidden"), true);
+  assert.equal(box.classList.contains("timer-expired"), false);
+  assert.equal(nextBtn.classList.contains("vote-ready"), false);
+});
+
 test("議論タイマー: タイマーなし（既定）では議論中に表示されない", () => {
   const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
   FB.setupGame();
