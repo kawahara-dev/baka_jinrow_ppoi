@@ -2112,3 +2112,89 @@ test("役職アイコン併記: 役職画面・役職カード・結果画面の
   assert.ok(rows.includes("🃏 バカ"), "結果画面にバカの実役職アイコン");
   assert.ok(rows.includes("🔮 見習い占い師"), "結果画面に占い師アイコン");
 });
+
+test("ログの折りたたみ: 見出しがトグルボタンになり、aria-controls と CSS がある", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  assert.match(html, /<button type="button" class="log-toggle" id="dialogueLogToggle" aria-expanded="false" aria-controls="dialogueLog">▸ セリフ<\/button>/);
+  assert.match(html, /<button type="button" class="log-toggle" id="actionLogToggle" aria-expanded="false" aria-controls="actionLog">▸ 行動ログ<\/button>/);
+  // aria-live は維持（折りたたみで消えていない）。
+  assert.match(html, /<div id="dialogueLog" class="log" aria-live="polite">/);
+  assert.match(html, /<div id="actionLog" class="log" aria-live="polite">/);
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  assert.match(style, /\.log-toggle \{[^}]*cursor: pointer;/);
+  assert.match(style, /\.log-toggle:focus-visible \{[^}]*outline:/);
+});
+
+test("ログの折りたたみ: 既定は両方たたみ、トグルで個別に開閉でき、状態が保存される", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  // 既定（保存なし）は両方とも折りたたみ。
+  assert.ok(elements.get("dialogueLog").classList.contains("hidden"), "セリフは既定でたたむ");
+  assert.ok(elements.get("actionLog").classList.contains("hidden"), "行動ログは既定でたたむ");
+  assert.equal(elements.get("dialogueLogToggle").getAttribute("aria-expanded"), "false");
+  assert.equal(elements.get("dialogueLogToggle").textContent, "▸ セリフ");
+  assert.equal(elements.get("actionLogToggle").getAttribute("aria-expanded"), "false");
+  assert.equal(elements.get("actionLogToggle").textContent, "▸ 行動ログ");
+  // セリフだけ開く（行動ログはたたんだまま）。
+  elements.get("dialogueLogToggle").onclick();
+  assert.ok(!elements.get("dialogueLog").classList.contains("hidden"), "セリフが開く");
+  assert.ok(elements.get("actionLog").classList.contains("hidden"), "行動ログはたたんだまま");
+  assert.equal(elements.get("dialogueLogToggle").getAttribute("aria-expanded"), "true");
+  assert.equal(elements.get("dialogueLogToggle").textContent, "▾ セリフ");
+  // 状態が保存される。
+  assert.equal(localStorage.getItem(FB.LOG_FOLD_KEY), JSON.stringify({ dialogue: false, action: true }));
+  // もう一度押すとたたみ直す。
+  elements.get("dialogueLogToggle").onclick();
+  assert.ok(elements.get("dialogueLog").classList.contains("hidden"));
+  assert.equal(localStorage.getItem(FB.LOG_FOLD_KEY), JSON.stringify({ dialogue: true, action: true }));
+  // setLogFolded でも同じ状態になる。
+  FB.setLogFolded("action", false);
+  assert.ok(!elements.get("actionLog").classList.contains("hidden"), "行動ログが開く");
+  assert.equal(elements.get("actionLogToggle").getAttribute("aria-expanded"), "true");
+});
+
+test("ログの折りたたみ: 保存された開閉状態が次回起動時に復元される", () => {
+  const { elements } = loadGame({
+    seedSettings: BASE_SETTINGS,
+    seedStorage: { fakeBloomLogFold: JSON.stringify({ dialogue: false, action: true }) },
+  });
+  assert.ok(!elements.get("dialogueLog").classList.contains("hidden"), "保存で開いていたセリフは開いたまま");
+  assert.ok(elements.get("actionLog").classList.contains("hidden"), "保存でたたんでいた行動ログはたたんだまま");
+  assert.equal(elements.get("dialogueLogToggle").getAttribute("aria-expanded"), "true");
+  assert.equal(elements.get("dialogueLogToggle").textContent, "▾ セリフ");
+});
+
+test("ログの折りたたみ: 保存データが壊れていても両方たたんだ既定で始まる", () => {
+  const broken = loadGame({ seedSettings: BASE_SETTINGS, seedStorage: { fakeBloomLogFold: "not-json{" } });
+  assert.ok(broken.elements.get("dialogueLog").classList.contains("hidden"));
+  assert.ok(broken.elements.get("actionLog").classList.contains("hidden"));
+  // 片方だけ不正な値は、その片方だけ既定に戻る。
+  const partial = loadGame({
+    seedSettings: BASE_SETTINGS,
+    seedStorage: { fakeBloomLogFold: JSON.stringify({ dialogue: false, action: "yes" }) },
+  });
+  assert.ok(!partial.elements.get("dialogueLog").classList.contains("hidden"), "正しい値は生かす");
+  assert.ok(partial.elements.get("actionLog").classList.contains("hidden"), "不正な値は既定（たたむ）に戻る");
+});
+
+test("ログの折りたたみ: 新しい行が追加されても自動で開き直さない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  // ゲーム開始の行が行動ログに入っても、たたんだまま。
+  assert.ok(elements.get("actionLog").children.length > 0, "行動ログに行が入る");
+  assert.ok(elements.get("actionLog").classList.contains("hidden"), "追記してもたたんだまま");
+  // 議論のセリフが入っても、セリフログはたたんだまま。
+  let discussed = false;
+  for (let i = 0; i < 15 && !discussed; i++) {
+    FB.setupGame();
+    const s = FB.state;
+    const alive = s.players.filter((p) => p.alive);
+    s.selectedId = alive.find((p) => p.id !== s.playerId).id;
+    FB.runNight();
+    if (FB.state.phase !== "morning") continue;
+    FB.morningToDiscussion();
+    discussed = true;
+  }
+  assert.ok(discussed, "議論まで進んだ");
+  assert.ok(elements.get("dialogueLog").children.length > 0, "セリフログに行が入る");
+  assert.ok(elements.get("dialogueLog").classList.contains("hidden"), "セリフも追記で開かない");
+});
