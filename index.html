@@ -306,6 +306,43 @@
     @keyframes motionExile { 0% { transform: translateY(0); opacity: 1; }
       55% { transform: translateY(8px); opacity: 0.55; }
       100% { transform: translateY(16px); opacity: 0; } }
+    /* 自分のアクションのモーション（第2弾）：夜に自分が対象を選んだ
+       とき、自分の歩行者が対象へ寄って役職系統の仕草をする。寄る方向
+       は歩行者の並び（--i の大小＝左右）で決める。寄りは translate
+       プロパティ、仕草は transform/filter で分け、歩行の上下動
+       （.wbody の techitechi）と干渉しない。 */
+    .stage .walker.motion-own-peek-r .wbody { animation: ownLungeR 1.7s ease both, ownPeek 1.7s ease both; }
+    .stage .walker.motion-own-peek-l .wbody { animation: ownLungeL 1.7s ease both, ownPeek 1.7s ease both; }
+    .stage .walker.motion-own-guard-r .wbody { animation: ownLungeR 1.7s ease both, ownGuard 1.7s ease both; }
+    .stage .walker.motion-own-guard-l .wbody { animation: ownLungeL 1.7s ease both, ownGuard 1.7s ease both; }
+    .stage .walker.motion-own-sneak-r .wbody { animation: ownLungeR 1.7s ease both, ownSneak 1.7s ease both; }
+    .stage .walker.motion-own-sneak-l .wbody { animation: ownLungeL 1.7s ease both, ownSneak 1.7s ease both; }
+    .stage .walker.motion-own-slash-r .wbody { animation: ownLungeR 1.7s ease both, ownSlash 1.7s ease both; }
+    .stage .walker.motion-own-slash-l .wbody { animation: ownLungeL 1.7s ease both, ownSlash 1.7s ease both; }
+    .stage .walker.motion-own-plant-r .wbody { animation: ownLungeR 1.7s ease both, ownPlant 1.7s ease both; }
+    .stage .walker.motion-own-plant-l .wbody { animation: ownLungeL 1.7s ease both, ownPlant 1.7s ease both; }
+    @keyframes ownLungeR { 0% { translate: 0 0; } 35% { translate: 44px 0; } 70% { translate: 44px 0; } 100% { translate: 0 0; } }
+    @keyframes ownLungeL { 0% { translate: 0 0; } 35% { translate: -44px 0; } 70% { translate: -44px 0; } 100% { translate: 0 0; } }
+    @keyframes ownPeek { 0% { transform: scale(1) rotate(0deg); filter: none; }
+      35% { transform: scale(1.07) rotate(3deg); filter: drop-shadow(0 0 9px rgba(255, 200, 60, 0.95)); }
+      70% { transform: scale(1.07) rotate(3deg); filter: drop-shadow(0 0 9px rgba(255, 200, 60, 0.95)); }
+      100% { transform: scale(1) rotate(0deg); filter: none; } }
+    @keyframes ownGuard { 0% { transform: scale(1); filter: none; }
+      35% { transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(80, 200, 255, 0.95)); }
+      70% { transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(80, 200, 255, 0.95)); }
+      100% { transform: scale(1); filter: none; } }
+    @keyframes ownSneak { 0% { transform: scale(1, 1) translateY(0) rotate(0deg); }
+      35% { transform: scale(1.04, 0.88) translateY(3px) rotate(-3deg); }
+      70% { transform: scale(1.04, 0.88) translateY(3px) rotate(-3deg); }
+      100% { transform: scale(1, 1) translateY(0) rotate(0deg); } }
+    @keyframes ownSlash { 0% { transform: scale(1) rotate(0deg) translateY(0); }
+      35% { transform: scale(1.1) rotate(-10deg) translateY(-6px); }
+      70% { transform: scale(1.1) rotate(-10deg) translateY(-6px); }
+      100% { transform: scale(1) rotate(0deg) translateY(0); } }
+    @keyframes ownPlant { 0% { transform: scale(1, 1) translateY(0); filter: none; }
+      35% { transform: scale(1.02, 0.8) translateY(6px); filter: drop-shadow(0 0 7px rgba(224, 123, 42, 0.85)); }
+      70% { transform: scale(1.02, 0.8) translateY(6px); filter: drop-shadow(0 0 7px rgba(224, 123, 42, 0.85)); }
+      100% { transform: scale(1, 1) translateY(0); filter: none; } }
     .stage.flash-red { animation: stageFlashRed 0.9s ease; }
     @keyframes stageFlashRed { 0% { box-shadow: inset 0 0 0 4px rgba(224,72,95,0.9); }
       100% { box-shadow: inset 0 0 0 0 rgba(224,72,95,0); } }
@@ -1705,6 +1742,16 @@
         && ROLES[target.roleKey].faction === "フェイク") return;
       state.selectedId = id;
       draw();
+      // パス＆プレイの夜入力中は、自分の番だけ選んだ対象へ寄る
+      // モーションを出す（この番は本人だけが見ている画面のため、他の
+      // 人間に行動が漏れない）。個人カットインを出さない分、選んだ
+      // 瞬間に動かす。能力入力では能力の種類（盗み見・妨害）で決める。
+      if (state.mode === "pnp" && state.pnpNightInputPending != null) {
+        const player = state.players[state.pnpNightInputPending];
+        let type = ROLES[getEffectiveRoleKey(player)]?.nightAction?.type;
+        if (state.pnpStep === "nightFakeAbility") type = player.roleKey === "mimic" ? "spy" : "block";
+        stageOwnActionMotion(player.id, id, type);
+      }
       return;
     }
 
@@ -1917,7 +1964,8 @@
           plant: ["💣 爆弾設置", "bomb"], lookout: ["🔭 見張り", "info"],
           trap: ["🪤 罠設置", "info"], revive: ["💉 診察", "protect"]
         }[myType];
-        if (meta) showCutin(meta[0], `→ ${target.name}`, meta[1]);
+        if (meta) showCutin(meta[0], `→ ${target.name}`, meta[1],
+          () => stageOwnActionMotion(me.id, target.id, myType));
       } else {
         showCutin("🌙 夜行動", "あなたは静かに夜を過ごした", "phase");
       }
@@ -2230,6 +2278,34 @@
     void stage.offsetWidth;
     stage.classList.add("flash-red");
     later(() => stage.classList.remove("flash-red"), 1000);
+  }
+
+  // Character motion phase 2: the human's own night action. When the
+  // human (solo) or the current human (pass-and-play) picks a target,
+  // their own walker lunges toward the target and plays a flourish
+  // for their role family (peek / guard / sneak / slash / plant).
+  // Only the acting human's walker moves; a CPU member's private night
+  // action is never animated (anti-leak). Direction follows the
+  // walkers' order on the stage: a larger --i (player id) walks
+  // further right, so the target's id decides left vs right.
+  const OWN_ACTION_FAMILIES = {
+    investigate: "peek", spy: "peek", lookout: "peek",
+    protect: "guard", revive: "guard", block: "guard",
+    track: "sneak", attack: "slash", plant: "plant", trap: "plant",
+  };
+  function stageOwnActionMotion(actorId, targetId, actionType) {
+    const family = OWN_ACTION_FAMILIES[actionType];
+    if (!family) return;
+    const stage = el("stage");
+    if (!stage || !stage.querySelector) return;
+    const w = stage.querySelector(`.walker[data-player="${actorId}"]`);
+    if (!w || !w.classList) return;
+    const dir = targetId >= actorId ? "r" : "l";
+    const cls = `motion-own-${family}-${dir}`;
+    w.classList.remove(`motion-own-${family}-r`, `motion-own-${family}-l`);
+    void w.offsetWidth;
+    w.classList.add(cls);
+    later(() => w.classList.remove(cls), 1800);
   }
 
   // Mouse: publicly reveal one player's role, once per game. A baka
