@@ -105,3 +105,160 @@ test("ブラウザ側のゲームは共有モジュールと同じ内容の ROLE
   assert.equal(FB.state.players.length, 8);
   assert.equal(JSON.stringify(FB.state.players.map((p) => p.name)), JSON.stringify(Logic.PLAYER_NAMES));
 });
+
+// 決定的な乱数（mulberry32）：同じ seed なら同じ配役になる。
+function seededRandom(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function countRoles(dealt) {
+  const counts = {};
+  for (const d of dealt) counts[d.roleKey] = (counts[d.roleKey] || 0) + 1;
+  return counts;
+}
+
+test("dealRoles：8人・バカ1・占い師1・指定通りのインポスター人数とボマー", () => {
+  for (const settings of [
+    { fakeCount: "1", bomber: "off" },
+    { fakeCount: "2", bomber: "off" },
+    { fakeCount: "1", bomber: "on" },
+    { fakeCount: "2", bomber: "on" },
+  ]) {
+    const dealt = Logic.dealRoles(settings, seededRandom(42));
+    assert.equal(dealt.length, 8, "8人分");
+    const counts = countRoles(dealt);
+    assert.equal(counts.baka, 1, "バカは常に1人");
+    assert.equal(counts.apprenticeSeer, 1, "見習い占い師は常に1人");
+    const fakeN = (counts.fakeGirl || 0) + (counts.mimic || 0);
+    assert.equal(fakeN, Number(settings.fakeCount), "インポスター人数は指定通り");
+    if (settings.fakeCount === "1") assert.equal(fakeN, 1);
+    if (settings.fakeCount === "2") assert.equal(counts.fakeGirl, 1, "2人ならフェイクガール");
+    if (settings.fakeCount === "2") assert.equal(counts.mimic, 1, "2人ならなりすまし");
+    assert.equal(counts.bomber || 0, settings.bomber === "on" ? 1 : 0, "ボマーの有無は指定通り");
+    for (const d of dealt) assert.ok(d.roleKey in Logic.ROLES, `${d.roleKey} は有効な役職`);
+    // 役職の合計が8人になる（残りは村ガールで埋まる）。
+    assert.equal(Object.values(counts).reduce((a, b) => a + b, 0), 8);
+  }
+});
+
+test("dealRoles：ランダム指定では両方の出目が出る（抽選が生きている）", () => {
+  const fakeCounts = new Set();
+  const bomberSeen = new Set();
+  for (let i = 0; i < 200; i++) {
+    const dealt = Logic.dealRoles({ fakeCount: "random", bomber: "random" }, seededRandom(i));
+    assert.equal(dealt.length, 8);
+    const counts = countRoles(dealt);
+    fakeCounts.add((counts.fakeGirl || 0) + (counts.mimic || 0));
+    bomberSeen.add(counts.bomber || 0);
+  }
+  assert.ok(fakeCounts.has(1) && fakeCounts.has(2), "インポスター1人と2人の両方が出る");
+  assert.ok(bomberSeen.has(0) && bomberSeen.has(1), "ボマーあり・なしの両方が出る");
+});
+
+test("dealRoles：表示役職はバカだけ、うっかり個体は占い師だけ", () => {
+  for (let i = 0; i < 100; i++) {
+    const dealt = Logic.dealRoles({ fakeCount: "random", bomber: "random" }, seededRandom(1000 + i));
+    for (const d of dealt) {
+      if (d.roleKey === "baka") {
+        assert.ok(Logic.INNOCENT_ROLE_KEYS.includes(d.fakeDisplayRoleKey), "バカの表示役職はイノセント役職");
+      } else {
+        assert.equal(d.fakeDisplayRoleKey, null, "バカ以外に表示役職はない");
+      }
+      if (d.roleKey === "apprenticeSeer") assert.equal(typeof d.clumsy, "boolean");
+      else assert.equal(d.clumsy, false, "占い師以外はうっかり個体にならない");
+    }
+  }
+});
+
+test("dealRoles：同じ seed なら同じ配役、seed を変えれば変わる", () => {
+  const a = Logic.dealRoles({ fakeCount: "random", bomber: "random" }, seededRandom(7));
+  const b = Logic.dealRoles({ fakeCount: "random", bomber: "random" }, seededRandom(7));
+  assert.equal(JSON.stringify(a), JSON.stringify(b), "同じ seed は同じ結果");
+  const c = Logic.dealRoles({ fakeCount: "random", bomber: "random" }, seededRandom(8));
+  assert.notEqual(JSON.stringify(a), JSON.stringify(c), "違う seed は違う結果");
+});
+
+test("resolveVoteTally：最多票1人・同数・空の票", () => {
+  assert.deepEqual(Logic.resolveVoteTally(new Map([[0, 3], [1, 1], [2, 2]])), { winnerId: 0, max: 3 });
+  assert.deepEqual(Logic.resolveVoteTally(new Map([[0, 2], [1, 2]])), { winnerId: null, max: 2 });
+  assert.deepEqual(Logic.resolveVoteTally(new Map()), { winnerId: null, max: -1 });
+  assert.deepEqual(Logic.resolveVoteTally(new Map([[5, 1]])), { winnerId: 5, max: 1 });
+  // 政治家の2票分など、票数が重い1人が勝つ。
+  assert.deepEqual(Logic.resolveVoteTally(new Map([[0, 4], [1, 4], [2, 5]])), { winnerId: 2, max: 5 });
+});
+
+test("checkWinCondition：勝敗4パターンと続行", () => {
+  // インポスター全滅 → イノセント勝利。
+  assert.equal(
+    Logic.checkWinCondition(["villager", "guardian", "apprenticeSeer"], 0),
+    "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！"
+  );
+  // インポスターがイノセントと同数以上 → インポスター勝利。
+  assert.equal(
+    Logic.checkWinCondition(["villager", "fakeGirl"], 0),
+    "💀 インポスター陣営の勝利…生存者数が同数以上になった。"
+  );
+  // ボマーだけ残る → ボマーの単独勝利。
+  assert.equal(
+    Logic.checkWinCondition(["bomber"], 0),
+    "💣 ボマーの単独勝利！最後の1人になったよ！"
+  );
+  // ボマーが爆弾で2人以上倒し、インポスターが全滅した瞬間 → 横取り勝利。
+  assert.equal(
+    Logic.checkWinCondition(["villager", "guardian", "bomber"], 2),
+    "💣 ボマーの勝利！爆弾で2人以上を倒し、勝利を横取りした！"
+  );
+  // ボマー1キルだけでは横取りしない。インポスターが0人ならイノセント勝利。
+  assert.equal(
+    Logic.checkWinCondition(["villager", "guardian", "bomber"], 1),
+    "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！"
+  );
+  // ボマー1キルでインポスターが残っていれば横取りせず続行。
+  assert.equal(Logic.checkWinCondition(["villager", "guardian", "bomber", "fakeGirl"], 1), null);
+  // まだ決着していない盤面 → null。
+  assert.equal(Logic.checkWinCondition(["villager", "guardian", "apprenticeSeer", "fakeGirl"], 0), null);
+  assert.equal(Logic.checkWinCondition(["villager", "guardian", "bomber", "fakeGirl"], 0), null);
+});
+
+test("ブラウザ側の setupGame は dealRoles と同じ配役の不変条件を満たす", () => {
+  for (let i = 0; i < 50; i++) {
+    const { FB } = loadGame({ seedSettings: { fakeCount: "random", bomber: "random", sound: "off", difficulty: "normal" } });
+    FB.setupGame();
+    const players = FB.state.players;
+    assert.equal(players.length, 8);
+    const counts = {};
+    for (const p of players) counts[p.roleKey] = (counts[p.roleKey] || 0) + 1;
+    assert.equal(counts.baka, 1, "バカは1人");
+    assert.equal(counts.apprenticeSeer, 1, "占い師は1人");
+    const fakeN = (counts.fakeGirl || 0) + (counts.mimic || 0);
+    assert.ok(fakeN === 1 || fakeN === 2, "インポスターは1〜2人");
+    for (const p of players) {
+      if (p.roleKey === "baka") assert.ok(Logic.INNOCENT_ROLE_KEYS.includes(p.fakeDisplayRoleKey));
+      else assert.equal(p.fakeDisplayRoleKey, null);
+    }
+  }
+});
+
+test("ブラウザ側の dealRoles / checkWinCondition は共有モジュールと同一結果", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  // 同じ seed の乱数を与えれば、別レルムでも配役はバイト単位で一致する。
+  const settings = { fakeCount: "random", bomber: "random" };
+  assert.equal(
+    JSON.stringify(FB.dealRoles(settings, seededRandom(123))),
+    JSON.stringify(Logic.dealRoles(settings, seededRandom(123)))
+  );
+  assert.equal(
+    FB.checkWinCondition(["villager", "bomber"], 2),
+    Logic.checkWinCondition(["villager", "bomber"], 2)
+  );
+  assert.equal(
+    JSON.stringify(FB.resolveVoteTally(new Map([[0, 2], [1, 2]]))),
+    JSON.stringify(Logic.resolveVoteTally(new Map([[0, 2], [1, 2]])))
+  );
+});

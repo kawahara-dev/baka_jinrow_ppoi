@@ -360,6 +360,93 @@
 
   function rand(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
 
+  // Fisher-Yates shuffle with an injectable random source (default
+  // Math.random). The browser passes nothing; tests pass a seeded
+  // function for deterministic draws.
+  function shuffle(arr, random) {
+    const rnd = typeof random === "function" ? random : Math.random;
+    const out = [...arr];
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+
+  // Role draw (the pure part of setupGame): deal 8 roles from the
+  // settings. Returns one entry per player, in player order:
+  // { roleKey, fakeDisplayRoleKey, clumsy }.
+  // - fakeCount "random" draws 1 Fake 35% / 2 Fakes 65% (PR #49);
+  //   a lone Fake is one of fakeGirl / mimic at random.
+  // - the seer is always in; the other Innocent power roles are drawn
+  //   and about half of games also get the neutral Bomber.
+  // - the baka always gets a random Innocent display role, and the seer
+  //   is a hidden clumsy individual with CLUMSY_SEER_RATE.
+  // `random` is an injectable () => [0,1) source for deterministic tests.
+  function dealRoles(settings, random) {
+    const rnd = typeof random === "function" ? random : Math.random;
+    const fakeCount = settings.fakeCount === "random"
+      ? (rnd() < 0.35 ? 1 : 2)
+      : Number(settings.fakeCount);
+    const fixedFakeRoles = ["fakeGirl", "mimic"];
+    const fakePool = fakeCount === 1
+      ? [fixedFakeRoles[Math.floor(rnd() * fixedFakeRoles.length)]]
+      : [...fixedFakeRoles];
+    const hasBomber = settings.bomber === "random" ? rnd() < 0.5 : settings.bomber === "on";
+    const pureSlots = 8 - fakeCount - 1 - (hasBomber ? 1 : 0);
+    const drawPool = shuffle(
+      INNOCENT_ROLE_KEYS.filter(k => !["apprenticeSeer", "villager"].includes(k)),
+      rnd
+    );
+    const pureRoles = ["apprenticeSeer", ...drawPool.slice(0, Math.max(0, pureSlots - 1))];
+    const roleBag = shuffle([
+      ...fakePool,
+      ...(hasBomber ? ["bomber"] : []),
+      "baka",
+      ...pureRoles,
+      ...Array.from({ length: 8 - fakeCount - (hasBomber ? 1 : 0) - 1 - pureRoles.length }, () => "villager")
+    ], rnd);
+    return roleBag.map(roleKey => ({
+      roleKey,
+      fakeDisplayRoleKey: roleKey === "baka"
+        ? INNOCENT_ROLE_KEYS[Math.floor(rnd() * INNOCENT_ROLE_KEYS.length)]
+        : null,
+      clumsy: roleKey === "apprenticeSeer" ? rnd() < CLUMSY_SEER_RATE : false
+    }));
+  }
+
+  // Pure vote counting (the counting part of tallyVotes): from a Map of
+  // player id -> vote count, find the single top scorer. Returns
+  // { winnerId, max }; winnerId is null on a tie (an empty map counts as
+  // a tie with max -1, same as the old inline loop).
+  function resolveVoteTally(votes) {
+    let max = -1;
+    let topIds = [];
+    for (const [id, c] of votes.entries()) {
+      if (c > max) {
+        max = c;
+        topIds = [id];
+      } else if (c === max) topIds.push(id);
+    }
+    return { winnerId: topIds.length === 1 ? topIds[0] : null, max };
+  }
+
+  // Pure win check (the decision part of checkWin): from the role keys of
+  // the alive players and the bomber's kill count, return the win text or
+  // null when the game continues. A surviving Bomber who has taken out
+  // 2+ players with bombs hijacks the win at the moment the game would
+  // otherwise end.
+  function checkWinCondition(aliveRoleKeys, bombKills) {
+    const pure = aliveRoleKeys.filter(k => ROLES[k].faction === "イノセント").length;
+    const fake = aliveRoleKeys.filter(k => ROLES[k].faction === "インポスター").length;
+    const bomberAlive = aliveRoleKeys.includes("bomber");
+    if (bomberAlive && pure === 0 && fake === 0) return "💣 ボマーの単独勝利！最後の1人になったよ！";
+    if (bomberAlive && (bombKills || 0) >= 2 && (fake === 0 || fake >= pure)) return "💣 ボマーの勝利！爆弾で2人以上を倒し、勝利を横取りした！";
+    if (fake === 0) return "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！";
+    if (fake >= pure) return "💀 インポスター陣営の勝利…生存者数が同数以上になった。";
+    return null;
+  }
+
   function getEffectiveRoleKey(player) {
     if (player.roleKey === "baka") return player.fakeDisplayRoleKey || "villager";
     return player.roleKey;
@@ -396,6 +483,10 @@
     INNOCENT_ROLE_KEYS,
     CLUMSY_SEER_RATE,
     rand,
+    shuffle,
+    dealRoles,
+    resolveVoteTally,
+    checkWinCondition,
     getEffectiveRoleKey,
     getPublicRoleKey,
     LEGACY_ROLE_NAMES,
