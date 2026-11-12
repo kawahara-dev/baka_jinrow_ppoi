@@ -1100,6 +1100,27 @@ test("アクセシビリティ: ログは aria-live、設定グループは role
   }
 });
 
+test("CSS 変数監査: var(--x) は :root で定義されているか、要素の style 属性で与えられるものだけ", () => {
+  // 2026-11-12 の不具合：.seg button.active が未定義の --accent/--accent2 を参照し、
+  // 背景が透明になって白文字が見えなくなっていた（--line も未定義で枠線が出ていなかった）。
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  const root = style.match(/:root \{([\s\S]*?)\}/)[1];
+  const defined = new Set([...root.matchAll(/--([a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]));
+  // 要素の style 属性で与えられる変数（歩行者の --i / --bd）は例外。
+  const inlineVars = new Set(["i", "bd"]);
+  const used = new Set([...style.matchAll(/var\(--([a-zA-Z0-9-]+)\)/g)].map((m) => m[1]));
+  for (const name of used) {
+    assert.ok(defined.has(name) || inlineVars.has(name), `未定義の CSS 変数 var(--${name}) が使われている`);
+  }
+  // 報告された不具合の再発防止：選択中の設定ボタンはピンク→紫のグラデ＋白文字。
+  for (const name of ["accent", "accent2", "line"]) {
+    assert.ok(defined.has(name), `:root に --${name} が定義されていない`);
+  }
+  assert.match(style, /\.seg button\.active \{[^}]*background: linear-gradient\(90deg, var\(--accent\), var\(--accent2\)\)/);
+  assert.match(style, /\.seg \{[^}]*border: 2px solid var\(--line\)/);
+});
+
 test("パス＆プレイ フェーズ2: 夜行動の順番入力で人間の対象が使われ、結果は本人だけに貯まる", () => {
   // 単独インポスターの妨害で占い師がブロックされる回があるため、妨害されずに
   // 調査が通った回で検証する（妨害の対象は CPU 守り手と占い師からランダム）。
