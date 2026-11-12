@@ -839,6 +839,37 @@ test("speech bubble: キューが順番に処理される", () => {
     "2番目の吹き出しは次のセリフのもの");
 });
 
+test("speech bubble: 議論中のマウス公開（再描画）でも表示中の吹き出しが残る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.ok(reachDiscussion(FB), "議論まで進まなかった");
+  FB.morningToDiscussion();
+  const firstBubble = allBubbles(elements)[0];
+  assert.ok(firstBubble, "議論の吹き出しが出ていない");
+  const firstText = firstBubble.textContent;
+  // 表示中の吹き出しがある最中に、別の発言者がマウス公開する。
+  // revealMouse は内部で draw() を呼び #cards を再構築する。
+  const me = humanOf(FB);
+  me.roleKey = "mouse";
+  me.mouseUsed = false;
+  const target = FB.state.players.find((p) => p.alive && p.id !== me.id);
+  FB.revealMouse(me, target);
+  // 表示中の吹き出しが発言者の新しいカードへ付け直されている。
+  const kept = allBubbles(elements).find((b) => b.textContent === firstText);
+  assert.ok(kept, "再描画で表示中の吹き出しが消えた");
+  // キューは捨てられていない（マウス公開のセリフが後続に残る）。
+  assert.ok(FB.speechQueue.length > 0, "再描画でキューが捨てられた");
+  // 期限切れでキューが進み、やがてマウス公開の吹き出しが出る
+  // （マウス公開のセリフはキューの末尾に入るため、直後とは限らない）。
+  let sawMouse = false;
+  for (let i = 0; i < 20 && !sawMouse; i++) {
+    FB.expireSpeechBubble();
+    const b = allBubbles(elements)[0];
+    if (b && b.textContent.includes("マウス能力")) sawMouse = true;
+    if (!b && FB.speechQueue.length === 0) break;
+  }
+  assert.ok(sawMouse, "キューを進めてもマウス公開の吹き出しが出ない");
+});
+
 test("speech bubble: マウス公開のセリフがマウスのカードに吹き出しで出る", () => {
   const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
   FB.setupGame();
