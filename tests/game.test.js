@@ -1955,8 +1955,29 @@ test("脱落アイコンのバッテン：脱落カードと結果行のアバ�
   assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{[^}]*content: "✕"/);
   assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{[^}]*color: var\(--danger\)/);
   assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{[^}]*z-index: 2/);
-  // スマホ（アバター40px）では ✕ を小さくする
-  assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{ font-size: 1\.5rem; \}/);
+  // PC（アバター64px）では ✕ をほぼ全面の 3.4rem に
+  assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{[^}]*font-size: 3\.4rem;/);
+  // 結果画面の行アバターは 40px なので ✕ は 2.4rem に抑える
+  assert.match(style, /\.result-row\.dead \.avatar::after \{ font-size: 2\.4rem; \}/);
+  // スマホ（アバター40px）では ✕ を 2.4rem に
+  assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{ font-size: 2\.4rem; \}/);
+  // 脱落カードはグレー背景＋薄さを戻す。カード全体に grayscale を
+  // かけると ✕ までグレーになるので、カード自体に filter が無いこと
+  const deadCardRule = style.match(/\.card\.dead \{[^}]*\}/)[0];
+  assert.match(deadCardRule, /background: #e2e2ea/);
+  assert.match(deadCardRule, /opacity: 0\.75/);
+  assert.doesNotMatch(deadCardRule, /filter:/);
+  // グレースケールは顔画像だけにかける（✕ は赤のまま残る）
+  assert.match(style, /\.card\.dead \.avatar-img, \.result-row\.dead \.avatar-img \{ filter: grayscale\(1\); \}/);
+  // 脱落カードの名前・メタもグレー系に
+  assert.match(style, /\.card\.dead \.name \{ color: #6f6f78; \}/);
+  assert.match(style, /\.card\.dead \.meta \{ color: #8a8a96; \}/);
+  // 結果画面の行も同じ扱い（背景グレー＋名前・役職をグレー系に）
+  const deadRowRule = style.match(/\.result-row\.dead \{[^}]*\}/)[0];
+  assert.match(deadRowRule, /background: #e2e2ea/);
+  assert.match(deadRowRule, /opacity: 0\.75/);
+  assert.match(style, /\.result-row\.dead \.result-name \{ color: #6f6f78; \}/);
+  assert.match(style, /\.result-row\.dead \.result-role \{ color: #8a8a96; \}/);
   // 生存者のカードには dead クラスが付かず、脱落すると付く
   // （✕ は dead クラス経由でのみ出るので、生存者には出ない）。
   const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
