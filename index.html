@@ -1054,6 +1054,7 @@
     // 前の試合の議論タイマーが残っていれば止める。
     stopDiscussTimer();
     clearSpeechBubbles();
+    clearCutins();
     const fakeCount = gameSettings.fakeCount === "random"
       ? (Math.random() < 0.35 ? 1 : 2)
       : Number(gameSettings.fakeCount);
@@ -1849,12 +1850,21 @@
         () => stageGhostWalker(vid, "motion-blast"), { charId: vid });
     }
     if (state.bombReport?.fizzled) showCutin("💣 爆弾は不発だった", "護衛が爆発を防いだ", "protect");
-    if (state.trapReport) showCutin("🪤 罠が作動！", "襲撃者が道連れになった", "attack",
-      () => stageGhostWalker(state.trapReport.attackerId, "motion-trap"),
-      { charId: state.trapReport.attackerId });
-    if (state.doctorReport) showCutin("💉 蘇生した！", `${state.players[state.doctorReport.victimId].name} が助かった`, "protect",
-      () => stageEventMotion(state.doctorReport.victimId, "motion-revive"),
-      { charId: state.doctorReport.victimId });
+    if (state.trapReport) {
+      // 表示時コールバックはキューに残って遅れて発火するため、対象 id は
+      // ここで値として固定する（次の夜・次の試合で state が置き換わっても
+      // 古い報告を読まない）。
+      const trapAttackerId = state.trapReport.attackerId;
+      showCutin("🪤 罠が作動！", "襲撃者が道連れになった", "attack",
+        () => stageGhostWalker(trapAttackerId, "motion-trap"),
+        { charId: trapAttackerId });
+    }
+    if (state.doctorReport) {
+      const revivedId = state.doctorReport.victimId;
+      showCutin("💉 蘇生した！", `${state.players[revivedId].name} が助かった`, "protect",
+        () => stageEventMotion(revivedId, "motion-revive"),
+        { charId: revivedId });
+    }
     if (winAfterNight) {
       showCutin(winAfterNight, "", "win");
       celebrate();
@@ -2664,6 +2674,24 @@
   // された人・自分の夜アクションの自分）。「防がれた」「不発」には付け
   // ない。motion は自分の夜アクションの役職系統（peek/guard/sneak/
   // slash/plant）で、種類別モーションより優先される。
+  // 新しい試合を始めるとき、前試合のカットインが残っていれば消す。
+  // 消さないと、前の試合のキューが新しい試合の画面に出たり、表示時
+  // コールバックが新しい state の null の報告を読んで落ちたりする
+  // （遅れて発火したタイマーが `state.doctorReport.victimId` を読む
+  // 断続的な失敗の原因だった）。
+  function clearCutins() {
+    cutinQueue.length = 0;
+    if (cutinTimer && typeof clearTimeout === "function") clearTimeout(cutinTimer);
+    cutinTimer = null;
+    cutinBusy = false;
+    const box = el("cutin");
+    if (box) box.classList.add("hidden");
+    const charBox = el("cutinChar");
+    if (charBox) {
+      charBox.classList.add("hidden");
+      charBox.innerHTML = "";
+    }
+  }
   function showCutin(title, sub, kind, onShow, opts) {
     const o = opts || {};
     cutinQueue.push({ title, sub: sub || "", kind: kind || "phase",

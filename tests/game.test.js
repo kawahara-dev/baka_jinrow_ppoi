@@ -1767,6 +1767,68 @@ test("キャラモーション第1弾：ドクターの蘇生で助かった人�
   assert.ok(walker.classList.contains("motion-revive"));
 });
 
+test("カットイン：蘇生カットインがキューに残っている間に報告が消えても落ちない", () => {
+  // 断続的な失敗の回帰テスト：シミュレーション終了後に残ったタイマーが
+  // 発火し、既に置き換わった state の doctorReport（null）の victimId
+  // を読んで TypeError になった。表示時コールバックはキューに入れた
+  // 時点の id を値で固定するため、報告が消えても落ちない。
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "doctor";
+  const fake = others[0];
+  fake.roleKey = "fakeGirl";
+  const victim = others[1];
+  const s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.equal(s.nightReport.type, "revived");
+  assert.ok(s.doctorReport);
+  FB.draw();
+  FB.nightCutins(me, victim, null);
+  // 個人カットイン（診察）は即表示され、蘇生カットインがキューに残る。
+  assert.equal(FB.cutinQueueLength, 1);
+  // 次の夜の解決で doctorReport / trapReport が null に置き換わった状態。
+  s.doctorReport = null;
+  s.trapReport = null;
+  // キューに残った蘇生カットインを出す（タップで送る）。修正前はここで
+  // `state.doctorReport.victimId` の読み取りで TypeError になった。
+  assert.doesNotThrow(() => elements.get("cutin").onclick());
+  assert.equal(elements.get("cutinTitle").textContent, "💉 蘇生した！");
+  // モーションの対象はキューに入れた時点の被害者のまま。
+  const stage = elements.get("stage");
+  const walker = stage.querySelector(`.walker[data-player="${victim.id}"]`);
+  assert.ok(walker, "蘇生した人の歩行者がステージにある");
+  assert.ok(walker.classList.contains("motion-revive"));
+});
+
+test("カットイン：新しい試合を始めると前試合のカットインは残らない", async () => {
+  // リトライ連打と同じ経路：キューとタイマーが残ったまま setupGame
+  // すると、前試合のカットインが新しい試合の画面に出てしまう。
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "doctor";
+  const fake = others[0];
+  fake.roleKey = "fakeGirl";
+  const victim = others[1];
+  const s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  FB.draw();
+  FB.nightCutins(me, victim, null);
+  assert.equal(FB.cutinQueueLength, 1, "蘇生カットインがキューに残っている");
+  // キューが残ったまま新しい試合を始める。
+  FB.setupGame();
+  assert.equal(FB.cutinQueueLength, 0, "キューが空になる");
+  assert.ok(elements.get("cutin").classList.contains("hidden"), "カットインが隠れる");
+  // 前試合のタイマーが残っていれば 1450ms 後に古いカットインが出る。
+  // タイマーが消えていることを、表示間隔を超えて待って確認する。
+  await new Promise((r) => setTimeout(r, 1700));
+  assert.ok(elements.get("cutin").classList.contains("hidden"), "待っても古いカットインは出ない");
+  assert.equal(FB.cutinQueueLength, 0);
+});
+
 test("キャラモーション第1弾：追放でフェードアウトし、結果画面で勝敗の動きが付く", () => {
   const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
   FB.setupGame();
