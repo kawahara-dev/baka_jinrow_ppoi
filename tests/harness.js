@@ -203,8 +203,11 @@ function createSandbox(seedSettings, { fakeAudio = false, seedStorage = null } =
 // seedSettings: タイトル画面の設定（fakeCount / bomber / sound / difficulty / bgm）。
 // fakeAudio: true なら FakeAudioContext を差し込み、BGM の発音パスを検証できる。
 // seedStorage: localStorage に先に仕込む任意のキー（折りたたみ状態など）。
+// 共有モジュール game-logic.js を先に同じコンテキストで読み、ブラウザと
+// 同じ順序（game-logic.js → index.html のメインスクリプト）で実行する。
 function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   const root = path.resolve(__dirname, "..");
+  const logicSrc = fs.readFileSync(path.join(root, "game-logic.js"), "utf8");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const m = html.match(/<script>([\s\S]*?)<\/script>/);
   if (!m) throw new Error("index.html に <script> が見つかりません");
@@ -240,6 +243,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
 `;
   const { sandbox, alerts, elements, localStorage } = createSandbox(seedSettings, { fakeAudio, seedStorage });
   vm.createContext(sandbox);
+  vm.runInContext(logicSrc, sandbox, { filename: "game-logic.js" });
   vm.runInContext(src, sandbox, { filename: "index.html<script>" });
   return { FB: sandbox.__FB__, alerts, elements, localStorage, sandbox, FakeAudioContext };
 }
