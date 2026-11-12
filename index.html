@@ -468,6 +468,7 @@
     .avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
     .name { font-weight: 700; margin-top: 4px; }
     .meta { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    .card .role-icon { font-size: 1.05rem; line-height: 1; }
 
     .right-panel {
       display: grid;
@@ -592,7 +593,9 @@
 
     @media (max-width: 980px) {
       .game-ui { grid-template-columns: 1fr; }
-      .right-panel { position: static; grid-template-columns: 1fr; }
+      /* スマホ1画面化：≤980px でもログ2つを横並びのままにする
+         （外側の .game-ui だけ1列に潰す）。ログは内部スクロール。 */
+      .right-panel { position: static; grid-template-columns: 1fr 1fr; }
       .log { height: min(36vh, 300px); }
       .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .player-role-card { padding: 10px; }
@@ -621,20 +624,24 @@
       .phase-title { font-size: 1.02rem; }
       .player-role-card { padding: 10px; }
       .player-role-card summary { padding: 6px 0; }
-      .player-role-meta { font-size: 0.88rem; }
-      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-      .card { min-height: 0; padding: 8px; border-radius: 12px; display: flex; align-items: center; gap: 8px; text-align: left; }
-      .card .avatar { width: 40px; height: 40px; font-size: 1.2rem; margin: 0; flex: 0 0 auto; }
+      /* 役職カードを2列グリッドに：短い2行を横並び、長い行は全幅に。 */
+      .player-role-meta { font-size: 0.88rem; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+      .player-role-meta div:nth-child(n+3) { grid-column: 1 / -1; }
+      /* カードは4列・縦型（アバター上・名前下）にして2段に収める。 */
+      .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+      .card { min-height: 0; padding: 8px 4px; border-radius: 12px; display: block; text-align: center; }
+      .card .avatar { width: 40px; height: 40px; font-size: 1.2rem; margin: 0 auto; }
       .card.dead .avatar::after, .result-row.dead .avatar::after { font-size: 2.4rem; }
       .card-main { min-width: 0; }
       .avatar { width: 52px; height: 52px; font-size: 1.5rem; }
-      .name { font-size: 0.92rem; }
-      .meta { font-size: 0.74rem; }
+      .name { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .meta { font-size: 0.74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* 生存者のメタは「？」だけに短縮（「 ・ 生存中」を隠す）。 */
+      .meta-state { display: none; }
       .card.voted::after { font-size: 0.66rem; padding: 1px 6px; top: 6px; right: 6px; }
-      /* Compact cards are horizontal with the avatar on the left,
-         so the bubble tail points at the avatar, not the centre. */
-      .speech-bubble::after { left: 22px; margin-left: 0; }
-      .log { height: min(30vh, 260px); font-size: 0.88rem; }
+      /* カードは縦型に戻ったので吹き出しのしっぽは中央のまま
+         （アバターも中央にあるため、左寄せの上書きは不要）。 */
+      .log { height: min(24vh, 220px); font-size: 0.88rem; }
       .right-panel .screen { padding: 10px; }
       .role-guide { font-size: 0.9rem; padding: 10px; }
       #ad-space { min-height: 56px; font-size: 0.82rem; }
@@ -862,20 +869,20 @@
     <details class="role-guide">
       <summary>役職一覧</summary>
       <ul>
-        <li><strong>見習い占い師（イノセント）</strong>：夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。</li>
-        <li><strong>守り手（イノセント）</strong>：夜に1人を襲撃や爆発から守る。</li>
-        <li><strong>追跡係（イノセント）</strong>：夜に1人が誰を訪ねたか分かる。</li>
-        <li><strong>ポリス（イノセント）</strong>：夜に1人の行動を封じる（襲撃そのものは止められない）。</li>
-        <li><strong>見張り役（イノセント）</strong>：夜に1人の家を訪れた全員が分かる。</li>
-        <li><strong>トラッパー（イノセント）</strong>：夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。</li>
-        <li><strong>ドクター（イノセント）</strong>：夜に1人を診察。その人がその夜倒れたら蘇生させる。</li>
-        <li><strong>マウス（イノセント）</strong>：昼に1回だけ、1人の本当の役職を全員に公開できる。</li>
-        <li><strong>政治家（イノセント）</strong>：投票の票が2票分になる。</li>
-        <li><strong>村ガール（イノセント）</strong>：能力なし。議論と投票が主軸。</li>
-        <li><strong>フェイクガール（インポスター）</strong>：襲撃しない夜は、イノセント側1人の行動を妨害する。</li>
-        <li><strong>なりすまし（インポスター）</strong>：調査でイノセントに見えることがある。襲撃しない夜はイノセント側1人の実役職を盗み見する。</li>
-        <li><strong>ボマー（ニュートラル）</strong>：約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</li>
-        <li><strong>バカ（イノセント）</strong>：本人は別のイノセント役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。</li>
+        <li><strong>🔮 見習い占い師（イノセント）</strong>：夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。</li>
+        <li><strong>🛡️ 守り手（イノセント）</strong>：夜に1人を襲撃や爆発から守る。</li>
+        <li><strong>👣 追跡係（イノセント）</strong>：夜に1人が誰を訪ねたか分かる。</li>
+        <li><strong>🚔 ポリス（イノセント）</strong>：夜に1人の行動を封じる（襲撃そのものは止められない）。</li>
+        <li><strong>🔭 見張り役（イノセント）</strong>：夜に1人の家を訪れた全員が分かる。</li>
+        <li><strong>🪤 トラッパー（イノセント）</strong>：夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。</li>
+        <li><strong>🩺 ドクター（イノセント）</strong>：夜に1人を診察。その人がその夜倒れたら蘇生させる。</li>
+        <li><strong>🐭 マウス（イノセント）</strong>：昼に1回だけ、1人の本当の役職を全員に公開できる。</li>
+        <li><strong>🗳️ 政治家（イノセント）</strong>：投票の票が2票分になる。</li>
+        <li><strong>🏠 村ガール（イノセント）</strong>：能力なし。議論と投票が主軸。</li>
+        <li><strong>🎭 フェイクガール（インポスター）</strong>：襲撃しない夜は、イノセント側1人の行動を妨害する。</li>
+        <li><strong>🪞 なりすまし（インポスター）</strong>：調査でイノセントに見えることがある。襲撃しない夜はイノセント側1人の実役職を盗み見する。</li>
+        <li><strong>💣 ボマー（ニュートラル）</strong>：約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</li>
+        <li><strong>🃏 バカ（イノセント）</strong>：本人は別のイノセント役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。</li>
       </ul>
       <p style="margin-top:8px;">イノセント側の役職（占い師・バカ以外）は毎ゲーム抽選で、登場しないこともあります。インポスター陣営の襲撃は陣営で1回だけ。</p>
     </details>
@@ -890,6 +897,7 @@
   const ROLES = {
     apprenticeSeer: {
       name: "見習い占い師",
+      icon: "🔮",
       faction: "イノセント",
       desc: "夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。",
       nightActionHint: "怪しい相手を1人選んで調査しよ。",
@@ -899,6 +907,7 @@
     },
     guardian: {
       name: "守り手",
+      icon: "🛡️",
       faction: "イノセント",
       desc: "夜に1人を守る。",
       nightActionHint: "襲われそうな子を1人選んでガード。",
@@ -908,6 +917,7 @@
     },
     tracker: {
       name: "追跡係",
+      icon: "👣",
       faction: "イノセント",
       desc: "夜に1人が誰を訪ねたか分かる。",
       nightActionHint: "行動が怪しい相手を1人選んで追跡。",
@@ -917,6 +927,7 @@
     },
     police: {
       name: "ポリス",
+      icon: "🚔",
       faction: "イノセント",
       desc: "夜に1人を訪ねて、その夜の行動を封じる（FeignのPolice方式）。",
       nightActionHint: "能力を使いそうな相手を1人選んで足止め。",
@@ -926,6 +937,7 @@
     },
     lookout: {
       name: "見張り役",
+      icon: "🔭",
       faction: "イノセント",
       desc: "夜に1人の家を見張り、その夜に訪れた全員が分かる（FeignのLookout方式）。",
       nightActionHint: "狙われそうな子や怪しい子の家を見張ろう。",
@@ -935,6 +947,7 @@
     },
     trapper: {
       name: "トラッパー",
+      icon: "🪤",
       faction: "イノセント",
       desc: "夜に1人の家へ罠を設置。その人が襲撃されて倒れたら、襲撃者も道連れになる（FeignのTrapper方式）。",
       nightActionHint: "襲われそうな子の家に罠を仕掛けよう。自分の家にも設置できる。",
@@ -944,6 +957,7 @@
     },
     doctor: {
       name: "ドクター",
+      icon: "🩺",
       faction: "イノセント",
       desc: "夜に1人を診察。その人がその夜に襲撃や爆発で倒れたら、朝までに蘇生させる。",
       nightActionHint: "狙われそうな子を診察しておこう。自分も選べる。",
@@ -953,6 +967,7 @@
     },
     mouse: {
       name: "マウス",
+      icon: "🐭",
       faction: "イノセント",
       desc: "能力は昼。ゲーム中1回だけ、議論中に1人の本当の役職を全員に公開できる（FeignのMouse方式）。",
       nightActionHint: "夜は能力なし。昼の議論で公開ボタンのタイミングを計ろう。",
@@ -962,6 +977,7 @@
     },
     politician: {
       name: "政治家",
+      icon: "🗳️",
       faction: "イノセント",
       desc: "能力は投票。自分の票が常に2票分になる（FeignのPolitician方式）。",
       nightActionHint: "夜は能力なし。昼は投票で決着をつける動きを考えよう。",
@@ -971,6 +987,7 @@
     },
     villager: {
       name: "村ガール",
+      icon: "🏠",
       faction: "イノセント",
       desc: "能力なし。議論と投票で戦う。",
       nightActionHint: "夜は情報整理に集中。朝ログと発言の矛盾を探そう。",
@@ -980,6 +997,7 @@
     },
     fakeGirl: {
       name: "フェイクガール",
+      icon: "🎭",
       faction: "インポスター",
       desc: "インポスター陣営として夜に1人を脱落させる。襲撃しない夜は、イノセント側1人の夜行動を妨害する。",
       nightActionHint: "仲間と相談した想定で、インポスター陣営として襲撃先を1人に絞る。",
@@ -989,6 +1007,7 @@
     },
     mimic: {
       name: "なりすまし",
+      icon: "🪞",
       faction: "インポスター",
       desc: "調査でイノセントに見えることがある。襲撃しない夜は、イノセント側1人の実役職を盗み見る。得た情報は陣営の襲撃先決定に使われる。",
       nightActionHint: "占いをいなしつつ、インポスター陣営の襲撃先相談に乗る立ち回り。",
@@ -998,6 +1017,7 @@
     },
     bomber: {
       name: "ボマー",
+      icon: "💣",
       faction: "ニュートラル",
       desc: "第三勢力。夜に1人へ爆弾を仕掛け、翌日の夜に爆発する（FeignのBomber方式）。最後の1人になるか、爆弾で2人以上を倒して生き残ると勝利。",
       nightActionHint: "毎晩だれか1人に爆弾を仕掛けよう。自分以外を全員倒せば勝ち。",
@@ -1007,6 +1027,7 @@
     },
     baka: {
       name: "バカ",
+      icon: "🃏",
       faction: "イノセント",
       desc: "本人には分からないが、別のイノセント役職として振る舞うトリッキー枠。表示された役職で夜行動できるが、その結果はすべて偽物（FeignのInsane方式）。",
       nightActionHint: "表示された役職として夜行動しよう（能力なしのこともある）。ただし結果は信用できない。",
@@ -1395,7 +1416,7 @@
     // 文言は出さない。種明かしは結果画面のみ。
     const r = ROLES[getEffectiveRoleKey(player)];
     return `
-      <strong>${player.name} の役職：${r.name}</strong><br>
+      <strong>${player.name} の役職：${r.icon} ${r.name}</strong><br>
       陣営：${r.faction}<br>
       説明：${r.desc}<br>
       夜の推奨行動：${r.nightActionHint}<br>
@@ -1744,7 +1765,7 @@
     const me = state.players[state.playerId];
     // バカの役職カードも表示役職で出す（本人には分からない）。
     const role = ROLES[getEffectiveRoleKey(me)];
-    el("roleCardName").textContent = role.name;
+    el("roleCardName").textContent = `${role.icon} ${role.name}`;
     el("roleCardFaction").textContent = role.faction;
     el("roleCardPhaseHint").textContent = getPhaseHint(role);
     el("roleCardRisk").textContent = role.riskNote;
@@ -1786,11 +1807,17 @@
         div.tabIndex = -1;
         div.setAttribute("aria-disabled", "true");
       }
+      // 脱落カードのメタは表示役職のアイコン1つ（getPublicRoleKey 経由なので
+      // バカの実役職は漏れない）。生存カードは「？」のみ。
+      // 「 ・ 生存中」は .meta-state に入れて、スマホでは CSS で隠す。
+      const metaHtml = p.alive
+        ? `？<span class="meta-state"> ・ 生存中</span>`
+        : `<span class="role-icon" aria-hidden="true">${ROLES[getPublicRoleKey(p)].icon}</span>`;
       div.innerHTML = `
         <div class="avatar"><span>${p.icon}</span>${ICON_IMGS[ICON_SLUGS[p.id]] ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[p.id]}" src="${ICON_IMGS[ICON_SLUGS[p.id]]}" alt="${p.name}" onerror="this.remove()">` : ""}</div>
         <div class="card-main">
           <div class="name">${p.name}</div>
-          <div class="meta">${revealedRole} ・ ${p.alive ? "生存中" : "脱落済み"}</div>
+          <div class="meta">${metaHtml}</div>
         </div>
       `;
       cards.appendChild(div);
@@ -2836,7 +2863,7 @@
       return `<div class="result-row ${p.alive ? "" : "dead"} ${isWinner ? "winner" : "loser"}">
         <div class="avatar"><span>${p.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${p.name}">` : ""}</div>
         <div><div class="result-name">${p.name}${state.mode === "pnp" ? "" : (p.id === state.playerId ? "（あなた）" : "")}<span class="faction-chip ${chipClass}">${role.faction}</span></div>
-        <div class="result-role">${role.name}${displayNote}${clumsyNote}</div></div>
+        <div class="result-role">${role.icon} ${role.name}${displayNote}${clumsyNote}</div></div>
         <div class="result-status">${status}</div>
       </div>`;
     }).join("");
