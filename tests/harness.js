@@ -42,7 +42,15 @@ function makeElement(id) {
       contains(name) { return el._classes.has(name); },
     },
     _classes: new Set(),
-    appendChild(child) { child._parent = el; el.children.push(child); return child; },
+    appendChild(child) {
+      // 実 DOM と同じく、既に別の親を持つ子はそちらから外してから付ける
+      // （draw() での吹き出し付け直しなど、要素の移動を再現するため）。
+      if (child._parent && child._parent !== el) {
+        const i = child._parent.children.indexOf(child);
+        if (i >= 0) child._parent.children.splice(i, 1);
+      }
+      child._parent = el; el.children.push(child); return child;
+    },
     // 実 DOM と同じく、remove() は親の子リストから自分を外す
     // （吹き出し・ゴースト歩行者の消去をテストで検証できるようにする）。
     remove() {

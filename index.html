@@ -1779,6 +1779,9 @@
     // パス＆プレイの夜・投票の入力中だけ、誰の番かを示す帯を出す。
     const pnpBanner = el("pnpTurnBanner");
     if (pnpBanner) pnpBanner.classList.toggle("hidden", !(state.mode === "pnp" && (state.pnpNightInputPending != null || state.pnpVoteInputPending != null)));
+    // カードの再構築で表示中の吹き出しが DOM から外れるため、あれば
+    // 発言者の新しいカードへ付け直す（キューは触らない）。
+    reattachSpeechBubble();
   }
 
   function selectTarget(id) {
@@ -2298,6 +2301,9 @@
   let speechBubbleTimer = null;
   let speechBubbleEl = null;
   let speechBubbleCard = null;
+  // 表示中の吹き出しの発言者。draw() でカードが再構築されたあと、
+  // 吹き出しを新しいカードへ付け直すために使う。
+  let speechBubblePlayerId = null;
   function findPlayerCard(playerId) {
     const cards = el("cards");
     if (!cards || !cards.children) return null;
@@ -2306,11 +2312,23 @@
     }
     return null;
   }
+  // draw() で #cards が再構築されたあと、表示中の吹き出しを発言者の
+  // 新しいカードへ付け直す。吹き出し要素そのものは使い回すので、
+  // 表示タイマーはそのまま（期限切れは従来通り expireSpeechBubble が処理する）。
+  function reattachSpeechBubble() {
+    if (!speechBubbleEl || speechBubblePlayerId == null) return;
+    const card = findPlayerCard(speechBubblePlayerId);
+    if (!card) return;
+    card.appendChild(speechBubbleEl);
+    if (card.style) card.style.zIndex = "30";
+    speechBubbleCard = card;
+  }
   function expireSpeechBubble() {
     if (speechBubbleEl && speechBubbleEl.remove) speechBubbleEl.remove();
     if (speechBubbleCard && speechBubbleCard.style) speechBubbleCard.style.zIndex = "";
     speechBubbleEl = null;
     speechBubbleCard = null;
+    speechBubblePlayerId = null;
     showNextSpeechBubble();
   }
   function showNextSpeechBubble() {
@@ -2328,6 +2346,7 @@
     if (card.style) card.style.zIndex = "30";
     speechBubbleEl = bubble;
     speechBubbleCard = card;
+    speechBubblePlayerId = item.playerId;
     stageBounce(item.playerId);
     speechBubbleTimer = later(expireSpeechBubble, SPEECH_BUBBLE_MS);
   }
@@ -2344,6 +2363,7 @@
     if (speechBubbleCard && speechBubbleCard.style) speechBubbleCard.style.zIndex = "";
     speechBubbleEl = null;
     speechBubbleCard = null;
+    speechBubblePlayerId = null;
   }
   // Log a public spoken line and queue its speech bubble.
   function sayDialogue(playerId, logText, bubbleText) {
