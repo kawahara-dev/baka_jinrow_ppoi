@@ -55,7 +55,17 @@ function makeElement(id) {
     dispatch(type, event = {}) {
       for (const fn of el._listeners[type] || []) fn(event);
     },
-    querySelector() { return null; },
+    querySelector(sel) {
+      // ステージの歩行者だけ、描画済みの innerHTML から解決する
+      // （stageBounce / stageEventMotion / stageGhostWalker の検証用）。
+      // それ以外は従来通り null。
+      const m = typeof sel === "string" && sel.match(/^\.walker\[data-player="(\d+)"\]$/);
+      if (!m) return null;
+      if (!String(el.innerHTML).includes(`data-player="${m[1]}"`)) return null;
+      if (!el._walkerStubs) el._walkerStubs = new Map();
+      if (!el._walkerStubs.has(m[1])) el._walkerStubs.set(m[1], makeElement(`walker-${m[1]}`));
+      return el._walkerStubs.get(m[1]);
+    },
     querySelectorAll() { return []; },
     closest() { return el; },
     scrollIntoView() {},
@@ -199,6 +209,7 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   recordPnpStats, loadPnpStats, renderPnpStats, focusEl,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
+  nightCutins, stageGhostWalker, stageEventMotion, stageFlashRed,
 };
 `;
   const { sandbox, alerts, elements, localStorage } = createSandbox(seedSettings, { fakeAudio });

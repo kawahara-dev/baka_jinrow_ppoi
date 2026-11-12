@@ -1406,3 +1406,156 @@ test("画面遷移：リトライで役職画面の見出しにフォーカス�
   elements.get("retryBtn").onclick();
   assert.equal(elements.get("roleScreenTitle")._focused, true);
 });
+
+test("キャラモーション第1弾：待機の呼吸と公開イベントのモーションCSSがある", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  // 待機の呼吸：ステージの歩行者に歩行＋呼吸の2アニメーション
+  assert.match(html, /\.stage \.walker \{[^}]*animation-name: walkAcross, stageBreathe/);
+  assert.match(html, /@keyframes stageBreathe/);
+  for (const name of ["motionFlinch", "motionBlast", "motionTrap", "motionRevive", "motionExile", "stageFlashRed", "winJump", "loseDroop"]) {
+    assert.ok(html.includes(`@keyframes ${name}`), `${name} のキーフレームがない`);
+  }
+  // 動きを減らす設定では呼吸・イベント・勝敗モーションが止まる
+  assert.ok(html.includes(".stage .walker, .stage .walker .wbody, .stage.flash-red,"));
+  assert.ok(html.includes(".result-row.winner .avatar, .result-row.loser .avatar,"));
+});
+
+test("キャラモーション第1弾：夜の襲撃で被害者がよろめき、ステージが赤く光る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "fakeGirl";
+  const victim = others[0];
+  const stage = elements.get("stage");
+  const before = stage.children.length;
+  FB.state.selectedId = victim.id;
+  FB.runNight();
+  assert.equal(FB.state.nightReport.type, "eliminated");
+  assert.equal(FB.state.nightReport.victimId, victim.id);
+  // 個人カットイン（襲撃）を送って襲撃カットインを出す
+  elements.get("cutin").onclick();
+  // 被害者のゴースト歩行者が1体だけステージに出る
+  assert.equal(stage.children.length, before + 1);
+  assert.match(stage.children[stage.children.length - 1].className, /motion-flinch/);
+  // 襲撃の赤フラッシュ
+  assert.ok(stage.classList.contains("flash-red"));
+});
+
+test("キャラモーション第1弾：私的な夜行動だけではモーションが付かない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "apprenticeSeer";
+  const target = others[0];
+  const stage = elements.get("stage");
+  FB.state.selectedId = target.id;
+  FB.runNight();
+  assert.equal(FB.state.nightReport.type, "none");
+  // ゴーストも赤フラッシュも出ない（占いは私的な行動）
+  assert.equal(stage.children.length, 0);
+  assert.ok(!stage.classList.contains("flash-red"));
+});
+
+test("キャラモーション第1弾：爆弾の爆発で被害者が吹っ飛ぶ", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "villager";
+  const victim = others[0];
+  const s = craftNight(FB, {});
+  s.bombs = [{ targetId: victim.id, explodeDay: s.day }];
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  // vm 内で作られた配列は deepEqual が通らないため要素で比べる
+  assert.equal(s.bombReport.explodedVictims.length, 1);
+  assert.equal(s.bombReport.explodedVictims[0], victim.id);
+  FB.draw();
+  const stage = elements.get("stage");
+  const before = stage.children.length;
+  FB.nightCutins(me, victim, null);
+  // 夜行動なしのカットインを送って爆発カットインを出す
+  elements.get("cutin").onclick();
+  assert.equal(stage.children.length, before + 1);
+  assert.match(stage.children[stage.children.length - 1].className, /motion-blast/);
+});
+
+test("キャラモーション第1弾：罠が作動すると被害者のよろめきと襲撃者の道連れが出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "trapper";
+  const fake = others[0];
+  fake.roleKey = "fakeGirl";
+  const victim = others[1];
+  const s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.ok(s.trapReport);
+  FB.draw();
+  const stage = elements.get("stage");
+  const before = stage.children.length;
+  FB.nightCutins(me, victim, null);
+  // 個人カットイン（罠設置）を送って襲撃カットインを出す
+  elements.get("cutin").onclick();
+  assert.equal(stage.children.length, before + 1);
+  assert.match(stage.children[stage.children.length - 1].className, /motion-flinch/);
+  // 襲撃カットインを送って罠カットインを出す
+  elements.get("cutin").onclick();
+  assert.equal(stage.children.length, before + 2);
+  assert.match(stage.children[stage.children.length - 1].className, /motion-trap/);
+});
+
+test("キャラモーション第1弾：ドクターの蘇生で助かった人がふわりと浮く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "doctor";
+  const fake = others[0];
+  fake.roleKey = "fakeGirl";
+  const victim = others[1];
+  const s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.equal(s.nightReport.type, "revived");
+  assert.ok(s.doctorReport);
+  FB.draw();
+  FB.nightCutins(me, victim, null);
+  // 個人カットイン（診察）を送って蘇生カットインを出す
+  elements.get("cutin").onclick();
+  const stage = elements.get("stage");
+  const walker = stage.querySelector(`.walker[data-player="${victim.id}"]`);
+  assert.ok(walker, "蘇生した人の歩行者がステージにある");
+  assert.ok(walker.classList.contains("motion-revive"));
+});
+
+test("キャラモーション第1弾：追放でフェードアウトし、結果画面で勝敗の動きが付く", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  humans[0].roleKey = "politician";
+  cpus[0].roleKey = "fakeGirl";
+  const targetA = cpus[0];
+  const targetB = cpus[1];
+  s.phase = "vote";
+  const votes = new Map();
+  FB.addVoteTo(votes, targetA.id, humans[0]); // 政治家：2票
+  FB.addVoteTo(votes, targetB.id, humans[1]); // 1票
+  const stage = elements.get("stage");
+  const before = stage.children.length;
+  FB.tallyVotes(votes);
+  assert.equal(targetA.alive, false);
+  assert.equal(targetA.deathCause, "追放");
+  assert.equal(s.phase, "end", "フェイクを追放してピュア陣営の勝利");
+  // 追放された人のゴーストがフェードアウトする
+  assert.equal(stage.children.length, before + 1);
+  assert.match(stage.children[stage.children.length - 1].className, /motion-exile/);
+  // 結果画面：勝ったピュア陣営は winner、負けたフェイク陣営は loser
+  const rows = elements.get("resultRows").innerHTML;
+  assert.match(rows, /result-row [^"]*winner/);
+  assert.match(rows, /result-row [^"]*loser/);
+});
