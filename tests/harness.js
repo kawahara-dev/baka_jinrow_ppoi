@@ -209,7 +209,7 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   recordPnpStats, loadPnpStats, renderPnpStats, focusEl,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
-  nightCutins, stageGhostWalker, stageEventMotion, stageFlashRed,
+  nightCutins, stageGhostWalker, stageEventMotion, stageFlashRed, stageOwnActionMotion,
 };
 `;
   const { sandbox, alerts, elements, localStorage } = createSandbox(seedSettings, { fakeAudio });

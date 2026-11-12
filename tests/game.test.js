@@ -1559,3 +1559,155 @@ test("キャラモーション第1弾：追放でフェードアウトし、結�
   assert.match(rows, /result-row [^"]*winner/);
   assert.match(rows, /result-row [^"]*loser/);
 });
+
+test("キャラモーション第2弾：自分のアクションのモーションCSSがある", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  for (const name of ["ownLungeR", "ownLungeL", "ownPeek", "ownGuard", "ownSneak", "ownSlash", "ownPlant"]) {
+    assert.ok(html.includes(`@keyframes ${name}`), `${name} のキーフレームがない`);
+  }
+  for (const family of ["peek", "guard", "sneak", "slash", "plant"]) {
+    for (const dir of ["r", "l"]) {
+      assert.ok(html.includes(`.motion-own-${family}-${dir} .wbody`), `motion-own-${family}-${dir} のルールがない`);
+    }
+  }
+  // 動きを減らす設定では .wbody のアニメーションが止まる（第1弾と同じ枠）
+  assert.ok(html.includes(".stage .walker, .stage .walker .wbody, .stage.flash-red,"));
+});
+
+test("キャラモーション第2弾：ソロで占いを選ぶと自分のキャラが対象へ寄ってのぞき込む", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "apprenticeSeer";
+  me.clumsy = false;
+  const target = others.find((p) => p.id > me.id) || others[0];
+  const stage = elements.get("stage");
+  FB.state.selectedId = target.id;
+  FB.runNight();
+  const walker = stage.querySelector(`.walker[data-player="${me.id}"]`);
+  assert.ok(walker, "自分の歩行者がステージにある");
+  if (target.id > me.id) {
+    assert.ok(walker.classList.contains("motion-own-peek-r"), "対象が右なので右へ寄る");
+  } else {
+    assert.ok(walker.classList.contains("motion-own-peek-l"), "対象が左なので左へ寄る");
+  }
+});
+
+test("キャラモーション第2弾：護衛は対象が左なら左へ寄って盾を構える", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "guardian";
+  const target = others.find((p) => p.id < me.id) || others[0];
+  const stage = elements.get("stage");
+  FB.state.selectedId = target.id;
+  FB.runNight();
+  const walker = stage.querySelector(`.walker[data-player="${me.id}"]`);
+  assert.ok(walker, "自分の歩行者がステージにある");
+  if (target.id < me.id) {
+    assert.ok(walker.classList.contains("motion-own-guard-l"), "対象が左なので左へ寄る");
+  } else {
+    assert.ok(walker.classList.contains("motion-own-guard-r"), "対象が右なので右へ寄る");
+  }
+});
+
+test("キャラモーション第2弾：妨害された夜は自分のアクションモーションが出ない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "apprenticeSeer";
+  const target = others[0];
+  FB.draw();
+  const s = FB.state;
+  s.humanBlocked = true;
+  s.nightActionTypes = { [me.id]: "investigate" };
+  s.nightReport = null;
+  s.bombReport = { explodedVictims: [], fizzled: false };
+  s.trapReport = null;
+  s.doctorReport = null;
+  FB.nightCutins(me, target, null);
+  const stage = elements.get("stage");
+  const walker = stage.querySelector(`.walker[data-player="${me.id}"]`);
+  assert.ok(walker, "自分の歩行者がステージにある");
+  assert.ok(!walker.classList.contains("motion-own-peek-r") && !walker.classList.contains("motion-own-peek-l"),
+    "妨害された夜はのぞき込みモーションが出てはいけない");
+});
+
+test("キャラモーション第2弾：CPUの夜行動だけでは誰にも自分のアクションモーションが付かない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "villager";
+  others[0].roleKey = "apprenticeSeer";
+  const target = others[1];
+  const stage = elements.get("stage");
+  FB.state.selectedId = target.id;
+  FB.runNight();
+  for (let i = 0; i < 5; i++) elements.get("cutin").onclick();
+  for (const p of FB.state.players.filter((x) => x.alive)) {
+    const w = stage.querySelector(`.walker[data-player="${p.id}"]`);
+    if (!w) continue;
+    for (const family of ["peek", "guard", "sneak", "slash", "plant"]) {
+      assert.ok(!w.classList.contains(`motion-own-${family}-r`) && !w.classList.contains(`motion-own-${family}-l`),
+        `${p.name} に自分のアクションモーションが付いてはいけない`);
+    }
+  }
+});
+
+test("キャラモーション第2弾：パス＆プレイで対象を選ぶと自分の番だけモーションが付く", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; p.clumsy = false; });
+  humans[0].roleKey = "apprenticeSeer";
+  // 受け渡しを全員分進めて夜入力へ
+  for (let i = 0; i < humans.length; i++) {
+    elements.get("pnpRevealBtn").onclick();
+    elements.get("pnpConfirmBtn").onclick();
+  }
+  assert.equal(s.pnpStep, "nightCover");
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightAction");
+  const player = FB.pnpNightCurrentPlayer();
+  assert.equal(player.id, humans[0].id);
+  const target = s.players.find((p) => p.alive && p.id !== player.id);
+  const stage = elements.get("stage");
+  FB.selectTarget(target.id);
+  const walker = stage.querySelector(`.walker[data-player="${player.id}"]`);
+  assert.ok(walker, "自分の歩行者がステージにある");
+  assert.ok(walker.classList.contains("motion-own-peek-r") || walker.classList.contains("motion-own-peek-l"),
+    "自分の番の占いでのぞき込みモーションが付く");
+  // 他の人間の歩行者には付かない
+  const other = stage.querySelector(`.walker[data-player="${humans[1].id}"]`);
+  assert.ok(other, "他の人間の歩行者がステージにある");
+  for (const family of ["peek", "guard", "sneak", "slash", "plant"]) {
+    assert.ok(!other.classList.contains(`motion-own-${family}-r`) && !other.classList.contains(`motion-own-${family}-l`),
+      "他の人間の歩行者にモーションが付いてはいけない");
+  }
+});
+
+test("キャラモーション第2弾：パス＆プレイの投票選択ではモーションが付かない", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; p.clumsy = false; });
+  humans[0].roleKey = "apprenticeSeer";
+  // 投票フェーズにして対象を選ぶ（夜のモーションが出てはいけない）
+  s.phase = "vote";
+  FB.draw();
+  const target = s.players.find((p) => p.alive && p.id !== humans[0].id);
+  const stage = elements.get("stage");
+  FB.selectTarget(target.id);
+  const walker = stage.querySelector(`.walker[data-player="${humans[0].id}"]`);
+  assert.ok(walker, "自分の歩行者がステージにある");
+  for (const family of ["peek", "guard", "sneak", "slash", "plant"]) {
+    assert.ok(!walker.classList.contains(`motion-own-${family}-r`) && !walker.classList.contains(`motion-own-${family}-l`),
+      "投票の選択で夜のモーションが出てはいけない");
+  }
+});
