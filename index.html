@@ -808,6 +808,7 @@
       <button id="nextBtn" class="primary hidden">次へ</button>
       <button id="mouseBtn" class="secondary hidden">🐭 役職を公開</button>
       <button id="retryBtn" class="secondary hidden">リトライ</button>
+      <button id="titleBtn" class="secondary hidden">タイトルに戻る</button>
     </div>
 
     <details class="role-guide">
@@ -1333,6 +1334,9 @@
     el("dialogueLog").innerHTML = "";
     el("actionLog").innerHTML = "";
     el("resultPanel").classList.add("hidden");
+    // 新しい試合では結果画面のボタンを隠す（START・リトライ共通）。
+    el("retryBtn").classList.add("hidden");
+    el("titleBtn").classList.add("hidden");
     actionLog("ゲーム開始！夜行動からスタートだよ。");
   }
 
@@ -2760,6 +2764,9 @@
     sfx(state.myWin ? "win" : "lose");
     const panel = el("resultPanel");
     panel.classList.remove("hidden");
+    // 結果画面では「タイトルに戻る」も出す（設定変更・モード切替のため）。
+    // 3つの決着ルートはすべて showResults を通るので、ここ1か所で足りる。
+    el("titleBtn").classList.remove("hidden");
     if (panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     // 結果画面が出たら見出しへフォーカスを移す（キーボード操作の起点）。
     focusEl("resultTitle");
@@ -3353,6 +3360,22 @@
       el("roleScreen").classList.remove("hidden");
       focusEl("roleScreenTitle");
     }
+  };
+  // 結果画面からタイトルへ戻る。設定変更・モード切替・戦績の確認のため。
+  // 戦績は showResults で記録済みなので、タイトルの戦績表示だけ更新し直す。
+  // 次の試合は START から始めるので state は setupGame で作り直す。
+  el("titleBtn").onclick = () => {
+    stopDiscussTimer();
+    clearSpeechBubbles();
+    el("titleBtn").classList.add("hidden");
+    el("retryBtn").classList.add("hidden");
+    el("resultPanel").classList.add("hidden");
+    el("gameScreen").classList.add("hidden");
+    el("roleScreen").classList.add("hidden");
+    el("pnpScreen").classList.add("hidden");
+    renderStats();
+    el("titleScreen").classList.remove("hidden");
+    focusEl("startBtn");
   };
 })();
 </script>
