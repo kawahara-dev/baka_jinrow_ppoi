@@ -769,6 +769,117 @@ test("morningToDiscussion: 議論ログにキャラ別セリフが出る", () =>
   assert.ok(sawCharLine, "キャラ別セリフが議論ログに出る");
 });
 
+// 吹き出しの検証用：発言者のカードに付いた .speech-bubble を返す。
+function bubbleOf(elements, playerId) {
+  const card = elements.get("cards").children.find(
+    (c) => c.getAttribute("data-player") === String(playerId));
+  if (!card) return null;
+  return card.children.find((c) => c.className === "speech-bubble") || null;
+}
+function allBubbles(elements) {
+  return elements.get("cards").children.flatMap((c) =>
+    c.children.filter((x) => x.className === "speech-bubble"));
+}
+// ログ行から吹き出しに入るはずのセリフ部分を取り出す。
+// 議論セリフは「名前：セリフ」、マウス公開は「🐭 名前「セリフ」」形式。
+function bubbleTextOf(line) {
+  const m = line.match(/「(.*)」$/);
+  if (m) return m[1];
+  return line.slice(line.indexOf("：") + 1);
+}
+// 夜を1回回して議論フェーズまで進める。朝にならなかったら false。
+function reachDiscussion(FB) {
+  for (let i = 0; i < 15; i++) {
+    FB.setupGame();
+    const s = FB.state;
+    const alive = s.players.filter((p) => p.alive);
+    s.selectedId = alive.find((p) => p.id !== s.playerId).id;
+    FB.runNight();
+    if (s.phase === "morning") return true;
+  }
+  return false;
+}
+
+test("speech bubble: 議論の最初のセリフが発言者のカードに吹き出しで出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.ok(reachDiscussion(FB), "議論まで進まなかった");
+  const before = elements.get("dialogueLog").children.length;
+  FB.morningToDiscussion();
+  const lines = elements.get("dialogueLog").children.slice(before).map((c) => c.textContent);
+  assert.ok(lines.length > 0, "議論ログが出る");
+  // 先頭の発言者のカードにだけ吹き出しが出て、セリフが入っている。
+  const first = lines[0];
+  const speaker = FB.state.players.find((p) => first.startsWith(`${p.name}：`) || first.startsWith(`🐭 ${p.name}「`));
+  assert.ok(speaker, `先頭行の発言者が特定できない: ${first}`);
+  const bubble = bubbleOf(elements, speaker.id);
+  assert.ok(bubble, "発言者のカードに吹き出しがない");
+  assert.equal(bubble.textContent, bubbleTextOf(first));
+  assert.equal(allBubbles(elements).length, 1, "同時に表示される吹き出しは1つだけ");
+  // ログへの記録は従来通り即時（全員分が残る）。
+  assert.equal(elements.get("dialogueLog").children.length - before, lines.length);
+});
+
+test("speech bubble: キューが順番に処理される", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.ok(reachDiscussion(FB), "議論まで進まなかった");
+  const before = elements.get("dialogueLog").children.length;
+  FB.morningToDiscussion();
+  const lines = elements.get("dialogueLog").children.slice(before).map((c) => c.textContent);
+  assert.ok(lines.length >= 2, "キュー検証には2行以上のセリフが必要");
+  const queued = FB.speechQueue.length;
+  assert.ok(queued > 0, "残りのセリフがキューに残る");
+  // 1件分が終わると次の発言者の吹き出しに切り替わる。
+  const firstBubble = allBubbles(elements)[0];
+  FB.expireSpeechBubble();
+  assert.equal(FB.speechQueue.length, queued - 1);
+  assert.equal(allBubbles(elements).length, 1, "切り替え後も吹き出しは1つだけ");
+  assert.ok(!allBubbles(elements).includes(firstBubble), "前の吹き出しは消えている");
+  const second = allBubbles(elements)[0];
+  assert.ok(lines.slice(1).some((l) => bubbleTextOf(l) === second.textContent),
+    "2番目の吹き出しは次のセリフのもの");
+});
+
+test("speech bubble: マウス公開のセリフがマウスのカードに吹き出しで出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  s.phase = "discussion";
+  FB.draw();
+  const me = humanOf(FB);
+  me.roleKey = "mouse";
+  me.mouseUsed = false;
+  const target = s.players.find((p) => p.alive && p.id !== me.id);
+  FB.revealMouse(me, target);
+  const bubble = bubbleOf(elements, me.id);
+  assert.ok(bubble, "マウスのカードに吹き出しがない");
+  assert.ok(bubble.textContent.includes(target.name), "吹き出しに公開対象の名前が入る");
+  assert.equal(allBubbles(elements).length, 1);
+});
+
+test("speech bubble: 投票フェーズへ移ると吹き出しとキューが消える", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.ok(reachDiscussion(FB), "議論まで進まなかった");
+  FB.morningToDiscussion();
+  assert.equal(allBubbles(elements).length, 1, "議論中は吹き出しが出る");
+  assert.ok(FB.speechQueue.length > 0, "議論中はキューが残る");
+  FB.discussionToVote();
+  assert.equal(FB.state.phase, "vote");
+  assert.equal(allBubbles(elements).length, 0, "投票フェーズに吹き出しが残らない");
+  assert.equal(FB.speechQueue.length, 0, "投票フェーズにキューが残らない");
+});
+
+test("speech bubble: 夜の個人結果では吹き出しが出ない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const alive = s.players.filter((p) => p.alive);
+  s.selectedId = alive.find((p) => p.id !== s.playerId).id;
+  FB.runNight();
+  assert.ok(["morning", "end"].includes(s.phase), `夜が解決されなかった: ${s.phase}`);
+  assert.equal(allBubbles(elements).length, 0, "夜の結果で吹き出しが出てはいけない");
+  assert.equal(FB.speechQueue.length, 0, "夜の結果でキューが残ってはいけない");
+});
+
 test("フルゲーム: 各種設定で40日以内に必ず決着し、戦績が記録される", () => {
   const settingsList = [
     { fakeCount: "1", bomber: "off", difficulty: "easy" },

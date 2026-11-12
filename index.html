@@ -199,6 +199,39 @@
       font-size: 0.72rem;
       font-weight: 700;
     }
+    /* Speech bubble: a public discussion line shown above the
+       speaker's player card, one at a time (see sayDialogue).
+       The tail points down toward the avatar; the bubble may overlap
+       neighbouring cards, so it sits above them (z-index). */
+    .speech-bubble {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      bottom: calc(100% - 4px);
+      z-index: 30;
+      background: #fff;
+      border: 1px solid #f3c6e3;
+      border-radius: 12px;
+      padding: 6px 8px;
+      font-size: 0.72rem;
+      line-height: 1.4;
+      text-align: left;
+      color: #5b2a4a;
+      box-shadow: 0 6px 16px rgba(184, 155, 255, 0.28);
+      pointer-events: none;
+      animation: bubblePop 0.18s ease both;
+    }
+    .speech-bubble::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -6px;
+      margin-left: -6px;
+      border: 6px solid transparent;
+      border-top-color: #fff;
+      border-bottom: 0;
+    }
+    @keyframes bubblePop { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: none; } }
     .parade { position: relative; width: 100%; height: 148px; overflow: hidden; margin: 12px auto 2px; max-width: 600px;
       -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
       mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent); }
@@ -391,7 +424,7 @@
     @keyframes btnPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255, 111, 179, 0.45); } 50% { box-shadow: 0 0 0 9px rgba(255, 111, 179, 0); } }
     @media (prefers-reduced-motion: reduce) {
       .petals span, .confetti-piece, .cutin-band, .card, .log p, .shake, .stage .walker.speaking .wbody,
-      .stage .walker, .stage .walker .wbody, .stage.flash-red,
+      .stage .walker, .stage .walker .wbody, .stage.flash-red, .speech-bubble,
       .result-row.winner .avatar, .result-row.loser .avatar,
       #actionBtn:not(.hidden), #voteBtn:not(.hidden) { animation: none !important; }
     }
@@ -550,6 +583,9 @@
       .name { font-size: 0.92rem; }
       .meta { font-size: 0.74rem; }
       .card.voted::after { font-size: 0.66rem; padding: 1px 6px; top: 6px; right: 6px; }
+      /* Compact cards are horizontal with the avatar on the left,
+         so the bubble tail points at the avatar, not the centre. */
+      .speech-bubble::after { left: 22px; margin-left: 0; }
       .log { height: min(30vh, 260px); font-size: 0.88rem; }
       .right-panel .screen { padding: 10px; }
       .role-guide { font-size: 0.9rem; padding: 10px; }
@@ -1204,6 +1240,7 @@
   function setupGame() {
     // 前の試合の議論タイマーが残っていれば止める。
     stopDiscussTimer();
+    clearSpeechBubbles();
     const fakeCount = gameSettings.fakeCount === "random"
       ? (Math.random() < 0.35 ? 1 : 2)
       : Number(gameSettings.fakeCount);
@@ -1679,6 +1716,8 @@
       const div = document.createElement("div");
       div.style.animationDelay = `${cardIndex++ * 45}ms`;
       div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""}`;
+      // Speech bubbles find their speaker's card by this id.
+      div.setAttribute("data-player", String(p.id));
       div.onclick = () => selectTarget(p.id);
       // 脱落者のカードも結果画面までバカの実役職は出さない。
       const revealedRole = p.alive ? "？" : ROLES[getPublicRoleKey(p)].name;
@@ -2231,6 +2270,72 @@
     later(() => w.classList.remove("speaking"), 1000);
   }
 
+  // Speech bubbles: public spoken lines (discussion CPU lines and the
+  // mouse reveal) appear one at a time above the speaker's player card.
+  // The dialogueLog keeps the instant full record for re-reading; the
+  // bubble is the at-a-glance view. Private night results are never
+  // queued here (anti-leak, same rule as character motions). The queue
+  // is cleared on phase transitions so no bubble survives into the
+  // vote phase; the stage hop fires when the bubble shows, not when
+  // the line is logged.
+  const SPEECH_BUBBLE_MS = 2200;
+  const speechQueue = [];
+  let speechBubbleTimer = null;
+  let speechBubbleEl = null;
+  let speechBubbleCard = null;
+  function findPlayerCard(playerId) {
+    const cards = el("cards");
+    if (!cards || !cards.children) return null;
+    for (const card of cards.children) {
+      if (card.getAttribute && String(card.getAttribute("data-player")) === String(playerId)) return card;
+    }
+    return null;
+  }
+  function expireSpeechBubble() {
+    if (speechBubbleEl && speechBubbleEl.remove) speechBubbleEl.remove();
+    if (speechBubbleCard && speechBubbleCard.style) speechBubbleCard.style.zIndex = "";
+    speechBubbleEl = null;
+    speechBubbleCard = null;
+    showNextSpeechBubble();
+  }
+  function showNextSpeechBubble() {
+    speechBubbleTimer = null;
+    if (speechQueue.length === 0) return;
+    // The phase moved on while lines were queued: drop the rest.
+    if (state.phase !== "discussion") { speechQueue.length = 0; return; }
+    const item = speechQueue.shift();
+    const card = findPlayerCard(item.playerId);
+    if (!card) { showNextSpeechBubble(); return; }
+    const bubble = document.createElement("div");
+    bubble.className = "speech-bubble";
+    bubble.textContent = item.text;
+    card.appendChild(bubble);
+    if (card.style) card.style.zIndex = "30";
+    speechBubbleEl = bubble;
+    speechBubbleCard = card;
+    stageBounce(item.playerId);
+    speechBubbleTimer = later(expireSpeechBubble, SPEECH_BUBBLE_MS);
+  }
+  function enqueueSpeechBubble(playerId, text) {
+    if (playerId == null || !text) return;
+    speechQueue.push({ playerId, text });
+    if (!speechBubbleTimer && !speechBubbleEl) showNextSpeechBubble();
+  }
+  function clearSpeechBubbles() {
+    speechQueue.length = 0;
+    if (speechBubbleTimer && typeof clearTimeout === "function") clearTimeout(speechBubbleTimer);
+    speechBubbleTimer = null;
+    if (speechBubbleEl && speechBubbleEl.remove) speechBubbleEl.remove();
+    if (speechBubbleCard && speechBubbleCard.style) speechBubbleCard.style.zIndex = "";
+    speechBubbleEl = null;
+    speechBubbleCard = null;
+  }
+  // Log a public spoken line and queue its speech bubble.
+  function sayDialogue(playerId, logText, bubbleText) {
+    dialogueLog(logText);
+    enqueueSpeechBubble(playerId, bubbleText || logText);
+  }
+
   // Character motion phase 1: idle breathing is CSS-only (stageBreathe
   // on .stage .walker). The public-event motions below trigger only
   // for outcomes the game already announces publicly; a CPU member's
@@ -2322,11 +2427,12 @@
     state.revealedRoles[target.id] = shownRoleKey;
     const shown = ROLES[shownRoleKey];
     target.suspicion = shown.faction === "イノセント" ? -5 : 8;
-    dialogueLog(`🐭 ${actor.name}「ここでマウス能力！ ${target.name} は… ${shown.name}（${shown.faction}）だよ！」`);
+    const mouseLine = `ここでマウス能力！ ${target.name} は… ${shown.name}（${shown.faction}）だよ！`;
+    // draw() でカードが再描画されるため、吹き出しは再描画のあとに出す。
+    draw();
+    sayDialogue(actor.id, `🐭 ${actor.name}「${mouseLine}」`, mouseLine);
     actionLog(formatActionLog("roleReveal", { label: "公開", target: target.name, role: shown.name, faction: shown.faction }));
     showCutin("🐭 役職公開", `${target.name} は ${shown.name}`, "info");
-    draw();
-    stageBounce(actor.id);
   }
 
   // ---- パス＆プレイの議論タイマー（フェーズ4） ----
@@ -2390,6 +2496,8 @@
   function morningToDiscussion() {
     if (state.phase !== "morning") return;
     state.phase = "discussion";
+    // 前の議論の吹き出しが残っていれば消す。
+    clearSpeechBubbles();
     draw();
     const target = state.players[state.nightReport?.targetId];
     const templates = {
@@ -2475,8 +2583,8 @@
         line = pickTalkLine(p, category, tier, templates[category][tier]);
       }
       const nameForLine = lineTarget?.name || target?.name || "みんな";
-      dialogueLog(`${p.name}：${line.replaceAll("{target}", nameForLine)}`);
-      stageBounce(p.id);
+      const spoken = line.replaceAll("{target}", nameForLine);
+      sayDialogue(p.id, `${p.name}：${spoken}`, spoken);
     }
     // パス＆プレイ（フェーズ4）：設定されていれば議論タイマーを開始する。
     startDiscussTimer();
@@ -2485,6 +2593,8 @@
   function discussionToVote() {
     if (state.phase !== "discussion") return;
     stopDiscussTimer();
+    // 投票フェーズに吹き出しを残さない。
+    clearSpeechBubbles();
     state.phase = "vote";
     state.players.forEach(p => p.voted = false);
     actionLog(formatActionLog("voteGuide", { label: "投票" }));
@@ -2614,6 +2724,8 @@
   // End-of-game results: winner, your outcome, and the full roster with
   // real roles, factions, and how each player fell.
   function showResults(winText) {
+    // 結果画面に吹き出しを残さない。
+    clearSpeechBubbles();
     const winnerFaction = winText.includes("イノセント陣営の勝利") ? "イノセント"
       : winText.includes("インポスター陣営の勝利") ? "インポスター" : "ニュートラル";
     state.winnerFaction = winnerFaction;

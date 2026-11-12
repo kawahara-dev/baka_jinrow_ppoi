@@ -42,8 +42,16 @@ function makeElement(id) {
       contains(name) { return el._classes.has(name); },
     },
     _classes: new Set(),
-    appendChild(child) { el.children.push(child); return child; },
-    remove() {},
+    appendChild(child) { child._parent = el; el.children.push(child); return child; },
+    // 実 DOM と同じく、remove() は親の子リストから自分を外す
+    // （吹き出し・ゴースト歩行者の消去をテストで検証できるようにする）。
+    remove() {
+      if (el._parent) {
+        const i = el._parent.children.indexOf(el);
+        if (i >= 0) el._parent.children.splice(i, 1);
+        el._parent = null;
+      }
+    },
     setAttribute(name, value) { el._attributes[name] = String(value); },
     getAttribute(name) { return name in el._attributes ? el._attributes[name] : null; },
     removeAttribute(name) { delete el._attributes[name]; },
@@ -206,6 +214,8 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   confirmPnpVoteAction, advancePnpVote, finishPnpVote,
   pnpVoteCurrentPlayer, tallyVotes, cpuVotePick, addVoteTo, selectTarget,
   pnpCpuTalkCap, startDiscussTimer, stopDiscussTimer, discussTimerTick,
+  enqueueSpeechBubble, showNextSpeechBubble, expireSpeechBubble, clearSpeechBubbles,
+  get speechQueue() { return speechQueue; },
   recordPnpStats, loadPnpStats, renderPnpStats, focusEl,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
