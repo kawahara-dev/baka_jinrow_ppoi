@@ -2198,3 +2198,179 @@ test("ログの折りたたみ: 新しい行が追加されても自動で開き
   assert.ok(elements.get("dialogueLog").children.length > 0, "セリフログに行が入る");
   assert.ok(elements.get("dialogueLog").classList.contains("hidden"), "セリフも追記で開かない");
 });
+
+test("カットインのキャラアニメ：顔の CSS と種類別・系統別キーフレームがある", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  assert.ok(html.includes('id="cutinChar"'), "カットイン帯に顔の要素がない");
+  for (const name of ["cutinFlinch", "cutinBlast", "cutinFloat", "cutinHop", "cutinSway", "cutinPop",
+    "cutinOwnPeek", "cutinOwnGuard", "cutinOwnSneak", "cutinOwnSlash", "cutinOwnPlant"]) {
+    assert.ok(html.includes(`@keyframes ${name}`), `${name} のキーフレームがない`);
+  }
+  assert.match(html, /\.cutin-char \{[^}]*display: flex/);
+  assert.match(html, /\.cutin-face \{[^}]*width: 96px/);
+  // 種類別モーション（attack＝よろめき、bomb＝吹っ飛び、protect＝浮く、info＝跳ねる、phase＝ゆらゆら）
+  for (const [kind, anim] of [["attack", "cutinFlinch"], ["bomb", "cutinBlast"], ["protect", "cutinFloat"],
+    ["info", "cutinHop"], ["phase", "cutinSway"]]) {
+    assert.ok(html.includes(`.cutin[data-kind="${kind}"] .cutin-face:not(.small) { animation: ${anim}`),
+      `${kind} の顔モーションルールがない`);
+  }
+  // 自分のアクションの系統モーション（種類別より後ろ＝優先される）
+  for (const family of ["peek", "guard", "sneak", "slash", "plant"]) {
+    assert.ok(html.includes(`.cutin-char[data-own="${family}"] .cutin-face:not(.small)`),
+      `系統 ${family} の顔モーションルールがない`);
+  }
+  assert.ok(html.indexOf('.cutin-char[data-own="peek"]') > html.indexOf('.cutin[data-kind="attack"]'),
+    "系統モーションのルールが種類別より後ろにない（優先されない）");
+  // 動きを減らす設定ではカットインの顔アニメも止まる
+  assert.ok(html.includes(".cutin-band, .cutin-char,"), "reduced-motion の対象に .cutin-char がない");
+  // スマホでは顔を小さくする
+  assert.ok(html.includes("@media (max-width: 640px) { .cutin-face { width: 76px;"));
+});
+
+test("カットインのキャラアニメ：charId 付きで顔が出て、なしでは隠れたまま", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const me = humanOf(FB);
+  // charId 0（falsy な id）でも顔が出ること
+  FB.showCutin("テスト", "サブ", "info", null, { charId: 0 });
+  const charBox = elements.get("cutinChar");
+  assert.ok(!charBox.classList.contains("hidden"), "charId 付きなのに顔が出ていない");
+  assert.ok(charBox.innerHTML.includes(FB.state.players[0].icon), "0番の顔が出ていない");
+  assert.ok(charBox.innerHTML.includes('class="cutin-face"'), "顔の要素がない");
+  assert.equal(charBox.dataset.own, "", "系統モーションなしのはず");
+  elements.get("cutin").onclick();
+  // 顔なしカットインでは隠れたまま（前の顔が残らない）
+  FB.showCutin("テスト2", "", "phase");
+  assert.ok(charBox.classList.contains("hidden"), "顔なしなのに顔が出ている");
+  assert.equal(charBox.innerHTML, "", "顔なしなのに前の顔が残っている");
+  elements.get("cutin").onclick();
+  assert.ok(charBox.classList.contains("hidden"), "閉じたあとも顔が隠れたままのはず");
+});
+
+test("カットインのキャラアニメ：自分の夜アクションは自分の顔＋系統モーション＋相手の小さい顔", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "apprenticeSeer";
+  me.clumsy = false;
+  const target = others[0];
+  FB.state.selectedId = target.id;
+  FB.runNight();
+  // 最初のカットインは自分の占い（個人）
+  const charBox = elements.get("cutinChar");
+  assert.ok(!charBox.classList.contains("hidden"), "自分のアクションの顔が出ていない");
+  assert.equal(charBox.dataset.own, "peek", "占いは peek 系統のはず");
+  assert.ok(charBox.innerHTML.includes(me.icon), "自分の顔が出ていない");
+  assert.ok(charBox.innerHTML.includes(target.icon), "相手の顔が出ていない");
+  assert.ok(charBox.innerHTML.includes('class="cutin-face small"'), "相手の顔が小さくない");
+  assert.equal(elements.get("cutin").dataset.kind, "info", "占いのカットイン種別のはず");
+});
+
+test("カットインのキャラアニメ：夜の襲撃カットインに被害者の顔が出る（よろめき）", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "fakeGirl";
+  const victim = others[0];
+  FB.state.selectedId = victim.id;
+  FB.runNight();
+  assert.equal(FB.state.nightReport.type, "eliminated");
+  const charBox = elements.get("cutinChar");
+  // 個人カットイン（襲撃・slash 系統）を送る
+  assert.equal(charBox.dataset.own, "slash", "襲撃は slash 系統のはず");
+  elements.get("cutin").onclick();
+  // 襲撃カットイン：被害者の顔だけ（相手の小さい顔はない）
+  assert.ok(!charBox.classList.contains("hidden"), "被害者の顔が出ていない");
+  assert.equal(charBox.dataset.own, "", "公開カットインに系統モーションが付いてはいけない");
+  assert.ok(charBox.innerHTML.includes(victim.icon), "被害者の顔が出ていない");
+  assert.ok(!charBox.innerHTML.includes("cutin-face small"), "被害者カットインに小さい顔があってはいけない");
+  assert.equal(elements.get("cutin").dataset.kind, "attack");
+});
+
+test("カットインのキャラアニメ：防がれた襲撃のカットインには誰の顔も出ない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "guardian";
+  const fake = others[0];
+  fake.roleKey = "fakeGirl";
+  const victim = others[1];
+  const s = craftNight(FB, { [me.id]: victim.id, [fake.id]: victim.id });
+  FB.resolveNightActions(me, victim, FB.state.players.filter((p) => p.alive));
+  assert.equal(s.nightReport.type, "blocked", "守り手の護衛で襲撃が防がれるはず");
+  FB.draw();
+  FB.nightCutins(me, victim, null);
+  const charBox = elements.get("cutinChar");
+  // 個人カットイン（護衛・guard 系統）には自分の顔が出る
+  assert.equal(charBox.dataset.own, "guard", "護衛は guard 系統のはず");
+  elements.get("cutin").onclick();
+  // 「襲撃は防がれた」カットイン：守った人・狙われた人は未発表なので顔なし
+  assert.ok(charBox.classList.contains("hidden"), "防がれたカットインに顔が出てはいけない");
+  assert.equal(charBox.innerHTML, "");
+  assert.equal(elements.get("cutinTitle").textContent, "🛡️ 襲撃は防がれた！");
+});
+
+test("カットインのキャラアニメ：爆弾の不発カットインには誰の顔も出ない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  resetToVillagers(FB);
+  const me = humanOf(FB);
+  const target = FB.state.players.find((p) => p.id !== me.id);
+  const s = FB.state;
+  s.humanBlocked = false;
+  s.nightActionTypes = {};
+  s.nightReport = null;
+  s.bombReport = { explodedVictims: [], fizzled: true };
+  s.trapReport = null;
+  s.doctorReport = null;
+  FB.nightCutins(me, target, null);
+  const charBox = elements.get("cutinChar");
+  // 村ガール（能力なし）の夜行動カットインは顔なし
+  assert.ok(charBox.classList.contains("hidden"), "静かな夜のカットインに顔が出てはいけない");
+  elements.get("cutin").onclick();
+  // 「爆弾は不発」カットインも顔なし
+  assert.ok(charBox.classList.contains("hidden"), "不発のカットインに顔が出てはいけない");
+  assert.equal(charBox.innerHTML, "");
+  assert.equal(elements.get("cutinTitle").textContent, "💣 爆弾は不発だった");
+});
+
+test("カットインのキャラアニメ：追放カットインに追放された人の顔が出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  humans[0].roleKey = "politician";
+  cpus[0].roleKey = "fakeGirl";
+  const targetA = cpus[0];
+  const targetB = cpus[1];
+  s.phase = "vote";
+  const votes = new Map();
+  FB.addVoteTo(votes, targetA.id, humans[0]);
+  FB.addVoteTo(votes, targetB.id, humans[1]);
+  FB.tallyVotes(votes);
+  assert.equal(targetA.alive, false);
+  const charBox = elements.get("cutinChar");
+  assert.ok(!charBox.classList.contains("hidden"), "追放された人の顔が出ていない");
+  assert.ok(charBox.innerHTML.includes(targetA.icon), "追放された人の顔が出ていない");
+  assert.ok(!charBox.innerHTML.includes(targetB.icon), "追放されなかった人の顔が出てはいけない");
+  assert.equal(elements.get("cutin").dataset.kind, "phase");
+});
+
+test("カットインのキャラアニメ：マウス公開のカットインに公開された人の顔が出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  const target = others[0];
+  FB.revealMouse(me, target);
+  const charBox = elements.get("cutinChar");
+  assert.ok(!charBox.classList.contains("hidden"), "公開された人の顔が出ていない");
+  assert.ok(charBox.innerHTML.includes(target.icon), "公開された人の顔が出ていない");
+  assert.equal(elements.get("cutin").dataset.kind, "info");
+  assert.equal(elements.get("cutinTitle").textContent, "🐭 役職公開");
+});

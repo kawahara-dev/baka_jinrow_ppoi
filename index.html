@@ -446,6 +446,84 @@
     .cutin[data-kind="win"] .cutin-title { background: linear-gradient(90deg, #ff6fb3, #b79bff, #ffb347);
       -webkit-background-clip: text; background-clip: text; color: transparent; }
     @keyframes cutinIn { from { transform: translateX(-46px) skewX(-7deg); opacity: 0; } to { transform: translateX(0) skewX(0); opacity: 1; } }
+    /* カットインのキャラ顔：帯の上に大きく出す。顔はカードと同じ顔画像
+       （ICON_IMGS）＋絵文字フォールバックで、役職は出さない。出すのは
+       カットイン自体が公開しているキャラだけ（秘匿ルールは JS 側で守る）。
+       アニメは帯の表示 1.45 秒に収まる 1.1 秒で、ポップインを頭に含む。
+       自分の夜アクションでは相手の顔を小さく右に添える。 */
+    .cutin-char { display: flex; justify-content: center; align-items: flex-end; gap: 22px; margin-bottom: 12px; }
+    .cutin-char.hidden { display: none; }
+    .cutin-face { position: relative; width: 96px; height: 96px; font-size: 3.2rem; line-height: 96px; text-align: center; }
+    .cutin-face.small { width: 54px; height: 54px; font-size: 1.8rem; line-height: 54px; margin-bottom: 6px; animation: cutinPop 0.45s ease both; }
+    @keyframes cutinPop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    /* 種類別モーション（公開カットイン）：attack＝よろめき、bomb＝吹っ飛び、
+       protect＝光って浮く、info＝ピョンと跳ねる、phase＝ゆらゆら。 */
+    .cutin[data-kind="attack"] .cutin-face:not(.small) { animation: cutinFlinch 1.1s ease both; }
+    .cutin[data-kind="bomb"] .cutin-face:not(.small) { animation: cutinBlast 1.1s ease-out both; }
+    .cutin[data-kind="protect"] .cutin-face:not(.small) { animation: cutinFloat 1.1s ease both; }
+    .cutin[data-kind="info"] .cutin-face:not(.small) { animation: cutinHop 1.1s ease both; }
+    .cutin[data-kind="phase"] .cutin-face:not(.small) { animation: cutinSway 1.1s ease-in-out both; }
+    @keyframes cutinFlinch { 0% { transform: scale(0.5) rotate(0deg); opacity: 0; }
+      12% { transform: scale(1.06) rotate(-4deg); opacity: 1; }
+      28% { transform: scale(1) rotate(6deg) translateX(4px); }
+      45% { transform: rotate(-6deg) translateX(-4px); }
+      62% { transform: rotate(3deg); }
+      100% { transform: rotate(-6deg) translateY(3px); opacity: 1; } }
+    @keyframes cutinBlast { 0% { transform: scale(0.5); opacity: 0; }
+      15% { transform: scale(1.05); opacity: 1; }
+      35% { transform: translateY(-26px) scale(1.12); }
+      70% { transform: translateY(-30px) scale(0.98); }
+      100% { transform: translateY(-12px) scale(1.02); opacity: 1; } }
+    @keyframes cutinFloat { 0% { transform: scale(0.5); opacity: 0; filter: none; }
+      15% { transform: scale(1.05); opacity: 1; }
+      50% { transform: translateY(-12px); filter: drop-shadow(0 0 14px rgba(80, 200, 140, 0.95)); }
+      100% { transform: translateY(-4px); filter: drop-shadow(0 0 6px rgba(80, 200, 140, 0.5)); } }
+    @keyframes cutinHop { 0% { transform: scale(0.5); opacity: 0; }
+      15% { transform: scale(1.06); opacity: 1; }
+      35% { transform: translateY(-16px) scale(1.08); }
+      55% { transform: translateY(0) scale(0.96); }
+      75% { transform: translateY(-8px); }
+      100% { transform: translateY(0) scale(1); } }
+    @keyframes cutinSway { 0% { transform: scale(0.5) rotate(0deg); opacity: 0; }
+      15% { transform: scale(1.05); opacity: 1; }
+      35% { transform: rotate(4deg); }
+      60% { transform: rotate(-4deg); }
+      85% { transform: rotate(3deg); }
+      100% { transform: rotate(0deg); } }
+    /* 自分の夜アクションの系統モーション（PR #65 と同じ系統分け）。
+       種類別ルールより後ろに置くので、指定があればこちらが勝つ。 */
+    .cutin-char[data-own="peek"] .cutin-face:not(.small) { animation: cutinOwnPeek 1.1s ease both; }
+    .cutin-char[data-own="guard"] .cutin-face:not(.small) { animation: cutinOwnGuard 1.1s ease both; }
+    .cutin-char[data-own="sneak"] .cutin-face:not(.small) { animation: cutinOwnSneak 1.1s ease both; }
+    .cutin-char[data-own="slash"] .cutin-face:not(.small) { animation: cutinOwnSlash 1.1s ease both; }
+    .cutin-char[data-own="plant"] .cutin-face:not(.small) { animation: cutinOwnPlant 1.1s ease both; }
+    @keyframes cutinOwnPeek { 0% { transform: scale(0.5) rotate(0deg); opacity: 0; filter: none; }
+      15% { transform: scale(1.06) rotate(2deg); opacity: 1; }
+      40% { transform: scale(1.08) rotate(4deg); filter: drop-shadow(0 0 12px rgba(255, 200, 60, 0.95)); }
+      75% { transform: scale(1.08) rotate(4deg); filter: drop-shadow(0 0 12px rgba(255, 200, 60, 0.95)); }
+      100% { transform: scale(1) rotate(0deg); filter: none; } }
+    @keyframes cutinOwnGuard { 0% { transform: scale(0.5); opacity: 0; filter: none; }
+      15% { transform: scale(1.06); opacity: 1; }
+      40% { transform: scale(1.08) translateY(-6px); filter: drop-shadow(0 0 12px rgba(80, 200, 255, 0.95)); }
+      75% { transform: scale(1.08) translateY(-6px); filter: drop-shadow(0 0 12px rgba(80, 200, 255, 0.95)); }
+      100% { transform: scale(1); filter: none; } }
+    @keyframes cutinOwnSneak { 0% { transform: scale(0.5, 0.5) translateY(0) rotate(0deg); opacity: 0; }
+      15% { transform: scale(1.05, 1) translateY(0); opacity: 1; }
+      40% { transform: scale(1.04, 0.86) translateY(4px) rotate(-3deg); }
+      75% { transform: scale(1.04, 0.86) translateY(4px) rotate(-3deg); }
+      100% { transform: scale(1, 1) translateY(0) rotate(0deg); } }
+    @keyframes cutinOwnSlash { 0% { transform: scale(0.5) rotate(0deg) translateY(0); opacity: 0; }
+      15% { transform: scale(1.06) rotate(-4deg); opacity: 1; }
+      40% { transform: scale(1.1) rotate(-12deg) translateY(-8px); }
+      75% { transform: scale(1.1) rotate(-12deg) translateY(-8px); }
+      100% { transform: scale(1) rotate(0deg) translateY(0); } }
+    @keyframes cutinOwnPlant { 0% { transform: scale(0.5, 0.5) translateY(0); opacity: 0; filter: none; }
+      15% { transform: scale(1.05, 1) translateY(0); opacity: 1; }
+      40% { transform: scale(1.02, 0.8) translateY(6px); filter: drop-shadow(0 0 9px rgba(224, 123, 42, 0.85)); }
+      75% { transform: scale(1.02, 0.8) translateY(6px); filter: drop-shadow(0 0 9px rgba(224, 123, 42, 0.85)); }
+      100% { transform: scale(1, 1) translateY(0); filter: none; } }
+    @media (max-width: 640px) { .cutin-face { width: 76px; height: 76px; font-size: 2.5rem; line-height: 76px; }
+      .cutin-face.small { width: 44px; height: 44px; font-size: 1.5rem; line-height: 44px; } }
     .shake { animation: shakeAnim 0.45s ease; }
     @keyframes shakeAnim { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px, 2px); } 40% { transform: translate(6px, -2px); } 60% { transform: translate(-4px, 1px); } 80% { transform: translate(3px, -1px); } }
     #confetti { position: fixed; inset: 0; z-index: 55; pointer-events: none; overflow: hidden; }
@@ -459,7 +537,7 @@
     #actionBtn:not(.hidden), #voteBtn:not(.hidden), #nextBtn.vote-ready:not(.hidden) { animation: btnPulse 1.8s ease-in-out infinite; }
     @keyframes btnPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255, 111, 179, 0.45); } 50% { box-shadow: 0 0 0 9px rgba(255, 111, 179, 0); } }
     @media (prefers-reduced-motion: reduce) {
-      .petals span, .confetti-piece, .cutin-band, .card, .log p, .shake, .stage .walker.speaking .wbody,
+      .petals span, .confetti-piece, .cutin-band, .cutin-char, .card, .log p, .shake, .stage .walker.speaking .wbody,
       .stage .walker, .stage .walker .wbody, .stage.flash-red, .speech-bubble,
       .result-row.winner .avatar, .result-row.loser .avatar,
       #actionBtn:not(.hidden), #voteBtn:not(.hidden), #nextBtn.vote-ready:not(.hidden) { animation: none !important; }
@@ -669,6 +747,7 @@
 <div id="confetti" aria-hidden="true"></div>
 <div id="cutin" class="cutin hidden" data-kind="phase" role="status">
   <div class="cutin-band">
+    <div id="cutinChar" class="cutin-char hidden" aria-hidden="true"></div>
     <div id="cutinTitle" class="cutin-title"></div>
     <div id="cutinSub" class="cutin-sub"></div>
   </div>
@@ -2101,7 +2180,8 @@
           trap: ["🪤 罠設置", "info"], revive: ["💉 診察", "protect"]
         }[myType];
         if (meta) showCutin(meta[0], `→ ${target.name}`, meta[1],
-          () => stageOwnActionMotion(me.id, target.id, myType));
+          () => stageOwnActionMotion(me.id, target.id, myType),
+          { charId: me.id, targetCharId: target.id, motion: OWN_ACTION_FAMILIES[myType] });
       } else {
         showCutin("🌙 夜行動", "あなたは静かに夜を過ごした", "phase");
       }
@@ -2111,19 +2191,21 @@
       showCutin("🌙 夜の襲撃", `${state.players[vid].name} が倒れた…`, "attack", () => {
         stageGhostWalker(vid, "motion-flinch");
         stageFlashRed();
-      });
+      }, { charId: vid });
     } else if (state.nightReport?.type === "blocked") {
       showCutin("🛡️ 襲撃は防がれた！", "誰かが守り切った", "protect");
     }
     for (const vid of state.bombReport?.explodedVictims || []) {
       showCutin("💣 爆弾が爆発！", `${state.players[vid].name} が巻き込まれた…`, "bomb",
-        () => stageGhostWalker(vid, "motion-blast"));
+        () => stageGhostWalker(vid, "motion-blast"), { charId: vid });
     }
     if (state.bombReport?.fizzled) showCutin("💣 爆弾は不発だった", "護衛が爆発を防いだ", "protect");
     if (state.trapReport) showCutin("🪤 罠が作動！", "襲撃者が道連れになった", "attack",
-      () => stageGhostWalker(state.trapReport.attackerId, "motion-trap"));
+      () => stageGhostWalker(state.trapReport.attackerId, "motion-trap"),
+      { charId: state.trapReport.attackerId });
     if (state.doctorReport) showCutin("💉 蘇生した！", `${state.players[state.doctorReport.victimId].name} が助かった`, "protect",
-      () => stageEventMotion(state.doctorReport.victimId, "motion-revive"));
+      () => stageEventMotion(state.doctorReport.victimId, "motion-revive"),
+      { charId: state.doctorReport.victimId });
     if (winAfterNight) {
       showCutin(winAfterNight, "", "win");
       celebrate();
@@ -2546,7 +2628,7 @@
     draw();
     sayDialogue(actor.id, `🐭 ${actor.name}「${mouseLine}」`, mouseLine);
     actionLog(formatActionLog("roleReveal", { label: "公開", target: target.name, role: shown.name, faction: shown.faction }));
-    showCutin("🐭 役職公開", `${target.name} は ${shown.name}`, "info");
+    showCutin("🐭 役職公開", `${target.name} は ${shown.name}`, "info", null, { charId: target.id });
   }
 
   // ---- パス＆プレイの議論タイマー（フェーズ4） ----
@@ -2803,7 +2885,7 @@
     ex.deathCause = "追放";
     ex.deathDay = state.day;
     state.executed = ex.id;
-    showCutin("🗳️ 投票結果", `${ex.name} が追放された`, "phase");
+    showCutin("🗳️ 投票結果", `${ex.name} が追放された`, "phase", null, { charId: ex.id });
     actionLog(formatActionLog("voteEliminated", { label: "投票", target: ex.name, votes: max }));
     actionLog(formatActionLog("roleReveal", { label: "投票", target: ex.name, role: ROLES[getPublicRoleKey(ex)].name, faction: ROLES[getPublicRoleKey(ex)].faction }));
 
@@ -2920,8 +3002,26 @@
     fn();
     return null;
   }
-  function showCutin(title, sub, kind, onShow) {
-    cutinQueue.push({ title, sub: sub || "", kind: kind || "phase", onShow: typeof onShow === "function" ? onShow : null });
+  // カットインに載せる顔。カードと同じ顔画像（ICON_IMGS）＋絵文字
+  // フォールバックで、キャラの顔だけを出す（役職は出さない）。
+  function cutinFaceHtml(playerId, small) {
+    const p = state.players[playerId];
+    if (!p) return "";
+    const img = ICON_IMGS[ICON_SLUGS[playerId]];
+    return `<span class="cutin-face${small ? " small" : ""}"><span>${p.icon}</span>${img ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[playerId]}" src="${img}" alt="${p.name}" onerror="this.remove()">` : ""}</span>`;
+  }
+  // opts: { charId, targetCharId, motion }。charId はそのカットイン自体が
+  // 公開しているキャラだけ（被害者・助かった人・マウス公開の本人・追放
+  // された人・自分の夜アクションの自分）。「防がれた」「不発」には付け
+  // ない。motion は自分の夜アクションの役職系統（peek/guard/sneak/
+  // slash/plant）で、種類別モーションより優先される。
+  function showCutin(title, sub, kind, onShow, opts) {
+    const o = opts || {};
+    cutinQueue.push({ title, sub: sub || "", kind: kind || "phase",
+      onShow: typeof onShow === "function" ? onShow : null,
+      charId: typeof o.charId === "number" ? o.charId : null,
+      targetCharId: typeof o.targetCharId === "number" ? o.targetCharId : null,
+      motion: typeof o.motion === "string" ? o.motion : null });
     pumpCutin();
   }
   function pumpCutin() {
@@ -2937,6 +3037,21 @@
     el("cutinTitle").textContent = item.title;
     el("cutinSub").textContent = item.sub;
     if (box.dataset) box.dataset.kind = item.kind;
+    // 顔つきカットイン：charId があれば顔を出し、なければ隠したまま。
+    // 自分の夜アクションは自分の顔（系統モーション付き）＋相手の顔（小）。
+    const charBox = el("cutinChar");
+    if (charBox) {
+      if (item.charId !== null && item.charId !== undefined) {
+        charBox.innerHTML = cutinFaceHtml(item.charId, false)
+          + (item.targetCharId !== null && item.targetCharId !== undefined ? cutinFaceHtml(item.targetCharId, true) : "");
+        if (charBox.dataset) charBox.dataset.own = item.motion || "";
+        charBox.classList.remove("hidden");
+      } else {
+        charBox.innerHTML = "";
+        if (charBox.dataset) charBox.dataset.own = "";
+        charBox.classList.add("hidden");
+      }
+    }
     box.classList.remove("hidden");
     // カットインの表示に合わせて公開イベントのモーションを動かす
     // （キャラモーション第1弾）。キューに溜まった分は順番に表示される
@@ -2952,6 +3067,11 @@
     sfx({ attack: "attack", bomb: "bomb", protect: "protect", info: "pop", phase: "phase" }[item.kind] || "pop");
     const done = () => {
       box.classList.add("hidden");
+      const charBox = el("cutinChar");
+      if (charBox) {
+        charBox.classList.add("hidden");
+        charBox.innerHTML = "";
+      }
       cutinBusy = false;
       pumpCutin();
     };
