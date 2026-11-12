@@ -189,6 +189,28 @@
       .card:hover { transform: translateY(-2px); box-shadow: 0 10px 18px rgba(184, 155, 255, 0.22); }
     }
     .card.dead { opacity: 0.45; filter: grayscale(0.3); }
+    /* 脱落済みのアイコンにバッテン（✕）を重ねる：薄くなるだけでは
+       ぱっと見で脱落と分かりにくいため。結果画面の行アイコンも同じ。
+       .avatar は position:relative 済み、顔画像は .avatar-img が
+       absolute で全面なので ::after をその上に重ねる。
+       カード全体の opacity(0.45) が掛かる前提で、色は濃いめの
+       --danger＋白い縁取りで読めるようにする。吹き出しはカード側の
+       子要素でアバターとは別なので干渉しない。 */
+    .card.dead .avatar::after, .result-row.dead .avatar::after {
+      content: "✕";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      color: var(--danger);
+      font-size: 2.2rem;
+      font-weight: 900;
+      line-height: 1;
+      text-shadow: 0 0 6px #fff, 0 0 2px #fff;
+      pointer-events: none;
+    }
     .card.selected { outline: 3px solid var(--pink); box-shadow: 0 0 0 5px rgba(255, 111, 179, 0.18), 0 10px 18px rgba(184, 155, 255, 0.22); }
     .card.voted::after {
       content: "投票済";
@@ -592,6 +614,7 @@
       .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .card { min-height: 0; padding: 8px; border-radius: 12px; display: flex; align-items: center; gap: 8px; text-align: left; }
       .card .avatar { width: 40px; height: 40px; font-size: 1.2rem; margin: 0; flex: 0 0 auto; }
+      .card.dead .avatar::after, .result-row.dead .avatar::after { font-size: 1.5rem; }
       .card-main { min-width: 0; }
       .avatar { width: 52px; height: 52px; font-size: 1.5rem; }
       .name { font-size: 0.92rem; }

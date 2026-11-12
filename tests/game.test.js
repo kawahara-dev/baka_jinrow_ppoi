@@ -1946,3 +1946,33 @@ test("キャラモーション第2弾：パス＆プレイの投票選択では�
       "投票の選択で夜のモーションが出てはいけない");
   }
 });
+
+test("脱落アイコンのバッテン：脱落カードと結果行のアバターに ✕ が重なる", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  // ゲーム画面のカードと結果画面の行、両方に ✕ のルールがある
+  // （::after の描画自体はハーネスでは見えないため静的に確認する）。
+  assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{[^}]*content: "✕"/);
+  assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{[^}]*color: var\(--danger\)/);
+  assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{[^}]*z-index: 2/);
+  // スマホ（アバター40px）では ✕ を小さくする
+  assert.match(style, /\.card\.dead \.avatar::after, \.result-row\.dead \.avatar::after \{ font-size: 1\.5rem; \}/);
+  // 生存者のカードには dead クラスが付かず、脱落すると付く
+  // （✕ は dead クラス経由でのみ出るので、生存者には出ない）。
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const target = s.players.find((p) => p.alive && p.id !== s.playerId);
+  const card = elements.get("cards").children[target.id];
+  assert.ok(!card.className.includes("dead"), "生存中のカードに dead クラスが付いてはいけない");
+  target.alive = false;
+  FB.draw();
+  const deadCard = elements.get("cards").children[target.id];
+  assert.ok(deadCard.className.includes("dead"), "脱落したカードに dead クラスが付く");
+  assert.ok(deadCard.innerHTML.includes('class="avatar"'), "脱落カードにアバターがある（✕ を重ねる対象）");
+  // ドクター蘇生で生き返れば dead クラスが外れて ✕ も消える
+  target.alive = true;
+  FB.draw();
+  const revivedCard = elements.get("cards").children[target.id];
+  assert.ok(!revivedCard.className.includes("dead"), "蘇生したカードから dead クラスが外れる");
+});
