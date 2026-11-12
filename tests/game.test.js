@@ -16,6 +16,9 @@ function resetToVillagers(FB) {
   s.players.forEach((p) => {
     p.roleKey = "villager";
     p.fakeDisplayRoleKey = null;
+    // 隠し個体フラグも落とす（役職を固定するテストで占い師の判定が
+    // ズレないようにする）。
+    p.clumsy = false;
     p.alive = true;
     p.suspicion = 0;
   });
@@ -86,7 +89,8 @@ function playPnpVote(FB, elements) {
       throw new Error(`投票入力の想定外のステップ: ${s.pnpStep}`);
     }
   }
-  assert.ok(s.phase === "night" || s.phase === "end", `投票が解決されなかった: ${s.phase} / ${s.pnpStep}`);
+  // 投票で最後の人間が追放された場合、夜は人間なしで即解決され朝になる。
+  assert.ok(["night", "morning", "end"].includes(s.phase), `投票が解決されなかった: ${s.phase} / ${s.pnpStep}`);
 }
 
 function playFullGame(FB, elements, maxDays = 40) {
@@ -400,6 +404,191 @@ test("resolveNightActions: バカの占い結果は偽物（両方の判定が�
   assert.ok(results.has("フェイク"));
 });
 
+test("roleHtmlFor: バカには表示役職だけを見せ、「バカ」「偽表示」は出ない", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const me = humanOf(FB);
+  me.roleKey = "baka";
+  me.fakeDisplayRoleKey = "guardian";
+  const html = FB.roleHtmlFor(me);
+  assert.ok(html.includes("守り手"), `表示役職が出る: ${html}`);
+  assert.ok(!html.includes("バカ"), `バカの文言が出ない: ${html}`);
+  assert.ok(!html.includes("偽表示"), `偽表示の文言が出ない: ${html}`);
+  // 占い師表示のバカも同じ（説明・ヒントは表示役職のもの）。
+  me.fakeDisplayRoleKey = "apprenticeSeer";
+  const seerHtml = FB.roleHtmlFor(me);
+  assert.ok(seerHtml.includes("見習い占い師"));
+  assert.ok(!seerHtml.includes("バカ"));
+  // バカ以外は従来通り自分の役職が出る。
+  me.roleKey = "tracker";
+  me.fakeDisplayRoleKey = null;
+  assert.ok(FB.roleHtmlFor(me).includes("追跡係"));
+});
+
+test("役職カードとフェーズヒント: バカは表示役職として見える", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const me = humanOf(FB);
+  me.roleKey = "baka";
+  me.fakeDisplayRoleKey = "apprenticeSeer";
+  s.phase = "night";
+  FB.updateInGameRoleCard();
+  assert.equal(elements.get("roleCardName").textContent, "見習い占い師");
+  assert.equal(elements.get("roleCardFaction").textContent, "ピュア");
+  assert.ok(!FB.getPhaseHint(FB.ROLES[me.roleKey]).includes("偽表示"), "ヒントに偽表示の文言は出ない");
+  assert.match(FB.getPhaseHint(FB.ROLES[me.roleKey]), /調査/);
+  // 村ガール表示のバカも表示役職のカードになる。
+  me.fakeDisplayRoleKey = "villager";
+  FB.updateInGameRoleCard();
+  assert.equal(elements.get("roleCardName").textContent, "村ガール");
+});
+
+test("公開情報: 脱落したバカは表示役職として公開される", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  const baka = others[0];
+  baka.roleKey = "baka";
+  baka.fakeDisplayRoleKey = "guardian";
+  const fake = others[1];
+  fake.roleKey = "fakeGirl";
+  const s = craftNight(FB, { [fake.id]: baka.id });
+  FB.resolveNightActions(me, baka, FB.state.players.filter((p) => p.alive));
+  assert.equal(baka.alive, false);
+  const lines = elements.get("actionLog").children.map((c) => c.textContent);
+  const reveal = lines.find((l) => l.includes("役職:"));
+  assert.ok(reveal, `公開ログがある: ${lines.join(" / ")}`);
+  assert.ok(reveal.includes("守り手"), `表示役職で公開される: ${reveal}`);
+  assert.ok(!reveal.includes("バカ"), `実役職は出ない: ${reveal}`);
+  // カードの表示も表示役職。
+  FB.draw();
+  const card = elements.get("cards").children[baka.id];
+  assert.ok(card.innerHTML.includes("守り手"), `カードも表示役職: ${card.innerHTML}`);
+  assert.ok(!card.innerHTML.includes("バカ"));
+  assert.equal(FB.getPublicRoleKey(baka), "guardian");
+});
+
+test("revealMouse: バカを公開しても表示役職が出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  const me = humanOf(FB);
+  me.roleKey = "mouse";
+  const baka = others[0];
+  baka.roleKey = "baka";
+  baka.fakeDisplayRoleKey = "tracker";
+  FB.revealMouse(me, baka);
+  assert.equal(FB.state.revealedRoles[baka.id], "tracker");
+  const lines = elements.get("dialogueLog").children.map((c) => c.textContent);
+  assert.ok(lines.some((l) => l.includes("追跡係")), `表示役職で公開される: ${lines.join(" / ")}`);
+  assert.ok(!lines.some((l) => l.includes("バカ")), `実役職は出ない: ${lines.join(" / ")}`);
+});
+
+test("setupGame: うっかり占い師は独立役職ではなく、占い師の隠し個体になった", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.ok(!("clumsySeer" in FB.ROLES), "ROLES に clumsySeer はない");
+  let clumsyGames = 0;
+  const games = 200;
+  for (let i = 0; i < games; i++) {
+    FB.setupGame();
+    const s = FB.state;
+    assert.equal(s.players.filter((p) => p.roleKey === "clumsySeer").length, 0);
+    assert.equal(s.players.filter((p) => p.roleKey === "apprenticeSeer").length, 1);
+    const seer = s.players.find((p) => p.roleKey === "apprenticeSeer");
+    assert.equal(typeof seer.clumsy, "boolean");
+    if (seer.clumsy) clumsyGames++;
+    // バカの表示役職にうっかり占い師は出ない。
+    const baka = s.players.find((p) => p.roleKey === "baka");
+    assert.notEqual(baka.fakeDisplayRoleKey, "clumsySeer");
+  }
+  const rate = clumsyGames / games;
+  assert.ok(rate > 0.2 && rate < 0.5, `うっかり個体の出現率が 30〜40% 目安: ${(rate * 100).toFixed(0)}%`);
+});
+
+test("resolveNightActions: うっかり個体の占い師は判定がズレる（本人には分からない）", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  // うっかり個体：フェイクを調べてもピュア判定が出ることがある。
+  const clumsyResults = new Set();
+  for (let i = 0; i < 60; i++) {
+    FB.setupGame();
+    const others = resetToVillagers(FB);
+    const me = humanOf(FB);
+    me.roleKey = "apprenticeSeer";
+    me.clumsy = true;
+    const fake = others[0];
+    fake.roleKey = "fakeGirl";
+    const s = craftNight(FB, { [me.id]: fake.id });
+    FB.resolveNightActions(me, fake, FB.state.players.filter((p) => p.alive));
+    clumsyResults.add(s.lastInvestigation[me.id].result);
+  }
+  assert.ok(clumsyResults.has("ピュア"), "うっかり個体はフェイクをピュアと誤認する");
+  assert.ok(clumsyResults.has("フェイク"), "うっかり個体でも正しい判定が出ることがある");
+  // 通常の占い師は従来通りフェイクを正しく見抜く（clumsy フラグなし）。
+  for (let i = 0; i < 20; i++) {
+    FB.setupGame();
+    const others = resetToVillagers(FB);
+    const me = humanOf(FB);
+    me.roleKey = "apprenticeSeer";
+    me.clumsy = false;
+    const fake = others[0];
+    fake.roleKey = "fakeGirl";
+    const s = craftNight(FB, { [me.id]: fake.id });
+    FB.resolveNightActions(me, fake, FB.state.players.filter((p) => p.alive));
+    assert.equal(s.lastInvestigation[me.id].result, "フェイク");
+  }
+});
+
+test("showResults: 結果画面でバカと うっかり個体が開示される", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const baka = s.players.find((p) => p.roleKey === "baka");
+  baka.fakeDisplayRoleKey = "guardian";
+  const seer = s.players.find((p) => p.roleKey === "apprenticeSeer");
+  seer.clumsy = true;
+  // 人間をうっかり個体の占い師にして、個人の結果文も確認する。
+  s.playerId = seer.id;
+  FB.showResults("🎉 ピュア陣営の勝利！フェイクを全員追放したよ！");
+  const rows = elements.get("resultRows").innerHTML;
+  assert.ok(rows.includes("バカ（表示：守り手）"), `バカの実役職と表示役職が開示される: ${rows}`);
+  assert.ok(rows.includes("実はうっかり個体でした"), `うっかり個体が開示される: ${rows}`);
+  assert.match(elements.get("resultSub").textContent, /実はうっかり個体でした/);
+});
+
+test("renderStats: 旧セーブの clumsySeer 記録は当時の名前で表示される", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  localStorage.setItem("fakeBloomStats", JSON.stringify({
+    games: 3, wins: 1,
+    byRole: { clumsySeer: { games: 3, wins: 1 }, apprenticeSeer: { games: 2, wins: 0 } },
+    factionWins: { "ピュア": 1 }, steals: 0, streak: 0, bestStreak: 1,
+  }));
+  assert.doesNotThrow(() => FB.renderStats());
+  const chips = elements.get("statsRoles").innerHTML;
+  assert.ok(chips.includes("うっかり占い師：3戦1勝"), `旧記録が表示される: ${chips}`);
+  assert.ok(chips.includes("見習い占い師：2戦0勝"), `現行役職も表示される: ${chips}`);
+});
+
+test("シミュレーション: Feign 式秘匿化でも陣営勝率は目安から大きく崩れない", () => {
+  // 素朴な自動プレイヤーで回す。変更前（2026-11-12 計測）の目安は
+  // ピュア 46.5% / フェイク 53.0% / ボマー 0.5%（200試合）。
+  const counts = { "ピュア": 0, "フェイク": 0, "ニュートラル": 0 };
+  const N = 60;
+  for (let i = 0; i < N; i++) {
+    const { FB, elements } = loadGame({ seedSettings: { fakeCount: "random", bomber: "random", sound: "off", difficulty: "normal" } });
+    const end = playFullGame(FB, elements);
+    assert.equal(end.phase, "end", `試合 #${i} が終わらなかった`);
+    counts[end.winnerFaction]++;
+  }
+  const pure = counts["ピュア"] / N;
+  const fake = counts["フェイク"] / N;
+  const bomber = counts["ニュートラル"] / N;
+  assert.ok(pure >= 0.28 && pure <= 0.68, `ピュア勝率 ${(pure * 100).toFixed(0)}%`);
+  assert.ok(fake >= 0.28 && fake <= 0.68, `フェイク勝率 ${(fake * 100).toFixed(0)}%`);
+  assert.ok(bomber <= 0.15, `ボマー勝率 ${(bomber * 100).toFixed(0)}%`);
+});
+
 test("revealMouse: フェイクを公開すると疑念が上がり、ピュアだと下がる", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   FB.setupGame();
@@ -696,7 +885,8 @@ test("パス＆プレイ: 受け渡し画面で全員の役職を順番に確認
     elements.get("pnpRevealBtn").onclick();
     const roleHtml = elements.get("pnpPlayerRole").innerHTML;
     assert.ok(roleHtml.includes(player.name), "役職画面は本人の名前を示す");
-    assert.ok(roleHtml.includes(FB.ROLES[player.roleKey].name), "役職画面は本人の役職を示す");
+    // バカには表示役職だけが見える（役職画面は表示役職を示す）。
+    assert.ok(roleHtml.includes(FB.ROLES[FB.getEffectiveRoleKey(player)].name), "役職画面は本人の役職を示す");
     elements.get("pnpConfirmBtn").onclick();
     if (i < 2) {
       assert.equal(elements.get("pnpRole").classList.contains("hidden"), true, "確認後は次の人のカバー画面に戻る");
@@ -773,7 +963,7 @@ test("パス＆プレイ フェーズ2: 夜行動の順番入力で人間の対�
     const s = FB.state;
     const humans = s.humanPlayerIds.map((id) => s.players[id]);
     const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
-    s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+    s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; p.clumsy = false; });
     humans[0].roleKey = "apprenticeSeer";
     cpus[0].roleKey = "fakeGirl";
     cpus[1].roleKey = "guardian";

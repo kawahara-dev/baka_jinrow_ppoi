@@ -582,7 +582,7 @@
       <p>・ピュア陣営はフェイク全員追放で勝利、フェイク陣営はピュアと同数以上で勝利。</p>
       <p>・約半分のゲームでは第三勢力「ボマー」も登場。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利するのでご注意。</p>
       <p>・フェイクが1人だけのときは、襲撃に加えて役職の能力（妨害／盗み見）も使える本気モードになる。</p>
-      <p>・一部のピュア役職は「うっかり」で結果がズレることあり！</p>
+      <p>・占い師には結果がズレる個体が混ざることがある（本人にも分からない）。</p>
       <p>・パス＆プレイでは2〜8人で1台の端末を回して遊べます。役職は受け渡し画面で順番に確認し、夜行動と投票はCPUが行います。</p>
     </div>
   </section>
@@ -667,8 +667,7 @@
     <details class="role-guide">
       <summary>役職一覧</summary>
       <ul>
-        <li><strong>見習い占い師（ピュア）</strong>：夜に1人の陣営を調べる。</li>
-        <li><strong>うっかり占い師（ピュア）</strong>：占い結果が45%の確率でランダムにズレる。</li>
+        <li><strong>見習い占い師（ピュア）</strong>：夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。</li>
         <li><strong>守り手（ピュア）</strong>：夜に1人を襲撃や爆発から守る。</li>
         <li><strong>追跡係（ピュア）</strong>：夜に1人が誰を訪ねたか分かる。</li>
         <li><strong>ポリス（ピュア）</strong>：夜に1人の行動を封じる（襲撃そのものは止められない）。</li>
@@ -681,7 +680,7 @@
         <li><strong>フェイクガール（フェイク）</strong>：襲撃しない夜は、ピュア側1人の行動を妨害する。</li>
         <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。襲撃しない夜はピュア側1人の実役職を盗み見する。</li>
         <li><strong>ボマー（ニュートラル）</strong>：約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</li>
-        <li><strong>バカ（ピュア）</strong>：表示された別の役職で行動するが、結果はすべて偽物。脱落時に実役職が公開される。</li>
+        <li><strong>バカ（ピュア）</strong>：本人は別のピュア役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。</li>
       </ul>
       <p style="margin-top:8px;">ピュア側の役職（占い師・バカ以外）は毎ゲーム抽選で、登場しないこともあります。フェイク陣営の襲撃は陣営で1回だけ。</p>
     </details>
@@ -697,7 +696,7 @@
     apprenticeSeer: {
       name: "見習い占い師",
       faction: "ピュア",
-      desc: "夜に1人の陣営を調べる。",
+      desc: "夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。",
       nightActionHint: "怪しい相手を1人選んで調査しよ。",
       resultInterpretation: "表示された陣営をそのまま参考にしてOK。",
       riskNote: "相手が『なりすまし』だと65%でピュア判定に化けることがある。",
@@ -775,15 +774,6 @@
       riskNote: "票の重さから正体を推測されることもある。",
       nightAction: null
     },
-    clumsySeer: {
-      name: "うっかり占い師",
-      faction: "ピュア",
-      desc: "占い結果が時々ランダムにズレる。",
-      nightActionHint: "怪しい相手を調査しつつ、連日の結果で傾向を見る。",
-      resultInterpretation: "判定は参考止まり。複数日の発言・投票と合わせて判断して。",
-      riskNote: "45%の確率で判定がランダム（ピュア/フェイク）に上書きされる。さらに相手が『なりすまし』ならピュア誤認も起こりうる。",
-      nightAction: { type: "investigate", priority: 20, allowSelf: false }
-    },
     villager: {
       name: "村ガール",
       faction: "ピュア",
@@ -823,9 +813,9 @@
     baka: {
       name: "バカ",
       faction: "ピュア",
-      desc: "見た目だけ別のピュア役職として振る舞うトリッキー枠。表示された役職で夜行動できるが、その結果はすべて偽物（FeignのInsane方式）。",
-      nightActionHint: "割り当てられた偽表示役職として夜行動しよう（能力なしのこともある）。ただし結果は信用できない。",
-      resultInterpretation: "夜の結果はすべて偽物。占い判定はランダム、護衛は実際には守れず、追跡情報もデタラメ。脱落時に実役職『バカ』が公開される。",
+      desc: "本人には分からないが、別のピュア役職として振る舞うトリッキー枠。表示された役職で夜行動できるが、その結果はすべて偽物（FeignのInsane方式）。",
+      nightActionHint: "表示された役職として夜行動しよう（能力なしのこともある）。ただし結果は信用できない。",
+      resultInterpretation: "夜の結果はすべて偽物。占い判定はランダム、護衛は実際には守れず、追跡情報もデタラメ。実役職が分かるのは結果画面だけ。",
       riskNote: "自分の結果を根拠に推理すると論理が破綻して疑われる。周りから見ると、結果の矛盾がバカのサイン。",
       nightAction: null
     }
@@ -1030,7 +1020,12 @@
     if (charPool && charPool.length && Math.random() < 0.6) return rand(charPool);
     return rand(genericPool);
   }
-  const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "clumsySeer", "villager", "police", "lookout", "trapper", "doctor", "mouse", "politician"];
+  const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "villager", "police", "lookout", "trapper", "doctor", "mouse", "politician"];
+  // うっかり占い師は独立役職ではなく、見習い占い師の隠し個体。
+  // 占い師のうちこの割合が「うっかり個体」になり、本人にも分からない
+  // まま 45% の確率で判定がランダムに上書きされる。出現率は
+  // シミュレーションで勝率を見ながら調整する（目安 30〜40%）。
+  const CLUMSY_SEER_RATE = 0.35;
 
   let state = {};
 
@@ -1081,6 +1076,12 @@
   function getEffectiveRoleKey(player) {
     if (player.roleKey === "baka") return player.fakeDisplayRoleKey || "villager";
     return player.roleKey;
+  }
+  // ゲーム中の公開情報で見せる役職。バカは結果画面まで表示役職の
+  // まま（脱落時の公開・カード・マウスの公開・盗み見も同じ）で、
+  // うっかり個体の占い師も常にただの見習い占い師として見える。
+  function getPublicRoleKey(player) {
+    return getEffectiveRoleKey(player);
   }
 
   function setupGame() {
@@ -1141,6 +1142,9 @@
         suspicion: 0,
         lastTarget: null,
         fakeDisplayRoleKey: roleBag[i] === "baka" ? rand(INNOCENT_ROLE_KEYS) : null,
+        // 占い師の隠し個体（うっかり）。本人にも他プレイヤーにも分から
+        // ない。結果画面でのみ開示される。
+        clumsy: roleBag[i] === "apprenticeSeer" ? Math.random() < CLUMSY_SEER_RATE : false,
         mouseUsed: false,
         deathCause: null,
         deathDay: null
@@ -1179,13 +1183,13 @@
   // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
   // 受け渡し画面で共通して使う。
   function roleHtmlFor(player) {
-    const r = ROLES[player.roleKey];
-    const fakeRoleName = player.roleKey === "baka" ? ROLES[player.fakeDisplayRoleKey]?.name : null;
+    // バカには表示役職だけを本物として見せる。「バカ」「偽表示」の
+    // 文言は出さない。種明かしは結果画面のみ。
+    const r = ROLES[getEffectiveRoleKey(player)];
     return `
       <strong>${player.name} の役職：${r.name}</strong><br>
       陣営：${r.faction}<br>
       説明：${r.desc}<br>
-      ${fakeRoleName ? `偽表示ロール：${fakeRoleName}<br>` : ""}
       夜の推奨行動：${r.nightActionHint}<br>
       結果の見方：${r.resultInterpretation}<br>
       注意：${r.riskNote}<br>
@@ -1507,12 +1511,9 @@
   }
   function getPhaseHint(role) {
     if (state.phase === "night") {
+      // バカには表示役職のヒントをそのまま出す（偽表示の言及なし）。
       const me = state.players[state.playerId];
-      if (me.roleKey === "baka") {
-        const fakeRole = ROLES[me.fakeDisplayRoleKey];
-        if (fakeRole) return `偽表示ロール「${fakeRole.name}」として行動：${fakeRole.nightActionHint}`;
-      }
-      return role.nightActionHint;
+      return ROLES[getEffectiveRoleKey(me)].nightActionHint;
     }
     if (state.phase === "morning") return "朝の報告を整理して、発言方針を決めよう。";
     if (state.phase === "vote") return "ログと投票履歴から、いちばん矛盾が大きい相手に投票しよ。";
@@ -1523,7 +1524,8 @@
   function updateInGameRoleCard() {
     if (!state.players || !state.players.length) return;
     const me = state.players[state.playerId];
-    const role = ROLES[me.roleKey];
+    // バカの役職カードも表示役職で出す（本人には分からない）。
+    const role = ROLES[getEffectiveRoleKey(me)];
     el("roleCardName").textContent = role.name;
     el("roleCardFaction").textContent = role.faction;
     el("roleCardPhaseHint").textContent = getPhaseHint(role);
@@ -1549,7 +1551,8 @@
       div.style.animationDelay = `${cardIndex++ * 45}ms`;
       div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""}`;
       div.onclick = () => selectTarget(p.id);
-      const revealedRole = p.alive ? "？" : ROLES[p.roleKey].name;
+      // 脱落者のカードも結果画面までバカの実役職は出さない。
+      const revealedRole = p.alive ? "？" : ROLES[getPublicRoleKey(p)].name;
       // カードは div だが選択操作の本体なので、キーボードからも選べるようにする。
       // :focus-visible の枠線は CSS 済み（button/.card/summary）。
       div.setAttribute("role", "button");
@@ -1602,7 +1605,8 @@
 
     if (state.phase === "night") {
       const me = state.players[state.playerId];
-      const canSelectSelf = !!ROLES[me.roleKey].nightAction?.allowSelf;
+      // バカは表示役職として行動するので、自分を選べるかも表示役職で決める。
+      const canSelectSelf = !!ROLES[getEffectiveRoleKey(me)].nightAction?.allowSelf;
       if (id === state.playerId && !canSelectSelf) return;
       // フェイク能力の入力中はフェイクの仲間を選べない（盗み見・妨害の対象は非フェイク）。
       if (state.mode === "pnp" && state.pnpStep === "nightFakeAbility"
@@ -1665,7 +1669,7 @@
           registerAction(p.id, guardTarget);
           if (p.roleKey !== "baka") state.protectedTargets.add(guardTarget);
         }
-      } else if (effectiveRoleKey === "apprenticeSeer" || effectiveRoleKey === "clumsySeer") {
+      } else if (effectiveRoleKey === "apprenticeSeer") {
         const inspectTarget = targetOr(p, p.id === me.id ? target.id
           : gameSettings.difficulty === "hard"
             ? alive.filter(x => x.id !== p.id).sort((a, b) => b.suspicion - a.suspicion)[0]?.id
@@ -1716,7 +1720,7 @@
       const pickBlockTarget = () => {
         const actors = victims.filter(x => ROLES[getEffectiveRoleKey(x)].nightAction);
         if (gameSettings.difficulty === "hard") {
-          const knownSeer = actors.filter(x => ["apprenticeSeer", "clumsySeer"].includes(state.fakeIntel?.[x.id]));
+          const knownSeer = actors.filter(x => state.fakeIntel?.[x.id] === "apprenticeSeer");
           if (knownSeer.length) return rand(knownSeer)?.id;
         }
         return rand(actors.length ? actors : victims)?.id;
@@ -1743,7 +1747,7 @@
         fakeActor = rand(fakeSide);
         const fallbackVictims = alive.filter(x => x.id !== fakeActor.id);
         // The faction prefers victims the mimic has identified as power roles.
-        const intelTargets = gameSettings.difficulty === "easy" ? [] : victims.filter(x => ["apprenticeSeer", "clumsySeer", "guardian", "tracker", "police", "lookout", "doctor", "trapper"].includes(state.fakeIntel?.[x.id]));
+        const intelTargets = gameSettings.difficulty === "easy" ? [] : victims.filter(x => ["apprenticeSeer", "guardian", "tracker", "police", "lookout", "doctor", "trapper"].includes(state.fakeIntel?.[x.id]));
         const pool = intelTargets.length ? intelTargets : victims;
         attackTarget = rand(pool.length ? pool : fallbackVictims)?.id;
       }
@@ -1908,8 +1912,9 @@
         actor.lastTarget = visitors.length ? visitors[0].id : null;
         logFor(actor, `見張り → ${target.name} を訪れた人：${visitors.length ? visitors.map(v => v.name).join("、") : "なし"}`);
       } else if (actionType === "spy") {
-        state.fakeIntel[target.id] = target.roleKey;
-        logFor(actor, `盗み見 → ${target.name} の正体は「${ROLES[target.roleKey].name}」だった。`);
+        // バカの盗み見結果も表示役職（結果画面まで実役職は出さない）。
+        state.fakeIntel[target.id] = getPublicRoleKey(target);
+        logFor(actor, `盗み見 → ${target.name} の正体は「${ROLES[getPublicRoleKey(target)].name}」だった。`);
       } else if (actionType === "protect") {
         if (actor.roleKey !== "baka") state.protectedTargets.add(target.id);
         logFor(actor, formatActionLog("protect", { actor: ROLES[effectiveRoleKey].name, target: target.name }));
@@ -1920,7 +1925,8 @@
           result = Math.random() < 0.5 ? "ピュア" : "フェイク";
         } else {
           if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
-          if (effectiveRoleKey === "clumsySeer" && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+          // うっかり個体の占い師は本人も知らないまま 45% で判定がズレる。
+          if (actor.clumsy && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
         }
         state.lastInvestigation[actor.id] = { targetId: target.id, result };
         logFor(actor, formatActionLog("investigate", { actor: ROLES[effectiveRoleKey].name, target: target.name, result }));
@@ -1972,7 +1978,7 @@
         victim.deathDay = state.day;
         state.nightReport = { type: "eliminated", victimId: victim.id };
         actionLog(formatActionLog("attackEliminated", { target: victim.name }));
-        actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
+        actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[getPublicRoleKey(victim)].name, faction: ROLES[getPublicRoleKey(victim)].faction }));
         // Trapper: a trap on the victim's house takes the attacker down too.
         if (state.trapTargets.has(victim.id) && attackActorId != null) {
           const attacker = state.players[attackActorId];
@@ -1982,7 +1988,7 @@
             attacker.deathDay = state.day;
             state.trapReport = { attackerId: attacker.id, victimId: victim.id };
             actionLog(`🪤 ${victim.name} の家の罠が作動！襲撃者も道連れになった！`);
-            actionLog(formatActionLog("roleReveal", { label: "夜", target: attacker.name, role: ROLES[attacker.roleKey].name, faction: ROLES[attacker.roleKey].faction }));
+            actionLog(formatActionLog("roleReveal", { label: "夜", target: attacker.name, role: ROLES[getPublicRoleKey(attacker)].name, faction: ROLES[getPublicRoleKey(attacker)].faction }));
           }
         }
       } else {
@@ -2000,8 +2006,8 @@
       const spyActor = state.players[state.loneFakeAbility.actorId];
       const spyTarget = state.players[state.loneFakeAbility.targetId];
       if (spyActor && spyTarget) {
-        state.fakeIntel[spyTarget.id] = spyTarget.roleKey;
-        logFor(spyActor, `盗み見 → ${spyTarget.name} の正体は「${ROLES[spyTarget.roleKey].name}」だった。`);
+        state.fakeIntel[spyTarget.id] = getPublicRoleKey(spyTarget);
+        logFor(spyActor, `盗み見 → ${spyTarget.name} の正体は「${ROLES[getPublicRoleKey(spyTarget)].name}」だった。`);
       }
     }
 
@@ -2024,7 +2030,7 @@
         state.bombReport.explodedVictims.push(victim.id);
         state.bombKills = (state.bombKills || 0) + 1;
         actionLog(`💣💥 ${victim.name} が爆発に巻き込まれて倒れた…`);
-        actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[victim.roleKey].name, faction: ROLES[victim.roleKey].faction }));
+        actionLog(formatActionLog("roleReveal", { label: "夜", target: victim.name, role: ROLES[getPublicRoleKey(victim)].name, faction: ROLES[getPublicRoleKey(victim)].faction }));
       }
     }
 
@@ -2083,7 +2089,8 @@
   // and the table reacts to the announcement as if it were true.
   function revealMouse(actor, target) {
     actor.mouseUsed = true;
-    let shownRoleKey = target.roleKey;
+    // バカを公開しても表示役職（結果画面まで実役職は出さない）。
+    let shownRoleKey = getPublicRoleKey(target);
     if (actor.roleKey === "baka") {
       const pool = Object.keys(ROLES).filter(k => k !== "baka");
       shownRoleKey = rand(pool);
@@ -2270,7 +2277,7 @@
     state.executed = ex.id;
     showCutin("🗳️ 投票結果", `${ex.name} が追放された`, "phase");
     actionLog(formatActionLog("voteEliminated", { label: "投票", target: ex.name, votes: max }));
-    actionLog(formatActionLog("roleReveal", { label: "投票", target: ex.name, role: ROLES[ex.roleKey].name, faction: ROLES[ex.roleKey].faction }));
+    actionLog(formatActionLog("roleReveal", { label: "投票", target: ex.name, role: ROLES[getPublicRoleKey(ex)].name, faction: ROLES[getPublicRoleKey(ex)].faction }));
 
     const win = checkWin();
     if (win) {
@@ -2323,18 +2330,20 @@
     el("resultTitle").textContent = winText;
     el("resultSub").textContent = state.mode === "pnp"
       ? `パス＆プレイ（人間${state.humanPlayerIds.length}人）で遊びました。`
-      : `あなたは「${ROLES[me.roleKey].name}」（${ROLES[me.roleKey].faction}）で ${state.myWin ? "勝利！" : "敗北…"}`;
+      : `あなたは「${ROLES[me.roleKey].name}」（${ROLES[me.roleKey].faction}）で ${state.myWin ? "勝利！" : "敗北…"}${me.clumsy ? "（実はうっかり個体でした）" : ""}`;
     el("resultHighlights").innerHTML = buildHighlights().map(h => `<div class="result-highlight">${h}</div>`).join("");
     el("resultRows").innerHTML = state.players.map(p => {
       const role = ROLES[p.roleKey];
       const displayNote = p.roleKey === "baka" && p.fakeDisplayRoleKey ? `（表示：${ROLES[p.fakeDisplayRoleKey].name}）` : "";
+      // 結果画面でのみ種明かしする：うっかり個体だった占い師を開示する。
+      const clumsyNote = p.clumsy ? "（実はうっかり個体でした）" : "";
       const chipClass = role.faction === "ピュア" ? "pure" : role.faction === "フェイク" ? "fake" : "neutral";
       const status = p.alive ? "生存" : `${p.deathDay ?? "?"}日目に脱落${p.deathCause ? `（${p.deathCause}）` : ""}`;
       const img = ICON_IMGS[ICON_SLUGS[p.id]];
       return `<div class="result-row ${p.alive ? "" : "dead"}">
         <div class="avatar"><span>${p.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${p.name}">` : ""}</div>
         <div><div class="result-name">${p.name}${state.mode === "pnp" ? "" : (p.id === state.playerId ? "（あなた）" : "")}<span class="faction-chip ${chipClass}">${role.faction}</span></div>
-        <div class="result-role">${role.name}${displayNote}</div></div>
+        <div class="result-role">${role.name}${displayNote}${clumsyNote}</div></div>
         <div class="result-status">${status}</div>
       </div>`;
     }).join("");
@@ -2434,6 +2443,8 @@
 
   // ---- persistent match records (localStorage) ----
   const STATS_KEY = "fakeBloomStats";
+  // 廃止済み役職の旧戦績データを表示するための名前（現行の ROLES にはない）。
+  const LEGACY_ROLE_NAMES = { clumsySeer: "うっかり占い師" };
   function loadStats() {
     const empty = { games: 0, wins: 0, byRole: {}, factionWins: {}, steals: 0, streak: 0, bestStreak: 0 };
     try {
@@ -2496,7 +2507,9 @@
     summary.textContent = `通算 ${stats.games}戦 ${stats.wins}勝 ${stats.games - stats.wins}敗（勝率 ${rate}%）`;
     rolesBox.innerHTML = Object.entries(stats.byRole)
       .sort((a, b) => b[1].games - a[1].games)
-      .map(([key, v]) => `<span class="stats-chip">${ROLES[key].name}：${v.games}戦${v.wins}勝</span>`)
+      // 廃止済み役職の旧記録（clumsySeer）は当時の名前で表示する。
+      // それ以外は現行の役職表から引く。
+      .map(([key, v]) => `<span class="stats-chip">${ROLES[key]?.name || LEGACY_ROLE_NAMES[key] || key}：${v.games}戦${v.wins}勝</span>`)
       .join("");
     renderAchievements();
   }

@@ -181,7 +181,8 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
 ;globalThis.__FB__ = {
   ROLES, PHASE_META, CHAR_TALK, charTalkPool, pickTalkLine, setupGame, runNight, resolveNightActions, doVote,
   morningToDiscussion, discussionToVote, revealMouse, checkWin,
-  getEffectiveRoleKey, showResults, buildHighlights, gameSettings,
+  getEffectiveRoleKey, getPublicRoleKey, getPhaseHint, updateInGameRoleCard,
+  renderStats, CLUMSY_SEER_RATE, showResults, buildHighlights, gameSettings,
   draw, paintSettings, roleHtmlFor, startHandoff, showPnpCover, showPnpRole,
   startPnpNight, showPnpNightCover, showPnpNightTurn, showPnpNightAction,
   confirmPnpNightAction, advancePnpNight, finishPnpNight,
