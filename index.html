@@ -380,6 +380,18 @@
       line-height: 1.5;
     }
 
+    /* パス＆プレイの議論タイマー（フェーズ4）。 */
+    .discuss-timer {
+      background: linear-gradient(145deg, #fff5fb 0%, #ffe4f2 100%);
+      border: 2px solid #ffb7db;
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.5;
+    }
+
 
     .role-guide {
       margin-top: 12px;
@@ -548,12 +560,27 @@
           <button type="button" data-value="8">8人</button>
         </div>
       </div>
+      <div class="settings-row hidden" id="discussTimerRow">
+        <span class="settings-label">議論タイマー</span>
+        <div class="seg" data-setting="discussTimer" role="group" aria-label="議論タイマー">
+          <button type="button" data-value="0">なし</button>
+          <button type="button" data-value="60">1分</button>
+          <button type="button" data-value="120">2分</button>
+          <button type="button" data-value="180">3分</button>
+        </div>
+      </div>
     </div>
     <div class="stats-panel">
       <div class="stats-head">📊 戦績</div>
       <p id="statsSummary" class="stats-summary">まだ対戦記録がありません</p>
       <div id="statsRoles" class="stats-roles"></div>
       <button id="statsReset" type="button" class="stats-reset">戦績をリセット</button>
+    </div>
+    <div class="stats-panel">
+      <div class="stats-head">📊 パス＆プレイの戦績</div>
+      <p id="pnpStatsSummary" class="stats-summary">まだパス＆プレイの記録がありません</p>
+      <div id="pnpStatsRoles" class="stats-roles"></div>
+      <button id="pnpStatsReset" type="button" class="stats-reset">パス＆プレイの戦績をリセット</button>
     </div>
     <div class="stats-panel achievements-panel">
       <div class="stats-head">🏅 実績</div>
@@ -583,7 +610,7 @@
       <p>・約半分のゲームでは第三勢力「ボマー」も登場。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利するのでご注意。</p>
       <p>・フェイクが1人だけのときは、襲撃に加えて役職の能力（妨害／盗み見）も使える本気モードになる。</p>
       <p>・占い師には結果がズレる個体が混ざることがある（本人にも分からない）。</p>
-      <p>・パス＆プレイでは2〜8人で1台の端末を回して遊べます。役職は受け渡し画面で順番に確認し、夜行動と投票はCPUが行います。</p>
+      <p>・パス＆プレイでは2〜8人で1台の端末を回して遊べます。役職は受け渡し画面で順番に確認し、夜行動と投票も順番に入力します。議論は口頭で行い、タイマー（設定で なし／1分／2分／3分）で時間を計れます。戦績はソロと別に記録されます。</p>
     </div>
   </section>
 
@@ -618,6 +645,7 @@
       <div class="stat"><div>現在フェーズ</div><div id="phaseText" class="phase-title">夜行動</div></div>
       <div class="stat"><div>あなたの陣営</div><strong id="factionText">-</strong></div>
     </div>
+    <div id="discussTimer" class="discuss-timer hidden" aria-live="polite"></div>
     <div id="stage" class="stage" aria-hidden="true"></div>
     <details id="inGameRoleCard" class="player-role-card" open>
       <summary>
@@ -1085,6 +1113,8 @@
   }
 
   function setupGame() {
+    // 前の試合の議論タイマーが残っていれば止める。
+    stopDiscussTimer();
     const fakeCount = gameSettings.fakeCount === "random"
       ? (Math.random() < 0.35 ? 1 : 2)
       : Number(gameSettings.fakeCount);
@@ -2105,6 +2135,64 @@
     stageBounce(actor.id);
   }
 
+  // ---- パス＆プレイの議論タイマー（フェーズ4） ----
+  // 設定（discussTimer 秒）で議論の残り時間を表示する。時間切れでも
+  // 自動で投票へは進まない（口頭の議論を途中で切らないため）。投票への
+  // 合図だけを出し、進むタイミングは人間が決める。
+  let discussTimerId = null;
+  let discussSecondsLeft = 0;
+  function formatDiscussTime(sec) {
+    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  }
+  function renderDiscussTimer() {
+    const box = el("discussTimer");
+    if (!box) return;
+    if (state.mode !== "pnp" || state.phase !== "discussion" || !(Number(gameSettings.discussTimer) > 0)) {
+      box.classList.add("hidden");
+      return;
+    }
+    box.classList.remove("hidden");
+    box.textContent = discussSecondsLeft > 0
+      ? `🗣️ 議論タイマー 残り ${formatDiscussTime(discussSecondsLeft)}`
+      : "⏰ 時間切れ！「議論を終えて投票へ」を押してね";
+  }
+  function discussTimerTick() {
+    if (state.mode !== "pnp" || state.phase !== "discussion") { discussTimerId = null; return; }
+    if (discussSecondsLeft <= 0) { discussTimerId = null; return; }
+    discussSecondsLeft -= 1;
+    if (discussSecondsLeft === 0) {
+      actionLog("⏰ 議論時間が終了しました。投票へ進んでください。");
+      renderDiscussTimer();
+      discussTimerId = null;
+      return;
+    }
+    renderDiscussTimer();
+    discussTimerId = later(discussTimerTick, 1000);
+  }
+  function startDiscussTimer() {
+    stopDiscussTimer();
+    const seconds = Number(gameSettings.discussTimer) || 0;
+    if (state.mode !== "pnp" || state.phase !== "discussion" || seconds <= 0) return;
+    discussSecondsLeft = seconds;
+    renderDiscussTimer();
+    discussTimerId = later(discussTimerTick, 1000);
+  }
+  function stopDiscussTimer() {
+    if (discussTimerId && typeof clearTimeout === "function") clearTimeout(discussTimerId);
+    discussTimerId = null;
+    discussSecondsLeft = 0;
+    const box = el("discussTimer");
+    if (box) box.classList.add("hidden");
+  }
+
+  // パス＆プレイの議論で発言する CPU の上限（フェーズ4）。人間は口頭で
+  // 議論するため、人間が多いほど CPU のセリフを減らす。2人→4、3人→3、
+  // 4人→2、5人以上→1。ソロでは使わない（全員が発言する）。
+  function pnpCpuTalkCap() {
+    if (state.mode !== "pnp") return Infinity;
+    return Math.max(1, 6 - state.humanPlayerIds.length);
+  }
+
   function morningToDiscussion() {
     if (state.phase !== "morning") return;
     state.phase = "discussion";
@@ -2144,10 +2232,15 @@
       return "low";
     };
     const alivePlayers = state.players.filter(p => p.alive);
-    for (const p of alivePlayers) {
-      // パス＆プレイでは人間の発言は口頭で行う。自動セリフは CPU のみ
-      // （人間の調査結果などが自動セリフで漏れるのを防ぐ）。
-      if (state.mode === "pnp" ? state.humanPlayerIds.includes(p.id) : p.id === state.playerId) continue;
+    // パス＆プレイでは人間の発言は口頭で行う。自動セリフは CPU のみ
+    // （人間の調査結果などが自動セリフで漏れるのを防ぐ）。
+    // フェーズ4：人間が多いほど CPU の発言を減らし、ログが CPU の
+    // セリフで埋め尽くされないようにする。ソロは従来通り全員が発言する。
+    let cpuSpeakers = alivePlayers.filter(p => state.mode === "pnp" ? !state.humanPlayerIds.includes(p.id) : p.id !== state.playerId);
+    if (state.mode === "pnp") {
+      cpuSpeakers = cpuSpeakers.sort(() => Math.random() - 0.5).slice(0, pnpCpuTalkCap());
+    }
+    for (const p of cpuSpeakers) {
       if (getEffectiveRoleKey(p) === "mouse" && !p.mouseUsed && Math.random() < 0.45) {
         const others = alivePlayers.filter(q => q.id !== p.id);
         const tgt = others.slice().sort((a, b) => b.suspicion - a.suspicion)[0];
@@ -2191,10 +2284,13 @@
       dialogueLog(`${p.name}：${line.replaceAll("{target}", nameForLine)}`);
       stageBounce(p.id);
     }
+    // パス＆プレイ（フェーズ4）：設定されていれば議論タイマーを開始する。
+    startDiscussTimer();
   }
 
   function discussionToVote() {
     if (state.phase !== "discussion") return;
+    stopDiscussTimer();
     state.phase = "vote";
     state.players.forEach(p => p.voted = false);
     actionLog(formatActionLog("voteGuide", { label: "投票" }));
@@ -2347,9 +2443,9 @@
         <div class="result-status">${status}</div>
       </div>`;
     }).join("");
-    // パス＆プレイの戦績はソロと分ける（フェーズ4で別キーに分離予定）。
-    // それまではソロの戦績を汚さないよう記録しない。
-    if (state.mode !== "pnp") recordStats(winText);
+    // パス＆プレイの戦績はソロと別キーに記録する（フェーズ4）。
+    if (state.mode === "pnp") recordPnpStats(winText);
+    else recordStats(winText);
     sfx(state.myWin ? "win" : "lose");
     const panel = el("resultPanel");
     panel.classList.remove("hidden");
@@ -2493,7 +2589,65 @@
     saveStats(stats);
     renderStats();
   }
+
+  // ---- パス＆プレイの戦績（フェーズ4）：ソロと別キーに分離 ----
+  // 「誰か1人」の勝敗ではなく、勝った陣営と各人間の役職ごとの戦績を残す。
+  const PNP_STATS_KEY = "fakeBloomPnpStats";
+  function loadPnpStats() {
+    const empty = { games: 0, factionWins: {}, byRole: {} };
+    try {
+      if (typeof localStorage === "undefined") return empty;
+      const parsed = JSON.parse(localStorage.getItem(PNP_STATS_KEY) || "null");
+      if (!parsed || typeof parsed.games !== "number") return empty;
+      return { games: parsed.games, factionWins: parsed.factionWins || {}, byRole: parsed.byRole || {} };
+    } catch {
+      return empty;
+    }
+  }
+  function savePnpStats(stats) {
+    try {
+      if (typeof localStorage === "undefined") return;
+      localStorage.setItem(PNP_STATS_KEY, JSON.stringify(stats));
+    } catch { /* storage unavailable; records are best-effort */ }
+  }
+  function recordPnpStats(winText) {
+    if (state.statsRecorded) return;
+    state.statsRecorded = true;
+    const winnerFaction = state.winnerFaction;
+    const stats = loadPnpStats();
+    stats.games += 1;
+    if (winnerFaction) stats.factionWins[winnerFaction] = (stats.factionWins[winnerFaction] || 0) + 1;
+    for (const id of state.humanPlayerIds) {
+      const p = state.players[id];
+      if (!p) continue;
+      const entry = stats.byRole[p.roleKey] || { games: 0, wins: 0 };
+      entry.games += 1;
+      if (ROLES[p.roleKey].faction === winnerFaction) entry.wins += 1;
+      stats.byRole[p.roleKey] = entry;
+    }
+    savePnpStats(stats);
+    renderPnpStats();
+  }
+  function renderPnpStats() {
+    const stats = loadPnpStats();
+    const summary = el("pnpStatsSummary");
+    const rolesBox = el("pnpStatsRoles");
+    if (!summary || !rolesBox) return;
+    if (stats.games === 0) {
+      summary.textContent = "まだパス＆プレイの記録がありません";
+      rolesBox.innerHTML = "";
+      return;
+    }
+    const w = stats.factionWins || {};
+    summary.textContent = `通算 ${stats.games}戦（ピュア勝利 ${w["ピュア"] || 0}・フェイク勝利 ${w["フェイク"] || 0}・ボマー勝利 ${w["ニュートラル"] || 0}）`;
+    rolesBox.innerHTML = Object.entries(stats.byRole)
+      .sort((a, b) => b[1].games - a[1].games)
+      // 廃止済み役職の旧記録（clumsySeer）は当時の名前で表示する。
+      .map(([key, v]) => `<span class="stats-chip">${ROLES[key]?.name || LEGACY_ROLE_NAMES[key] || key}：${v.games}戦${v.wins}勝</span>`)
+      .join("");
+  }
   function renderStats() {
+    renderPnpStats();
     const stats = loadStats();
     const summary = el("statsSummary");
     const rolesBox = el("statsRoles");
@@ -2554,6 +2708,24 @@
     btn.textContent = "戦績をリセット";
     saveStats({ games: 0, wins: 0, byRole: {}, factionWins: {}, steals: 0, streak: 0, bestStreak: 0 });
     renderStats();
+  };
+  // パス＆プレイの戦績リセット（ソロとは別ボタン・別キー）。
+  let pnpStatsResetArmed = false;
+  el("pnpStatsReset").onclick = () => {
+    const btn = el("pnpStatsReset");
+    if (!pnpStatsResetArmed) {
+      pnpStatsResetArmed = true;
+      btn.textContent = "本当にリセットする？";
+      later(() => {
+        pnpStatsResetArmed = false;
+        btn.textContent = "パス＆プレイの戦績をリセット";
+      }, 3000);
+      return;
+    }
+    pnpStatsResetArmed = false;
+    btn.textContent = "パス＆プレイの戦績をリセット";
+    savePnpStats({ games: 0, factionWins: {}, byRole: {} });
+    renderPnpStats();
   };
   renderStats();
 
@@ -2733,7 +2905,7 @@
   // ---- game settings (title screen; persisted in localStorage) ----
   const SETTINGS_KEY = "fakeBloomSettings";
   const gameSettings = (() => {
-    const fallback = { fakeCount: "random", bomber: "random", sound: "on", difficulty: "normal", bgm: "off", mode: "solo", humanCount: "2" };
+    const fallback = { fakeCount: "random", bomber: "random", sound: "on", difficulty: "normal", bgm: "off", mode: "solo", humanCount: "2", discussTimer: "0" };
     try {
       const raw = typeof localStorage !== "undefined" ? localStorage.getItem(SETTINGS_KEY) : null;
       if (!raw) return { ...fallback };
@@ -2745,7 +2917,8 @@
         difficulty: ["easy", "normal", "hard"].includes(parsed.difficulty) ? parsed.difficulty : fallback.difficulty,
         bgm: ["on", "off"].includes(parsed.bgm) ? parsed.bgm : fallback.bgm,
         mode: ["solo", "pnp"].includes(parsed.mode) ? parsed.mode : fallback.mode,
-        humanCount: ["2", "3", "4", "5", "6", "7", "8"].includes(parsed.humanCount) ? parsed.humanCount : fallback.humanCount
+        humanCount: ["2", "3", "4", "5", "6", "7", "8"].includes(parsed.humanCount) ? parsed.humanCount : fallback.humanCount,
+        discussTimer: ["0", "60", "120", "180"].includes(parsed.discussTimer) ? parsed.discussTimer : fallback.discussTimer
       };
     } catch {
       return { ...fallback };
@@ -2768,6 +2941,9 @@
     // 参加人数はパス＆プレイのときだけ表示する。
     const humanCountRow = document.getElementById("humanCountRow");
     if (humanCountRow) humanCountRow.classList.toggle("hidden", gameSettings.mode !== "pnp");
+    // 議論タイマーもパス＆プレイのときだけ表示する。
+    const discussTimerRow = document.getElementById("discussTimerRow");
+    if (discussTimerRow) discussTimerRow.classList.toggle("hidden", gameSettings.mode !== "pnp");
   }
   document.querySelectorAll(".seg button").forEach(b => {
     b.addEventListener("click", () => {

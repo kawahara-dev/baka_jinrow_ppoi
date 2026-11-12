@@ -190,6 +190,8 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   startPnpVote, showPnpVoteCover, showPnpVoteTurn,
   confirmPnpVoteAction, advancePnpVote, finishPnpVote,
   pnpVoteCurrentPlayer, tallyVotes, cpuVotePick, addVoteTo, selectTarget,
+  pnpCpuTalkCap, startDiscussTimer, stopDiscussTimer, discussTimerTick,
+  recordPnpStats, loadPnpStats, renderPnpStats,
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
 };

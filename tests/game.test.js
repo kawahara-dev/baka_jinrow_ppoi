@@ -930,6 +930,10 @@ test("フルゲーム: パス＆プレイで40日以内に決着し、個人情�
       assert.match(elements.get("resultSub").textContent, /パス＆プレイ/);
       assert.ok(!elements.get("resultRows").innerHTML.includes("（あなた）"), "結果画面に（あなた）が出ない");
       assert.equal(localStorage.getItem("fakeBloomStats"), null, "パス＆プレイでソロ戦績が記録されない");
+      // フェーズ4：パス＆プレイの戦績は別キーに記録される。
+      const pnpStats = JSON.parse(localStorage.getItem("fakeBloomPnpStats"));
+      assert.equal(pnpStats.games, 1, "パス＆プレイの戦績が1戦記録される");
+      assert.ok(["ピュア", "フェイク", "ニュートラル"].includes(Object.keys(pnpStats.factionWins)[0]), "勝った陣営が記録される");
       const actionLines = elements.get("actionLog").children.map((c) => c.textContent);
       for (const line of actionLines) {
         for (const marker of PRIVATE_MARKERS) {
@@ -949,7 +953,7 @@ test("アクセシビリティ: ログは aria-live、設定グループは role
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   assert.match(html, /<div id="dialogueLog" class="log" aria-live="polite">/);
   assert.match(html, /<div id="actionLog" class="log" aria-live="polite">/);
-  for (const label of ["フェイク人数", "効果音", "BGM", "難易度", "ボマー", "遊び方", "参加人数"]) {
+  for (const label of ["フェイク人数", "効果音", "BGM", "難易度", "ボマー", "遊び方", "参加人数", "議論タイマー"]) {
     assert.ok(html.includes(`role="group" aria-label="${label}"`), `${label} の設定グループ`);
   }
 });
@@ -1219,4 +1223,153 @@ test("tallyVotes: 政治家の票は2票分で、パス＆プレイの集計で�
   assert.equal(targetA.deathCause, "追放");
   assert.equal(targetB.alive, true);
   assert.equal(s.phase, "end", "フェイクを追放してピュア陣営の勝利");
+});
+
+test("gameSettings: 議論タイマーの既定値と不正値の扱い", () => {
+  const def = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.equal(def.FB.gameSettings.discussTimer, "0");
+  const timed = loadGame({ seedSettings: { ...BASE_SETTINGS, discussTimer: "120" } });
+  assert.equal(timed.FB.gameSettings.discussTimer, "120");
+  const bad = loadGame({ seedSettings: { ...BASE_SETTINGS, discussTimer: "90" } });
+  assert.equal(bad.FB.gameSettings.discussTimer, "0");
+  // discussTimer キー自体がない古い設定 → 後方互換でなし
+  const legacy = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp" } });
+  assert.equal(legacy.FB.gameSettings.discussTimer, "0");
+});
+
+test("paintSettings: 議論タイマーの行はパス＆プレイのときだけ表示される", () => {
+  const solo = loadGame({ seedSettings: BASE_SETTINGS });
+  solo.FB.paintSettings();
+  assert.equal(solo.elements.get("discussTimerRow").classList.contains("hidden"), true);
+  const pnp = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp" } });
+  pnp.FB.paintSettings();
+  assert.equal(pnp.elements.get("discussTimerRow").classList.contains("hidden"), false);
+});
+
+test("morningToDiscussion: パス＆プレイでは CPU の発言数が人数に応じて減る", () => {
+  const countNewTalkLines = (FB, elements, setup) => {
+    FB.setupGame();
+    setup();
+    const s = FB.state;
+    s.phase = "morning";
+    const before = elements.get("dialogueLog").children.length;
+    FB.morningToDiscussion();
+    assert.equal(s.phase, "discussion");
+    return elements.get("dialogueLog").children.length - before;
+  };
+  // ソロ：CPU 7人全員が発言する（従来通り）。
+  const solo = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.equal(countNewTalkLines(solo.FB, solo.elements, () => {}), 7);
+  // パス＆プレイ2人：上限4人まで（CPU 6人中4人）。
+  const pnp2 = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
+  assert.equal(countNewTalkLines(pnp2.FB, pnp2.elements, () => assert.equal(pnp2.FB.pnpCpuTalkCap(), 4)), 4);
+  // パス＆プレイ6人：上限1人まで（CPU 2人中1人）。
+  const pnp6 = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "6" } });
+  assert.equal(countNewTalkLines(pnp6.FB, pnp6.elements, () => assert.equal(pnp6.FB.pnpCpuTalkCap(), 1)), 1);
+  // パス＆プレイ8人：CPU がいないので発言は0行。
+  const pnp8 = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "8" } });
+  assert.equal(countNewTalkLines(pnp8.FB, pnp8.elements, () => {}), 0);
+});
+
+test("議論タイマー: パス＆プレイの議論で残り時間が表示され、時間切れで投票を促す", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", discussTimer: "60" } });
+  FB.setupGame();
+  const s = FB.state;
+  s.phase = "morning";
+  FB.morningToDiscussion();
+  assert.equal(s.phase, "discussion");
+  const box = elements.get("discussTimer");
+  assert.equal(box.classList.contains("hidden"), false);
+  assert.match(box.textContent, /残り 1:00/);
+  // 59秒進めると残り1秒になる
+  for (let i = 0; i < 59; i++) FB.discussTimerTick();
+  assert.match(box.textContent, /残り 0:01/);
+  // 最後の1秒で時間切れになり、投票を促す（自動では進まない）
+  FB.discussTimerTick();
+  assert.match(box.textContent, /時間切れ/);
+  const lines = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(lines.some((l) => l.includes("議論時間")), `時間切れの合図: ${lines.join(" / ")}`);
+  assert.equal(s.phase, "discussion", "時間切れでも自動で投票へは進まない");
+  // 投票へ進むとタイマー表示が消える
+  FB.discussionToVote();
+  assert.equal(box.classList.contains("hidden"), true);
+  assert.equal(s.phase, "vote");
+});
+
+test("議論タイマー: タイマーなし（既定）では議論中に表示されない", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
+  FB.setupGame();
+  const s = FB.state;
+  s.phase = "morning";
+  FB.morningToDiscussion();
+  assert.equal(elements.get("discussTimer").classList.contains("hidden"), true);
+  // ソロでもタイマー設定があっても表示されない
+  const solo = loadGame({ seedSettings: { ...BASE_SETTINGS, discussTimer: "60" } });
+  solo.FB.setupGame();
+  solo.FB.state.phase = "morning";
+  solo.FB.morningToDiscussion();
+  assert.equal(solo.elements.get("discussTimer").classList.contains("hidden"), true);
+});
+
+test("パス＆プレイ フェーズ4: 戦績は別キーに記録され、ソロ戦績は汚れない", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
+  FB.setupGame();
+  const s = FB.state;
+  const humans = s.humanPlayerIds.map((id) => s.players[id]);
+  // フェイクを全員脱落させてピュア勝利にする
+  s.players.filter((p) => FB.ROLES[p.roleKey].faction === "フェイク").forEach((p) => { p.alive = false; });
+  FB.showResults("🎉 ピュア陣営の勝利！フェイクを全員追放したよ！");
+  assert.equal(s.winnerFaction, "ピュア");
+  assert.equal(localStorage.getItem("fakeBloomStats"), null, "ソロ戦績は記録されない");
+  const pnp = JSON.parse(localStorage.getItem("fakeBloomPnpStats"));
+  assert.equal(pnp.games, 1);
+  assert.equal(pnp.factionWins["ピュア"], 1);
+  for (const h of humans) {
+    const entry = pnp.byRole[h.roleKey];
+    assert.ok(entry && entry.games === 1, `${h.roleKey} の戦績が記録される`);
+    assert.equal(entry.wins, FB.ROLES[h.roleKey].faction === "ピュア" ? 1 : 0);
+  }
+  // タイトル画面のパス＆プレイ戦績パネルに表示される
+  assert.match(elements.get("pnpStatsSummary").textContent, /通算 1戦/);
+  assert.match(elements.get("pnpStatsSummary").textContent, /ピュア勝利 1/);
+  // 2試合目は加算される（フェイク勝利で）
+  FB.setupGame();
+  const s2 = FB.state;
+  s2.players.filter((p) => FB.ROLES[p.roleKey].faction === "ピュア").forEach((p) => { p.alive = false; });
+  FB.showResults("💀 フェイク陣営の勝利…生存者数が同数以上になった。");
+  const pnp2 = JSON.parse(localStorage.getItem("fakeBloomPnpStats"));
+  assert.equal(pnp2.games, 2);
+  assert.equal(pnp2.factionWins["ピュア"], 1);
+  assert.equal(pnp2.factionWins["フェイク"], 1);
+});
+
+test("renderPnpStats: 保存されたパス＆プレイ戦績が表示される", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  localStorage.setItem("fakeBloomPnpStats", JSON.stringify({
+    games: 5, factionWins: { "ピュア": 3, "フェイク": 2 },
+    byRole: { villager: { games: 4, wins: 2 }, fakeGirl: { games: 1, wins: 1 } },
+  }));
+  FB.renderPnpStats();
+  assert.match(elements.get("pnpStatsSummary").textContent, /通算 5戦/);
+  assert.match(elements.get("pnpStatsSummary").textContent, /ピュア勝利 3/);
+  assert.match(elements.get("pnpStatsSummary").textContent, /フェイク勝利 2/);
+  const chips = elements.get("pnpStatsRoles").innerHTML;
+  assert.ok(chips.includes("村ガール：4戦2勝"), `役職チップ: ${chips}`);
+  assert.ok(chips.includes("フェイクガール：1戦1勝"), `役職チップ: ${chips}`);
+  // 記録がない場合は「まだ記録がありません」になる
+  const fresh = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.match(fresh.elements.get("pnpStatsSummary").textContent, /まだパス＆プレイの記録がありません/);
+});
+
+test("フルゲーム: 議論タイマー付きのパス＆プレイでも40日以内に決着する", () => {
+  for (const humanCount of ["2", "6"]) {
+    const { FB, elements, localStorage } = loadGame({
+      seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount, bomber: "on", discussTimer: "60" },
+    });
+    const end = playFullGame(FB, elements);
+    assert.equal(end.phase, "end", `パス＆プレイ ${humanCount}人・タイマー付きが終わらなかった`);
+    assert.ok(end.day <= 40);
+    assert.equal(JSON.parse(localStorage.getItem("fakeBloomPnpStats")).games, 1);
+    assert.equal(localStorage.getItem("fakeBloomStats"), null);
+  }
 });
