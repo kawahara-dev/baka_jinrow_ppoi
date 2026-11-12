@@ -1530,6 +1530,30 @@ test("画面遷移：リトライで役職画面の見出しにフォーカス�
   assert.equal(elements.get("roleScreenTitle")._focused, true);
 });
 
+test("結果画面：タイトルに戻るボタンでタイトルへ戻り、戦績が更新される", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  elements.get("startBtn").onclick();
+  playFullGame(FB, elements);
+  assert.equal(FB.state.phase, "end");
+  // 結果画面ではリトライとタイトルに戻るの両方が出る。
+  assert.equal(elements.get("retryBtn").classList.contains("hidden"), false);
+  assert.equal(elements.get("titleBtn").classList.contains("hidden"), false);
+  // タイトルへ戻るとゲーム画面が隠れ、タイトルが出て戦績が更新される。
+  elements.get("titleBtn").onclick();
+  assert.equal(elements.get("titleScreen").classList.contains("hidden"), false);
+  assert.equal(elements.get("gameScreen").classList.contains("hidden"), true);
+  assert.equal(elements.get("titleBtn").classList.contains("hidden"), true);
+  assert.equal(elements.get("retryBtn").classList.contains("hidden"), true);
+  assert.equal(elements.get("startBtn")._focused, true);
+  assert.match(elements.get("statsSummary").textContent, /通算 1戦/);
+  assert.equal(JSON.parse(localStorage.getItem("fakeBloomStats")).games, 1);
+  // タイトルから START すると新しい試合が始まり、ボタンは隠れたまま。
+  elements.get("startBtn").onclick();
+  assert.equal(FB.state.phase, "night");
+  assert.equal(elements.get("titleBtn").classList.contains("hidden"), true);
+  assert.equal(elements.get("retryBtn").classList.contains("hidden"), true);
+});
+
 test("キャラモーション第1弾：待機の呼吸と公開イベントのモーションCSSがある", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   // 待機の呼吸：ステージの歩行者に歩行＋呼吸の2アニメーション
