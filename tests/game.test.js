@@ -58,7 +58,7 @@ function playPnpNight(FB, elements) {
       elements.get("pnpConfirmBtn").onclick();
     } else if (s.pnpStep === "nightFakeAbility") {
       const player = FB.pnpNightCurrentPlayer();
-      const target = s.players.find((p) => p.alive && p.id !== player.id && FB.ROLES[p.roleKey].faction !== "フェイク");
+      const target = s.players.find((p) => p.alive && p.id !== player.id && FB.ROLES[p.roleKey].faction !== "インポスター");
       s.selectedId = target.id;
       elements.get("actionBtn").onclick();
     } else if (s.pnpStep === "nightAction") {
@@ -134,7 +134,7 @@ function playFullGame(FB, elements, maxDays = 40) {
   return FB.state;
 }
 
-test("setupGame: 8人・バカ1人・占い師1人・フェイク人数が設定通り", () => {
+test("setupGame: 8人・バカ1人・占い師1人・インポスター人数が設定通り", () => {
   for (const fakeCount of ["1", "2"]) {
     const { FB } = loadGame({ seedSettings: { ...BASE_SETTINGS, fakeCount } });
     FB.setupGame();
@@ -151,7 +151,7 @@ test("setupGame: 8人・バカ1人・占い師1人・フェイク人数が設定
     assert.equal(count("bomber"), 0);
     const baka = s.players.find((p) => p.roleKey === "baka");
     assert.ok(FB.ROLES[baka.fakeDisplayRoleKey]);
-    assert.equal(FB.ROLES[baka.fakeDisplayRoleKey].faction, "ピュア");
+    assert.equal(FB.ROLES[baka.fakeDisplayRoleKey].faction, "イノセント");
   }
 });
 
@@ -266,17 +266,17 @@ test("checkWin: 勝敗条件", () => {
   FB.setupGame();
   assert.equal(FB.checkWin(), null);
 
-  // フェイク全滅 → ピュア勝利
-  killAll("フェイク");
-  assert.match(FB.checkWin(), /ピュア陣営の勝利/);
+  // インポスター全滅 → イノセント勝利
+  killAll("インポスター");
+  assert.match(FB.checkWin(), /イノセント陣営の勝利/);
 
-  // ピュアがフェイクと同数以下 → フェイク勝利
+  // イノセントがインポスターと同数以下 → インポスター勝利
   FB.setupGame();
   FB.state.players
-    .filter((p) => FB.ROLES[p.roleKey].faction === "ピュア")
+    .filter((p) => FB.ROLES[p.roleKey].faction === "イノセント")
     .slice(0, 5)
     .forEach((p) => { p.alive = false; });
-  assert.match(FB.checkWin(), /フェイク陣営の勝利/);
+  assert.match(FB.checkWin(), /インポスター陣営の勝利/);
 
   // ボマーだけ生存 → ボマーの単独勝利
   FB.setupGame();
@@ -285,10 +285,10 @@ test("checkWin: 勝敗条件", () => {
     .forEach((p) => { p.alive = false; });
   assert.match(FB.checkWin(), /ボマーの単独勝利/);
 
-  // ボマーが爆弾で2人以上倒して生き残り、フェイク全滅 → 横取り勝利
+  // ボマーが爆弾で2人以上倒して生き残り、インポスター全滅 → 横取り勝利
   FB.setupGame();
   FB.state.bombKills = 2;
-  killAll("フェイク");
+  killAll("インポスター");
   assert.match(FB.checkWin(), /横取り/);
 });
 
@@ -351,7 +351,7 @@ test("resolveNightActions: 罠は襲撃者を道連れにし、ドクターは�
   assert.ok(s.doctorReport);
 });
 
-test("resolveNightActions: 見習い占い師の調査はフェイクを正しく見抜く", () => {
+test("resolveNightActions: 見習い占い師の調査はインポスターを正しく見抜く", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   for (let i = 0; i < 20; i++) {
     FB.setupGame();
@@ -362,12 +362,12 @@ test("resolveNightActions: 見習い占い師の調査はフェイクを正し�
     fake.roleKey = "fakeGirl";
     const s = craftNight(FB, { [me.id]: fake.id });
     FB.resolveNightActions(me, fake, FB.state.players.filter((p) => p.alive));
-    assert.equal(s.lastInvestigation[me.id].result, "フェイク");
+    assert.equal(s.lastInvestigation[me.id].result, "インポスター");
     assert.equal(s.lastInvestigation[me.id].targetId, fake.id);
   }
 });
 
-test("resolveNightActions: なりすましは調査でピュアに化けることがある", () => {
+test("resolveNightActions: なりすましは調査でイノセントに化けることがある", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   const results = new Set();
   for (let i = 0; i < 60; i++) {
@@ -381,9 +381,9 @@ test("resolveNightActions: なりすましは調査でピュアに化けるこ�
     FB.resolveNightActions(me, mimic, FB.state.players.filter((p) => p.alive));
     results.add(s.lastInvestigation[me.id].result);
   }
-  // 65%でピュアに化けるため、両方の結果が出るはず
-  assert.ok(results.has("ピュア"));
-  assert.ok(results.has("フェイク"));
+  // 65%でイノセントに化けるため、両方の結果が出るはず
+  assert.ok(results.has("イノセント"));
+  assert.ok(results.has("インポスター"));
 });
 
 test("resolveNightActions: バカの占い結果は偽物（両方の判定が出る）", () => {
@@ -400,8 +400,8 @@ test("resolveNightActions: バカの占い結果は偽物（両方の判定が�
     FB.resolveNightActions(me, target, FB.state.players.filter((p) => p.alive));
     results.add(s.lastInvestigation[me.id].result);
   }
-  assert.ok(results.has("ピュア"));
-  assert.ok(results.has("フェイク"));
+  assert.ok(results.has("イノセント"));
+  assert.ok(results.has("インポスター"));
 });
 
 test("roleHtmlFor: バカには表示役職だけを見せ、「バカ」「偽表示」は出ない", () => {
@@ -435,7 +435,7 @@ test("役職カードとフェーズヒント: バカは表示役職として見
   s.phase = "night";
   FB.updateInGameRoleCard();
   assert.equal(elements.get("roleCardName").textContent, "見習い占い師");
-  assert.equal(elements.get("roleCardFaction").textContent, "ピュア");
+  assert.equal(elements.get("roleCardFaction").textContent, "イノセント");
   assert.ok(!FB.getPhaseHint(FB.ROLES[me.roleKey]).includes("偽表示"), "ヒントに偽表示の文言は出ない");
   assert.match(FB.getPhaseHint(FB.ROLES[me.roleKey]), /調査/);
   // 村ガール表示のバカも表示役職のカードになる。
@@ -509,7 +509,7 @@ test("setupGame: うっかり占い師は独立役職ではなく、占い師の
 
 test("resolveNightActions: うっかり個体の占い師は判定がズレる（本人には分からない）", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
-  // うっかり個体：フェイクを調べてもピュア判定が出ることがある。
+  // うっかり個体：インポスターを調べてもイノセント判定が出ることがある。
   const clumsyResults = new Set();
   for (let i = 0; i < 60; i++) {
     FB.setupGame();
@@ -523,9 +523,9 @@ test("resolveNightActions: うっかり個体の占い師は判定がズレる�
     FB.resolveNightActions(me, fake, FB.state.players.filter((p) => p.alive));
     clumsyResults.add(s.lastInvestigation[me.id].result);
   }
-  assert.ok(clumsyResults.has("ピュア"), "うっかり個体はフェイクをピュアと誤認する");
-  assert.ok(clumsyResults.has("フェイク"), "うっかり個体でも正しい判定が出ることがある");
-  // 通常の占い師は従来通りフェイクを正しく見抜く（clumsy フラグなし）。
+  assert.ok(clumsyResults.has("イノセント"), "うっかり個体はインポスターをイノセントと誤認する");
+  assert.ok(clumsyResults.has("インポスター"), "うっかり個体でも正しい判定が出ることがある");
+  // 通常の占い師は従来通りインポスターを正しく見抜く（clumsy フラグなし）。
   for (let i = 0; i < 20; i++) {
     FB.setupGame();
     const others = resetToVillagers(FB);
@@ -536,7 +536,7 @@ test("resolveNightActions: うっかり個体の占い師は判定がズレる�
     fake.roleKey = "fakeGirl";
     const s = craftNight(FB, { [me.id]: fake.id });
     FB.resolveNightActions(me, fake, FB.state.players.filter((p) => p.alive));
-    assert.equal(s.lastInvestigation[me.id].result, "フェイク");
+    assert.equal(s.lastInvestigation[me.id].result, "インポスター");
   }
 });
 
@@ -550,7 +550,7 @@ test("showResults: 結果画面でバカと うっかり個体が開示される
   seer.clumsy = true;
   // 人間をうっかり個体の占い師にして、個人の結果文も確認する。
   s.playerId = seer.id;
-  FB.showResults("🎉 ピュア陣営の勝利！フェイクを全員追放したよ！");
+  FB.showResults("🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
   const rows = elements.get("resultRows").innerHTML;
   assert.ok(rows.includes("バカ（表示：守り手）"), `バカの実役職と表示役職が開示される: ${rows}`);
   assert.ok(rows.includes("実はうっかり個体でした"), `うっかり個体が開示される: ${rows}`);
@@ -562,7 +562,7 @@ test("renderStats: 旧セーブの clumsySeer 記録は当時の名前で表示�
   localStorage.setItem("fakeBloomStats", JSON.stringify({
     games: 3, wins: 1,
     byRole: { clumsySeer: { games: 3, wins: 1 }, apprenticeSeer: { games: 2, wins: 0 } },
-    factionWins: { "ピュア": 1 }, steals: 0, streak: 0, bestStreak: 1,
+    factionWins: { "イノセント": 1 }, steals: 0, streak: 0, bestStreak: 1,
   }));
   assert.doesNotThrow(() => FB.renderStats());
   const chips = elements.get("statsRoles").innerHTML;
@@ -572,8 +572,8 @@ test("renderStats: 旧セーブの clumsySeer 記録は当時の名前で表示�
 
 test("シミュレーション: Feign 式秘匿化でも陣営勝率は目安から大きく崩れない", () => {
   // 素朴な自動プレイヤーで回す。変更前（2026-11-12 計測）の目安は
-  // ピュア 46.5% / フェイク 53.0% / ボマー 0.5%（200試合）。
-  const counts = { "ピュア": 0, "フェイク": 0, "ニュートラル": 0 };
+  // イノセント 46.5% / インポスター 53.0% / ボマー 0.5%（200試合）。
+  const counts = { "イノセント": 0, "インポスター": 0, "ニュートラル": 0 };
   const N = 60;
   for (let i = 0; i < N; i++) {
     const { FB, elements } = loadGame({ seedSettings: { fakeCount: "random", bomber: "random", sound: "off", difficulty: "normal" } });
@@ -581,15 +581,15 @@ test("シミュレーション: Feign 式秘匿化でも陣営勝率は目安か
     assert.equal(end.phase, "end", `試合 #${i} が終わらなかった`);
     counts[end.winnerFaction]++;
   }
-  const pure = counts["ピュア"] / N;
-  const fake = counts["フェイク"] / N;
+  const pure = counts["イノセント"] / N;
+  const fake = counts["インポスター"] / N;
   const bomber = counts["ニュートラル"] / N;
-  assert.ok(pure >= 0.28 && pure <= 0.68, `ピュア勝率 ${(pure * 100).toFixed(0)}%`);
-  assert.ok(fake >= 0.28 && fake <= 0.68, `フェイク勝率 ${(fake * 100).toFixed(0)}%`);
+  assert.ok(pure >= 0.28 && pure <= 0.68, `イノセント勝率 ${(pure * 100).toFixed(0)}%`);
+  assert.ok(fake >= 0.28 && fake <= 0.68, `インポスター勝率 ${(fake * 100).toFixed(0)}%`);
   assert.ok(bomber <= 0.15, `ボマー勝率 ${(bomber * 100).toFixed(0)}%`);
 });
 
-test("revealMouse: フェイクを公開すると疑念が上がり、ピュアだと下がる", () => {
+test("revealMouse: インポスターを公開すると疑念が上がり、イノセントだと下がる", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   FB.setupGame();
   const others = resetToVillagers(FB);
@@ -780,7 +780,7 @@ test("フルゲーム: 各種設定で40日以内に必ず決着し、戦績が�
       const { FB, localStorage, elements } = loadGame({ seedSettings: { ...settings, sound: "off" } });
       const end = playFullGame(FB, elements);
       assert.equal(end.phase, "end", `設定 ${JSON.stringify(settings)} #${i} が終わらなかった`);
-      assert.ok(["ピュア", "フェイク", "ニュートラル"].includes(end.winnerFaction));
+      assert.ok(["イノセント", "インポスター", "ニュートラル"].includes(end.winnerFaction));
       assert.ok(end.day <= 40);
       // 結果画面のハイライト欄が空でないこと（フォールバック行でもよい）
       assert.ok(elements.get("resultHighlights").innerHTML.length > 0);
@@ -933,7 +933,7 @@ test("フルゲーム: パス＆プレイで40日以内に決着し、個人情�
       // フェーズ4：パス＆プレイの戦績は別キーに記録される。
       const pnpStats = JSON.parse(localStorage.getItem("fakeBloomPnpStats"));
       assert.equal(pnpStats.games, 1, "パス＆プレイの戦績が1戦記録される");
-      assert.ok(["ピュア", "フェイク", "ニュートラル"].includes(Object.keys(pnpStats.factionWins)[0]), "勝った陣営が記録される");
+      assert.ok(["イノセント", "インポスター", "ニュートラル"].includes(Object.keys(pnpStats.factionWins)[0]), "勝った陣営が記録される");
       const actionLines = elements.get("actionLog").children.map((c) => c.textContent);
       for (const line of actionLines) {
         for (const marker of PRIVATE_MARKERS) {
@@ -953,13 +953,13 @@ test("アクセシビリティ: ログは aria-live、設定グループは role
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   assert.match(html, /<div id="dialogueLog" class="log" aria-live="polite">/);
   assert.match(html, /<div id="actionLog" class="log" aria-live="polite">/);
-  for (const label of ["フェイク人数", "効果音", "BGM", "難易度", "ボマー", "遊び方", "参加人数", "議論タイマー"]) {
+  for (const label of ["インポスター人数", "効果音", "BGM", "難易度", "ボマー", "遊び方", "参加人数", "議論タイマー"]) {
     assert.ok(html.includes(`role="group" aria-label="${label}"`), `${label} の設定グループ`);
   }
 });
 
 test("パス＆プレイ フェーズ2: 夜行動の順番入力で人間の対象が使われ、結果は本人だけに貯まる", () => {
-  // 単独フェイクの妨害で占い師がブロックされる回があるため、妨害されずに
+  // 単独インポスターの妨害で占い師がブロックされる回があるため、妨害されずに
   // 調査が通った回で検証する（妨害の対象は CPU 守り手と占い師からランダム）。
   for (let attempt = 0; attempt < 10; attempt++) {
     const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
@@ -984,7 +984,7 @@ test("パス＆プレイ フェーズ2: 夜行動の順番入力で人間の対�
     assert.equal(FB.pnpNightCurrentPlayer().id, humans[0].id);
     assert.equal(elements.get("pnpTurnBanner").classList.contains("hidden"), false);
     assert.match(elements.get("pnpTurnBanner").textContent, /見習い占い師/);
-    s.selectedId = cpus[0].id; // フェイクを調査
+    s.selectedId = cpus[0].id; // インポスターを調査
     elements.get("actionBtn").onclick();
     assert.equal(s.pnpNightInputs[humans[0].id], cpus[0].id);
     // P2（村ガール）の番：能力なし画面で確認だけ
@@ -997,11 +997,11 @@ test("パス＆プレイ フェーズ2: 夜行動の順番入力で人間の対�
     assert.equal(s.phase, "morning");
     const inv = s.lastInvestigation[humans[0].id];
     if (!inv) continue; // 占い師が妨害された回はやり直し
-    assert.equal(inv.result, "フェイク");
+    assert.equal(inv.result, "インポスター");
     assert.equal(inv.targetId, cpus[0].id);
     // 結果は本人の pnpNightResults に貯まり、公開ログには出ない
     const mine = s.pnpNightResults[humans[0].id] || [];
-    assert.ok(mine.some((m) => m.includes("判定: フェイク")), `本人の結果: ${mine.join(" / ")}`);
+    assert.ok(mine.some((m) => m.includes("判定: インポスター")), `本人の結果: ${mine.join(" / ")}`);
     const lines = elements.get("actionLog").children.map((c) => c.textContent);
     assert.ok(!lines.some((l) => l.includes("判定:")), `調査結果が漏れた: ${lines.join(" / ")}`);
     // 人間の調査は CPU の疑念を上げない（ソロと同じ）
@@ -1020,14 +1020,14 @@ test("パス＆プレイ フェーズ2: 夜結果は次の夜の番で本人だ�
   s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
   humans[0].roleKey = "apprenticeSeer";
   // 前夜の結果が貯まっている状態を作る（解決時の蓄積は別テストで確認）
-  s.pnpNightResults[humans[0].id] = ["見習い占い師 → ルナ → 判定: フェイク"];
+  s.pnpNightResults[humans[0].id] = ["見習い占い師 → ルナ → 判定: インポスター"];
   s.phase = "night";
   FB.startPnpNight();
   assert.equal(s.pnpStep, "nightCover");
   // P1の番：カバー→前夜の結果が本人だけに表示される
   elements.get("pnpRevealBtn").onclick();
   assert.equal(s.pnpStep, "nightResult");
-  assert.match(elements.get("pnpPlayerRole").innerHTML, /判定: フェイク/);
+  assert.match(elements.get("pnpPlayerRole").innerHTML, /判定: インポスター/);
   assert.match(elements.get("pnpRoleTitle").textContent, /前夜の結果/);
   // 結果を見た後は消費される（vm 内の配列なので長さで確認する）
   elements.get("pnpConfirmBtn").onclick();
@@ -1042,7 +1042,7 @@ test("パス＆プレイ フェーズ2: 夜結果は次の夜の番で本人だ�
   assert.ok(!elements.get("pnpPlayerRole").innerHTML.includes("判定:"));
 });
 
-test("パス＆プレイ フェーズ2: フェイク人間の代表者が入力した襲撃先が使われる", () => {
+test("パス＆プレイ フェーズ2: インポスター人間の代表者が入力した襲撃先が使われる", () => {
   const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
   FB.setupGame();
   const s = FB.state;
@@ -1050,7 +1050,7 @@ test("パス＆プレイ フェーズ2: フェイク人間の代表者が入力�
   const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
   s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
   humans[0].roleKey = "fakeGirl";
-  humans[1].roleKey = "mimic"; // フェイク人間2人：代表者は humans[0]
+  humans[1].roleKey = "mimic"; // インポスター人間2人：代表者は humans[0]
   const victim = cpus[0];
   // 受け渡しを全員分進める
   for (let i = 0; i < 2; i++) {
@@ -1084,7 +1084,7 @@ test("パス＆プレイ フェーズ2: フェイク人間の代表者が入力�
   assert.equal(s.nightReport.victimId, victim.id);
 });
 
-test("パス＆プレイ フェーズ3: フェイク仲間の表示に P 番号が付く", () => {
+test("パス＆プレイ フェーズ3: インポスター仲間の表示に P 番号が付く", () => {
   const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
   FB.setupGame();
   const s = FB.state;
@@ -1095,10 +1095,10 @@ test("パス＆プレイ フェーズ3: フェイク仲間の表示に P 番号�
   // P1 の役職画面を開く（受け渡し画面）。
   elements.get("pnpRevealBtn").onclick();
   const roleHtml = elements.get("pnpPlayerRole").innerHTML;
-  assert.ok(roleHtml.includes(`フェイク仲間：P2（${humans[1].name}）`), `仲間確認: ${roleHtml}`);
+  assert.ok(roleHtml.includes(`インポスター仲間：P2（${humans[1].name}）`), `仲間確認: ${roleHtml}`);
 });
 
-test("パス＆プレイ フェーズ3: フェイク非代表者は襲撃先に合意し、能力の対象を入力する", () => {
+test("パス＆プレイ フェーズ3: インポスター非代表者は襲撃先に合意し、能力の対象を入力する", () => {
   const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
   FB.setupGame();
   const s = FB.state;
@@ -1130,9 +1130,9 @@ test("パス＆プレイ フェーズ3: フェイク非代表者は襲撃先に�
   elements.get("pnpConfirmBtn").onclick();
   assert.equal(s.pnpStep, "nightFakeAbility");
   assert.match(elements.get("pnpTurnBanner").textContent, /盗み見/);
-  // フェイクの仲間は能力の対象に選べない
+  // インポスターの仲間は能力の対象に選べない
   FB.selectTarget(humans[0].id);
-  assert.equal(s.selectedId, null, "フェイクの仲間は能力の対象に選べない");
+  assert.equal(s.selectedId, null, "インポスターの仲間は能力の対象に選べない");
   FB.selectTarget(spyTarget.id);
   assert.equal(s.selectedId, spyTarget.id);
   elements.get("actionBtn").onclick();
@@ -1157,7 +1157,7 @@ test("パス＆プレイ フェーズ3: 投票の順番入力で人間の票が�
   const humans = s.humanPlayerIds.map((id) => s.players[id]);
   const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
   s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
-  cpus[0].roleKey = "fakeGirl"; // 夜に襲撃するフェイク（全員村人だと夜1で即勝利するため）
+  cpus[0].roleKey = "fakeGirl"; // 夜に襲撃するインポスター（全員村人だと夜1で即勝利するため）
   // 受け渡しを全員分進める（最後の確認で夜入力が始まる）
   for (let i = 0; i < 3; i++) {
     elements.get("pnpRevealBtn").onclick();
@@ -1167,7 +1167,7 @@ test("パス＆プレイ フェーズ3: 投票の順番入力で人間の票が�
   playPnpNight(FB, elements);
   assert.equal(s.phase, "morning");
   FB.morningToDiscussion();
-  // 投票先：フェイクの CPU を人間全員で狙う。CPU の票も同じ相手へ向くよう
+  // 投票先：インポスターの CPU を人間全員で狙う。CPU の票も同じ相手へ向くよう
   // 疑念を上げておく（難易度 normal のブレ幅 1 より十分大きい）。
   const target = cpus[0];
   target.suspicion = 10;
@@ -1199,7 +1199,7 @@ test("パス＆プレイ フェーズ3: 投票の順番入力で人間の票が�
   // 全員分が終わると集計され、狙った相手が追放される
   assert.equal(target.alive, false);
   assert.equal(target.deathCause, "追放");
-  assert.equal(s.phase, "end", "フェイクを追放してピュア陣営の勝利");
+  assert.equal(s.phase, "end", "インポスターを追放してイノセント陣営の勝利");
 });
 
 test("tallyVotes: 政治家の票は2票分で、パス＆プレイの集計でも反映される", () => {
@@ -1222,7 +1222,7 @@ test("tallyVotes: 政治家の票は2票分で、パス＆プレイの集計で�
   assert.equal(targetA.alive, false);
   assert.equal(targetA.deathCause, "追放");
   assert.equal(targetB.alive, true);
-  assert.equal(s.phase, "end", "フェイクを追放してピュア陣営の勝利");
+  assert.equal(s.phase, "end", "インポスターを追放してイノセント陣営の勝利");
 });
 
 test("gameSettings: 議論タイマーの既定値と不正値の扱い", () => {
@@ -1316,49 +1316,61 @@ test("パス＆プレイ フェーズ4: 戦績は別キーに記録され、ソ�
   FB.setupGame();
   const s = FB.state;
   const humans = s.humanPlayerIds.map((id) => s.players[id]);
-  // フェイクを全員脱落させてピュア勝利にする
-  s.players.filter((p) => FB.ROLES[p.roleKey].faction === "フェイク").forEach((p) => { p.alive = false; });
-  FB.showResults("🎉 ピュア陣営の勝利！フェイクを全員追放したよ！");
-  assert.equal(s.winnerFaction, "ピュア");
+  // インポスターを全員脱落させてイノセント勝利にする
+  s.players.filter((p) => FB.ROLES[p.roleKey].faction === "インポスター").forEach((p) => { p.alive = false; });
+  FB.showResults("🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
+  assert.equal(s.winnerFaction, "イノセント");
   assert.equal(localStorage.getItem("fakeBloomStats"), null, "ソロ戦績は記録されない");
   const pnp = JSON.parse(localStorage.getItem("fakeBloomPnpStats"));
   assert.equal(pnp.games, 1);
-  assert.equal(pnp.factionWins["ピュア"], 1);
+  assert.equal(pnp.factionWins["イノセント"], 1);
   for (const h of humans) {
     const entry = pnp.byRole[h.roleKey];
     assert.ok(entry && entry.games === 1, `${h.roleKey} の戦績が記録される`);
-    assert.equal(entry.wins, FB.ROLES[h.roleKey].faction === "ピュア" ? 1 : 0);
+    assert.equal(entry.wins, FB.ROLES[h.roleKey].faction === "イノセント" ? 1 : 0);
   }
   // タイトル画面のパス＆プレイ戦績パネルに表示される
   assert.match(elements.get("pnpStatsSummary").textContent, /通算 1戦/);
-  assert.match(elements.get("pnpStatsSummary").textContent, /ピュア勝利 1/);
-  // 2試合目は加算される（フェイク勝利で）
+  assert.match(elements.get("pnpStatsSummary").textContent, /イノセント勝利 1/);
+  // 2試合目は加算される（インポスター勝利で）
   FB.setupGame();
   const s2 = FB.state;
-  s2.players.filter((p) => FB.ROLES[p.roleKey].faction === "ピュア").forEach((p) => { p.alive = false; });
-  FB.showResults("💀 フェイク陣営の勝利…生存者数が同数以上になった。");
+  s2.players.filter((p) => FB.ROLES[p.roleKey].faction === "イノセント").forEach((p) => { p.alive = false; });
+  FB.showResults("💀 インポスター陣営の勝利…生存者数が同数以上になった。");
   const pnp2 = JSON.parse(localStorage.getItem("fakeBloomPnpStats"));
   assert.equal(pnp2.games, 2);
-  assert.equal(pnp2.factionWins["ピュア"], 1);
-  assert.equal(pnp2.factionWins["フェイク"], 1);
+  assert.equal(pnp2.factionWins["イノセント"], 1);
+  assert.equal(pnp2.factionWins["インポスター"], 1);
 });
 
 test("renderPnpStats: 保存されたパス＆プレイ戦績が表示される", () => {
   const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
   localStorage.setItem("fakeBloomPnpStats", JSON.stringify({
-    games: 5, factionWins: { "ピュア": 3, "フェイク": 2 },
+    games: 5, factionWins: { "イノセント": 3, "インポスター": 2 },
     byRole: { villager: { games: 4, wins: 2 }, fakeGirl: { games: 1, wins: 1 } },
   }));
   FB.renderPnpStats();
   assert.match(elements.get("pnpStatsSummary").textContent, /通算 5戦/);
-  assert.match(elements.get("pnpStatsSummary").textContent, /ピュア勝利 3/);
-  assert.match(elements.get("pnpStatsSummary").textContent, /フェイク勝利 2/);
+  assert.match(elements.get("pnpStatsSummary").textContent, /イノセント勝利 3/);
+  assert.match(elements.get("pnpStatsSummary").textContent, /インポスター勝利 2/);
   const chips = elements.get("pnpStatsRoles").innerHTML;
   assert.ok(chips.includes("村ガール：4戦2勝"), `役職チップ: ${chips}`);
   assert.ok(chips.includes("フェイクガール：1戦1勝"), `役職チップ: ${chips}`);
   // 記録がない場合は「まだ記録がありません」になる
   const fresh = loadGame({ seedSettings: BASE_SETTINGS });
   assert.match(fresh.elements.get("pnpStatsSummary").textContent, /まだパス＆プレイの記録がありません/);
+});
+
+test("renderPnpStats: 改名前の陣営キー（ピュア／フェイク）で保存された戦績は新陣営名へ読み替える", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  localStorage.setItem("fakeBloomPnpStats", JSON.stringify({
+    games: 5, factionWins: { "ピュア": 3, "フェイク": 2 },
+    byRole: { villager: { games: 4, wins: 2 } },
+  }));
+  FB.renderPnpStats();
+  assert.match(elements.get("pnpStatsSummary").textContent, /イノセント勝利 3/);
+  assert.match(elements.get("pnpStatsSummary").textContent, /インポスター勝利 2/);
+  assert.doesNotMatch(elements.get("pnpStatsSummary").textContent, /ピュア勝利|フェイク勝利/);
 });
 
 test("フルゲーム: 議論タイマー付きのパス＆プレイでも40日以内に決着する", () => {
@@ -1377,7 +1389,7 @@ test("フルゲーム: 議論タイマー付きのパス＆プレイでも40日�
 test("画面遷移：結果画面で見出し（resultTitle）にフォーカスが移る", () => {
   const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
   FB.setupGame();
-  FB.showResults("🎉 ピュア陣営の勝利！フェイクを全員追放したよ！");
+  FB.showResults("🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
   assert.equal(elements.get("resultTitle")._focused, true);
 });
 
@@ -1550,11 +1562,11 @@ test("キャラモーション第1弾：追放でフェードアウトし、結�
   FB.tallyVotes(votes);
   assert.equal(targetA.alive, false);
   assert.equal(targetA.deathCause, "追放");
-  assert.equal(s.phase, "end", "フェイクを追放してピュア陣営の勝利");
+  assert.equal(s.phase, "end", "インポスターを追放してイノセント陣営の勝利");
   // 追放された人のゴーストがフェードアウトする
   assert.equal(stage.children.length, before + 1);
   assert.match(stage.children[stage.children.length - 1].className, /motion-exile/);
-  // 結果画面：勝ったピュア陣営は winner、負けたフェイク陣営は loser
+  // 結果画面：勝ったイノセント陣営は winner、負けたインポスター陣営は loser
   const rows = elements.get("resultRows").innerHTML;
   assert.match(rows, /result-row [^"]*winner/);
   assert.match(rows, /result-row [^"]*loser/);

@@ -583,11 +583,11 @@
       <h1 class="title-main">Fake Bloom</h1>
       <p class="subtitle">— おとぼけ魔女会議 —</p>
     </div>
-    <p>かわいい村で正体隠匿バトル！夜の行動と昼の議論でフェイクを見抜こう。</p>
+    <p>かわいい村で正体隠匿バトル！夜の行動と昼の議論でインポスターを見抜こう。</p>
     <div class="settings-panel" role="group" aria-label="ゲーム設定">
       <div class="settings-row">
-        <span class="settings-label">フェイク人数</span>
-        <div class="seg" data-setting="fakeCount" role="group" aria-label="フェイク人数">
+        <span class="settings-label">インポスター人数</span>
+        <div class="seg" data-setting="fakeCount" role="group" aria-label="インポスター人数">
           <button type="button" data-value="random">ランダム</button>
           <button type="button" data-value="1">1人</button>
           <button type="button" data-value="2">2人</button>
@@ -688,9 +688,9 @@
       <p>・フェーズ順：夜行動 → 朝の報告 → 昼の議論 → 投票。</p>
       <p>・夜の解決順：妨害 → 護衛 → 調査・盗み見 → 爆弾設置 → 追跡・見張り → 襲撃 → 爆発（前日の爆弾）。</p>
       <p>・昼は「報告→議論→投票」を順番に進行し、各フェーズで操作が制限されます。</p>
-      <p>・ピュア陣営はフェイク全員追放で勝利、フェイク陣営はピュアと同数以上で勝利。</p>
+      <p>・イノセント陣営はインポスター全員追放で勝利、インポスター陣営はイノセントと同数以上で勝利。</p>
       <p>・約半分のゲームでは第三勢力「ボマー」も登場。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利するのでご注意。</p>
-      <p>・フェイクが1人だけのときは、襲撃に加えて役職の能力（妨害／盗み見）も使える本気モードになる。</p>
+      <p>・インポスターが1人だけのときは、襲撃に加えて役職の能力（妨害／盗み見）も使える本気モードになる。</p>
       <p>・占い師には結果がズレる個体が混ざることがある（本人にも分からない）。</p>
       <p>・パス＆プレイでは2〜8人で1台の端末を回して遊べます。役職は受け渡し画面で順番に確認し、夜行動と投票も順番に入力します。議論は口頭で行い、タイマー（設定で なし／1分／2分／3分）で時間を計れます。戦績はソロと別に記録されます。</p>
     </div>
@@ -777,22 +777,22 @@
     <details class="role-guide">
       <summary>役職一覧</summary>
       <ul>
-        <li><strong>見習い占い師（ピュア）</strong>：夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。</li>
-        <li><strong>守り手（ピュア）</strong>：夜に1人を襲撃や爆発から守る。</li>
-        <li><strong>追跡係（ピュア）</strong>：夜に1人が誰を訪ねたか分かる。</li>
-        <li><strong>ポリス（ピュア）</strong>：夜に1人の行動を封じる（襲撃そのものは止められない）。</li>
-        <li><strong>見張り役（ピュア）</strong>：夜に1人の家を訪れた全員が分かる。</li>
-        <li><strong>トラッパー（ピュア）</strong>：夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。</li>
-        <li><strong>ドクター（ピュア）</strong>：夜に1人を診察。その人がその夜倒れたら蘇生させる。</li>
-        <li><strong>マウス（ピュア）</strong>：昼に1回だけ、1人の本当の役職を全員に公開できる。</li>
-        <li><strong>政治家（ピュア）</strong>：投票の票が2票分になる。</li>
-        <li><strong>村ガール（ピュア）</strong>：能力なし。議論と投票が主軸。</li>
-        <li><strong>フェイクガール（フェイク）</strong>：襲撃しない夜は、ピュア側1人の行動を妨害する。</li>
-        <li><strong>なりすまし（フェイク）</strong>：調査でピュアに見えることがある。襲撃しない夜はピュア側1人の実役職を盗み見する。</li>
+        <li><strong>見習い占い師（イノセント）</strong>：夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。</li>
+        <li><strong>守り手（イノセント）</strong>：夜に1人を襲撃や爆発から守る。</li>
+        <li><strong>追跡係（イノセント）</strong>：夜に1人が誰を訪ねたか分かる。</li>
+        <li><strong>ポリス（イノセント）</strong>：夜に1人の行動を封じる（襲撃そのものは止められない）。</li>
+        <li><strong>見張り役（イノセント）</strong>：夜に1人の家を訪れた全員が分かる。</li>
+        <li><strong>トラッパー（イノセント）</strong>：夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。</li>
+        <li><strong>ドクター（イノセント）</strong>：夜に1人を診察。その人がその夜倒れたら蘇生させる。</li>
+        <li><strong>マウス（イノセント）</strong>：昼に1回だけ、1人の本当の役職を全員に公開できる。</li>
+        <li><strong>政治家（イノセント）</strong>：投票の票が2票分になる。</li>
+        <li><strong>村ガール（イノセント）</strong>：能力なし。議論と投票が主軸。</li>
+        <li><strong>フェイクガール（インポスター）</strong>：襲撃しない夜は、イノセント側1人の行動を妨害する。</li>
+        <li><strong>なりすまし（インポスター）</strong>：調査でイノセントに見えることがある。襲撃しない夜はイノセント側1人の実役職を盗み見する。</li>
         <li><strong>ボマー（ニュートラル）</strong>：約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</li>
-        <li><strong>バカ（ピュア）</strong>：本人は別のピュア役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。</li>
+        <li><strong>バカ（イノセント）</strong>：本人は別のイノセント役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。</li>
       </ul>
-      <p style="margin-top:8px;">ピュア側の役職（占い師・バカ以外）は毎ゲーム抽選で、登場しないこともあります。フェイク陣営の襲撃は陣営で1回だけ。</p>
+      <p style="margin-top:8px;">イノセント側の役職（占い師・バカ以外）は毎ゲーム抽選で、登場しないこともあります。インポスター陣営の襲撃は陣営で1回だけ。</p>
     </details>
 
   </section>
@@ -805,16 +805,16 @@
   const ROLES = {
     apprenticeSeer: {
       name: "見習い占い師",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。",
       nightActionHint: "怪しい相手を1人選んで調査しよ。",
       resultInterpretation: "表示された陣営をそのまま参考にしてOK。",
-      riskNote: "相手が『なりすまし』だと65%でピュア判定に化けることがある。",
+      riskNote: "相手が『なりすまし』だと65%でイノセント判定に化けることがある。",
       nightAction: { type: "investigate", priority: 20, allowSelf: false }
     },
     guardian: {
       name: "守り手",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "夜に1人を守る。",
       nightActionHint: "襲われそうな子を1人選んでガード。",
       resultInterpretation: "夜の報告で襲撃が防がれたらガード成功の可能性あり。",
@@ -823,7 +823,7 @@
     },
     tracker: {
       name: "追跡係",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "夜に1人が誰を訪ねたか分かる。",
       nightActionHint: "行動が怪しい相手を1人選んで追跡。",
       resultInterpretation: "『誰を訪れたか』は間接情報。単体で黒確定にはしないのがコツ。",
@@ -832,16 +832,16 @@
     },
     police: {
       name: "ポリス",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "夜に1人を訪ねて、その夜の行動を封じる（FeignのPolice方式）。",
       nightActionHint: "能力を使いそうな相手を1人選んで足止め。",
-      resultInterpretation: "妨害した相手はその夜、能力を使えない（調査・護衛・追跡・盗み見・爆弾など）。ただしフェイク陣営の襲撃そのものは止められない。",
+      resultInterpretation: "妨害した相手はその夜、能力を使えない（調査・護衛・追跡・盗み見・爆弾など）。ただしインポスター陣営の襲撃そのものは止められない。",
       riskNote: "味方の能力者を止めると損。相手の役職読みが大事。",
       nightAction: { type: "block", priority: 5, allowSelf: false }
     },
     lookout: {
       name: "見張り役",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "夜に1人の家を見張り、その夜に訪れた全員が分かる（FeignのLookout方式）。",
       nightActionHint: "狙われそうな子や怪しい子の家を見張ろう。",
       resultInterpretation: "訪問者の中に襲撃者や能力者が混ざっている。誰が何をしたかまでは分からない。",
@@ -850,7 +850,7 @@
     },
     trapper: {
       name: "トラッパー",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "夜に1人の家へ罠を設置。その人が襲撃されて倒れたら、襲撃者も道連れになる（FeignのTrapper方式）。",
       nightActionHint: "襲われそうな子の家に罠を仕掛けよう。自分の家にも設置できる。",
       resultInterpretation: "罠が作動したら朝の報告で分かる。罠はその夜かぎり。",
@@ -859,7 +859,7 @@
     },
     doctor: {
       name: "ドクター",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "夜に1人を診察。その人がその夜に襲撃や爆発で倒れたら、朝までに蘇生させる。",
       nightActionHint: "狙われそうな子を診察しておこう。自分も選べる。",
       resultInterpretation: "蘇生が起きると朝の報告で公開される（倒れた人の役職は公開されたまま）。",
@@ -868,16 +868,16 @@
     },
     mouse: {
       name: "マウス",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "能力は昼。ゲーム中1回だけ、議論中に1人の本当の役職を全員に公開できる（FeignのMouse方式）。",
       nightActionHint: "夜は能力なし。昼の議論で公開ボタンのタイミングを計ろう。",
-      resultInterpretation: "公開された役職は確定情報。フェイクがバレれば追放まっしぐら。",
+      resultInterpretation: "公開された役職は確定情報。インポスターがバレれば追放まっしぐら。",
       riskNote: "1回きり。誰を公開するかで勝敗が動く。",
       nightAction: null
     },
     politician: {
       name: "政治家",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "能力は投票。自分の票が常に2票分になる（FeignのPolitician方式）。",
       nightActionHint: "夜は能力なし。昼は投票で決着をつける動きを考えよう。",
       resultInterpretation: "票が割れそうな場面で特に強い。",
@@ -886,7 +886,7 @@
     },
     villager: {
       name: "村ガール",
-      faction: "ピュア",
+      faction: "イノセント",
       desc: "能力なし。議論と投票で戦う。",
       nightActionHint: "夜は情報整理に集中。朝ログと発言の矛盾を探そう。",
       resultInterpretation: "自分の夜結果はないので、他者の報告の整合性がカギ。",
@@ -895,20 +895,20 @@
     },
     fakeGirl: {
       name: "フェイクガール",
-      faction: "フェイク",
-      desc: "フェイク陣営として夜に1人を脱落させる。襲撃しない夜は、ピュア側1人の夜行動を妨害する。",
-      nightActionHint: "仲間と相談した想定で、フェイク陣営として襲撃先を1人に絞る。",
+      faction: "インポスター",
+      desc: "インポスター陣営として夜に1人を脱落させる。襲撃しない夜は、イノセント側1人の夜行動を妨害する。",
+      nightActionHint: "仲間と相談した想定で、インポスター陣営として襲撃先を1人に絞る。",
       resultInterpretation: "襲撃が通れば盤面有利、守られると計画を立て直し。妨害された相手はその夜、能力を使えない。",
       riskNote: "守り手の防衛先に当たると襲撃失敗。襲撃は陣営で1回だけ。",
       nightAction: { type: "attack", priority: 40, allowSelf: false }
     },
     mimic: {
       name: "なりすまし",
-      faction: "フェイク",
-      desc: "調査でピュアに見えることがある。襲撃しない夜は、ピュア側1人の実役職を盗み見る。得た情報は陣営の襲撃先決定に使われる。",
-      nightActionHint: "占いをいなしつつ、フェイク陣営の襲撃先相談に乗る立ち回り。",
-      resultInterpretation: "調査を受けると、相手視点でピュア結果が出る可能性がある。盗み見で占い師や守り手が割れると、優先的に狙われる。",
-      riskNote: "target.roleKey === \"mimic\" のとき65%でピュア判定に化ける。襲撃実行はフェイク陣営で1回だけ。",
+      faction: "インポスター",
+      desc: "調査でイノセントに見えることがある。襲撃しない夜は、イノセント側1人の実役職を盗み見る。得た情報は陣営の襲撃先決定に使われる。",
+      nightActionHint: "占いをいなしつつ、インポスター陣営の襲撃先相談に乗る立ち回り。",
+      resultInterpretation: "調査を受けると、相手視点でイノセント結果が出る可能性がある。盗み見で占い師や守り手が割れると、優先的に狙われる。",
+      riskNote: "target.roleKey === \"mimic\" のとき65%でイノセント判定に化ける。襲撃実行はインポスター陣営で1回だけ。",
       nightAction: { type: "attack", priority: 40, allowSelf: false }
     },
     bomber: {
@@ -917,13 +917,13 @@
       desc: "第三勢力。夜に1人へ爆弾を仕掛け、翌日の夜に爆発する（FeignのBomber方式）。最後の1人になるか、爆弾で2人以上を倒して生き残ると勝利。",
       nightActionHint: "毎晩だれか1人に爆弾を仕掛けよう。自分以外を全員倒せば勝ち。",
       resultInterpretation: "爆弾は護衛されている相手には効かない。占われると『ニュートラル』とバレる。",
-      riskNote: "ピュア・フェイクどちらの勝利条件にも数えられない。両陣営から狙われる孤独な役職。",
+      riskNote: "イノセント・インポスターどちらの勝利条件にも数えられない。両陣営から狙われる孤独な役職。",
       nightAction: { type: "plant", priority: 25, allowSelf: false }
     },
     baka: {
       name: "バカ",
-      faction: "ピュア",
-      desc: "本人には分からないが、別のピュア役職として振る舞うトリッキー枠。表示された役職で夜行動できるが、その結果はすべて偽物（FeignのInsane方式）。",
+      faction: "イノセント",
+      desc: "本人には分からないが、別のイノセント役職として振る舞うトリッキー枠。表示された役職で夜行動できるが、その結果はすべて偽物（FeignのInsane方式）。",
       nightActionHint: "表示された役職として夜行動しよう（能力なしのこともある）。ただし結果は信用できない。",
       resultInterpretation: "夜の結果はすべて偽物。占い判定はランダム、護衛は実際には守れず、追跡情報もデタラメ。実役職が分かるのは結果画面だけ。",
       riskNote: "自分の結果を根拠に推理すると論理が破綻して疑われる。周りから見ると、結果の矛盾がバカのサイン。",
@@ -963,8 +963,8 @@
       },
       tracker: ["昨夜は誰も見なかったなぁ…静かだったよ"],
       observe: ["まだ情報が少ないね。話を聞こうよ", "まずはみんなの話を聞きたいな"],
-      claimFake: ["占いの結果…{target} がフェイクだったよ！", "{target}、占いで黒って出たの。信じて！"],
-      claimWhite: ["{target} は白だったよ！安心してね", "占いでは {target} はピュアだったよ"],
+      claimFake: ["占いの結果…{target} がインポスターだったよ！", "{target}、占いで黒って出たの。信じて！"],
+      claimWhite: ["{target} は白だったよ！安心してね", "占いでは {target} はイノセントだったよ"],
       claimNeutral: ["{target}、どっちでもないみたい…第三勢力かも", "{target} はニュートラル判定だったよ"],
       bomb: ["爆弾って怖いよね…ボマーを早く見つけよう！"],
       guardian: ["昨夜の襲撃、防げてよかったね！"],
@@ -974,7 +974,7 @@
       defense: {
         low: ["{target} は怪しくないの。星がそう言ってるの", "{target} のオーラは白いの"],
         mid: ["{target}、ちょっと影が見えるの…", "{target} の運命、少し曇ってるの"],
-        high: ["{target} の影は真っ黒なの。間違いないの", "星の導きよ…{target} がフェイクなの"]
+        high: ["{target} の影は真っ黒なの。間違いないの", "星の導きよ…{target} がインポスターなの"]
       },
       pressure: {
         low: ["{target} は大丈夫なの。心配ないの", "{target} を疑うのはまだ早いの"],
@@ -983,8 +983,8 @@
       },
       tracker: ["昨夜は誰の気配もなかったの。静かな夜だったの"],
       observe: ["まだ星の声が小さいの。もう少し待つの", "情報が少ないの。様子を見るの"],
-      claimFake: ["占いの水晶が告げたの…{target} がフェイクなの", "私の占いでは {target} は黒なの"],
-      claimWhite: ["{target} は白なの。星が微笑んでるの", "占いでは {target} はピュアなの"],
+      claimFake: ["占いの水晶が告げたの…{target} がインポスターなの", "私の占いでは {target} は黒なの"],
+      claimWhite: ["{target} は白なの。星が微笑んでるの", "占いでは {target} はイノセントなの"],
       claimNeutral: ["{target}、どっちの陣営でもないの。不思議なの", "{target} は第三勢力の気配なの"],
       bomb: ["爆弾の気配…ボマーがいるの、気をつけるの"],
       guardian: ["昨夜の襲撃、誰かが防いだの。よかったの"],
@@ -1003,8 +1003,8 @@
       },
       tracker: ["昨夜は誰も見なかったよぉ。静かだったなぁ"],
       observe: ["まだよくわからないなぁ。話を聞こうよぉ", "様子見でいいかなぁ…"],
-      claimFake: ["占いの結果なんだけどぉ…{target} がフェイクだったよぉ", "{target}、占いで黒って出ちゃったよぉ"],
-      claimWhite: ["{target} は白だったよぉ。よかったねぇ", "占いでは {target} はピュアだったよぉ"],
+      claimFake: ["占いの結果なんだけどぉ…{target} がインポスターだったよぉ", "{target}、占いで黒って出ちゃったよぉ"],
+      claimWhite: ["{target} は白だったよぉ。よかったねぇ", "占いでは {target} はイノセントだったよぉ"],
       claimNeutral: ["{target}、どっちでもないみたいだよぉ…", "{target} は第三勢力かもぉ…"],
       bomb: ["爆弾って怖いよぉ…ボマー、早く見つけたいなぁ"],
       guardian: ["昨夜の襲撃、防げてよかったよぉ…"],
@@ -1023,8 +1023,8 @@
       },
       tracker: ["昨夜は誰もお見かけしませんでしたわ。静かな夜でした"],
       observe: ["まだ情報が不足していますわ。お話を伺いましょう", "まずは皆様のお話を聞くべきですわね"],
-      claimFake: ["占いの結果ですわ…{target} がフェイクでしたわ", "私の占いでは {target} は黒ですわ"],
-      claimWhite: ["{target} は白でしたわ。ご安心くださいませ", "占いでは {target} はピュアでしたわ"],
+      claimFake: ["占いの結果ですわ…{target} がインポスターでしたわ", "私の占いでは {target} は黒ですわ"],
+      claimWhite: ["{target} は白でしたわ。ご安心くださいませ", "占いでは {target} はイノセントでしたわ"],
       claimNeutral: ["{target}、どちらでもないようですわ。第三勢力かしら", "{target} はニュートラル判定でしたわ"],
       bomb: ["爆弾とは恐ろしいことですわ…ボマーを早く見つけませんと"],
       guardian: ["昨夜の襲撃を防げたのは大きいですわね"],
@@ -1043,8 +1043,8 @@
       },
       tracker: ["昨夜は誰も見てない。静かだった"],
       observe: ["情報が足りない。聞くしかない", "まだ決めるな。様子見だ"],
-      claimFake: ["占いの結果。{target} はフェイクだ", "{target}、黒だ。信じろ"],
-      claimWhite: ["{target} は白だ。安心しろ", "占いでは {target} はピュアだ"],
+      claimFake: ["占いの結果。{target} はインポスターだ", "{target}、黒だ。信じろ"],
+      claimWhite: ["{target} は白だ。安心しろ", "占いでは {target} はイノセントだ"],
       claimNeutral: ["{target} はどっちでもない。第三勢力だ", "{target}、ニュートラル判定だ"],
       bomb: ["爆弾か。ボマーを早く見つける"],
       guardian: ["昨夜の襲撃、防げたのは大きい"],
@@ -1063,8 +1063,8 @@
       },
       tracker: ["昨夜は誰も見なかったなぁ。夢みたいに静かだったよぉ"],
       observe: ["まだよくわからないなぁ。ふわふわしてるよぉ", "様子見がいいかなぁ…雲の流れを見ようよぉ"],
-      claimFake: ["占いの結果なんだけどぉ…{target} がフェイクだったよぉ", "{target}、夢の中で黒って見えたよぉ"],
-      claimWhite: ["{target} は白い雲みたいだったよぉ。よかったねぇ", "占いでは {target} はピュアだったよぉ"],
+      claimFake: ["占いの結果なんだけどぉ…{target} がインポスターだったよぉ", "{target}、夢の中で黒って見えたよぉ"],
+      claimWhite: ["{target} は白い雲みたいだったよぉ。よかったねぇ", "占いでは {target} はイノセントだったよぉ"],
       claimNeutral: ["{target}、どっちでもないみたいだよぉ…不思議な色だよぉ", "{target} は第三勢力かもぉ…"],
       bomb: ["爆弾って怖いなぁ…ボマー、早く見つけたいよぉ"],
       guardian: ["昨夜の襲撃、防げてよかったなぁ…ほっとしたよぉ"],
@@ -1083,8 +1083,8 @@
       },
       tracker: ["昨夜は誰も見なかったよ。静かだったな"],
       observe: ["まだ情報が少ないよ。話を聞こうよ", "まずはみんなの話を聞きたいな"],
-      claimFake: ["占いの結果…{target} がフェイクだったよ！", "{target}、占いで黒って出たよ。信じて！"],
-      claimWhite: ["{target} は白だったよ！安心してね", "占いでは {target} はピュアだったよ"],
+      claimFake: ["占いの結果…{target} がインポスターだったよ！", "{target}、占いで黒って出たよ。信じて！"],
+      claimWhite: ["{target} は白だったよ！安心してね", "占いでは {target} はイノセントだったよ"],
       claimNeutral: ["{target}、どっちでもないみたい…第三勢力かも", "{target} はニュートラル判定だったよ"],
       bomb: ["爆弾って怖すぎる…ボマーを早く見つけようよ！"],
       guardian: ["昨夜の襲撃、防げてよかったね！"],
@@ -1103,8 +1103,8 @@
       },
       tracker: ["昨夜は誰も見なかったわ。静かだったわね"],
       observe: ["まだ情報が少ないわね。話を聞きましょう", "まずは全員の話を聞くべきね"],
-      claimFake: ["占いの結果よ…{target} がフェイクだったわ", "私の占いでは {target} は黒よ"],
-      claimWhite: ["{target} は白だったわ。安心してちょうだい", "占いでは {target} はピュアだったわ"],
+      claimFake: ["占いの結果よ…{target} がインポスターだったわ", "私の占いでは {target} は黒よ"],
+      claimWhite: ["{target} は白だったわ。安心してちょうだい", "占いでは {target} はイノセントだったわ"],
       claimNeutral: ["{target}、どっちの陣営でもないわね。第三勢力かしら", "{target} はニュートラル判定だったわ"],
       bomb: ["爆弾か…ボマーを早く見つけないと全員危ないわ"],
       guardian: ["昨夜の襲撃を防げたのは大きいわね"],
@@ -1170,9 +1170,9 @@
       case "track":
         return `${actor} → ${target} → 訪問先${payload.visitTarget ? payload.visitTarget : "なし"}`;
       case "attackEliminated":
-        return `フェイク陣営 → ${target} → 脱落`;
+        return `インポスター陣営 → ${target} → 脱落`;
       case "attackBlocked":
-        return `フェイク陣営 → ${target} → 防衛成功`;
+        return `インポスター陣営 → ${target} → 防衛成功`;
       case "voteGuide":
         return withLabel(payload.label, "投票 → 対象選択 → 実行");
       case "voteEliminated":
@@ -1228,7 +1228,7 @@
     ].sort(() => Math.random() - 0.5);
     const assignedFakeCount = roleBag.filter(roleKey => fixedFakeRoles.includes(roleKey)).length;
     if (assignedFakeCount !== fakeCount) {
-      console.warn(`[setupGame] フェイク人数ミスマッチ: expected=${fakeCount}, actual=${assignedFakeCount}`, roleBag);
+      console.warn(`[setupGame] インポスター人数ミスマッチ: expected=${fakeCount}, actual=${assignedFakeCount}`, roleBag);
     }
     state = {
       day: 1,
@@ -1368,8 +1368,8 @@
   function pnpNightCurrentPlayer() {
     return state.players[state.pnpNightQueue[state.pnpNightIndex]];
   }
-  // フェイク陣営の人間の中で、襲撃先の入力をする代表者
-  // （人間プレイヤー番号の順で最初の生存中のフェイク人間）。
+  // インポスター陣営の人間の中で、襲撃先の入力をする代表者
+  // （人間プレイヤー番号の順で最初の生存中のインポスター人間）。
   function pnpHumanFakeRep() {
     if (state.mode !== "pnp") return null;
     for (const id of state.humanPlayerIds) {
@@ -1430,12 +1430,12 @@
     const confirmLabel = state.pnpNightIndex + 1 < state.pnpNightQueue.length
       ? "確認した（次の人へ）"
       : "確認した（夜行動を終える）";
-    // フェイク陣営の人間が2人いる場合、襲撃入力は代表者1人だけ。
+    // インポスター陣営の人間が2人いる場合、襲撃入力は代表者1人だけ。
     // 代表者以外は襲撃先の合意確認をしてから、自分の能力（盗み見・妨害）
     // の対象を入力する（設計メモ 3.6、フェーズ3）。
-    // 代表者はキューで他のフェイク人間より前に並ぶため、ここに来る時点で
+    // 代表者はキューで他のインポスター人間より前に並ぶため、ここに来る時点で
     // 代表者の入力は済んでいる。念のため未入力なら従来の相談画面にする。
-    if (ROLES[player.roleKey].faction === "フェイク" && rep && rep.id !== player.id) {
+    if (ROLES[player.roleKey].faction === "インポスター" && rep && rep.id !== player.id) {
       const repInput = state.pnpNightInputs?.[rep.id];
       const repTarget = repInput !== undefined ? state.players[repInput] : null;
       el("pnpCover").classList.add("hidden");
@@ -1443,11 +1443,11 @@
       el("pnpRoleTitle").textContent = "夜行動";
       if (repTarget) {
         state.pnpStep = "nightFakeAgree";
-        el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>フェイクの仲間（${rep.name}）が今夜の襲撃先に <strong>${repTarget.name}</strong> を選びました。<br>この襲撃先で合意しますか？`;
+        el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>インポスターの仲間（${rep.name}）が今夜の襲撃先に <strong>${repTarget.name}</strong> を選びました。<br>この襲撃先で合意しますか？`;
         el("pnpConfirmBtn").textContent = "合意する（能力入力へ）";
       } else {
         state.pnpStep = "nightFakeConsult";
-        el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>フェイクの仲間（${rep.name}）と相談してください。<br>今夜の襲撃先は ${rep.name} が決めます。`;
+        el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>インポスターの仲間（${rep.name}）と相談してください。<br>今夜の襲撃先は ${rep.name} が決めます。`;
         el("pnpConfirmBtn").textContent = "相談した（能力入力へ）";
       }
       focusEl("pnpConfirmBtn");
@@ -1481,7 +1481,7 @@
     if (!banner) return;
     banner.textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番 — ${role.name}：${hintOverride || getPhaseHint(role)}`;
   }
-  // フェイク非代表者の能力入力（フェーズ3）：襲撃の合意確認のあと、
+  // インポスター非代表者の能力入力（フェーズ3）：襲撃の合意確認のあと、
   // 盗み見（なりすまし）・妨害（フェイクガール）の対象を自分で選ぶ。
   // 入力は confirmPnpNightAction と同じ経路で記録される。
   function showPnpFakeAbility() {
@@ -1496,8 +1496,8 @@
     el("factionText").textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番`;
     updatePnpTurnBanner(player, ROLES[player.roleKey],
       isMimic
-        ? "盗み見：相手の本当の役職を調べる（フェイクの仲間は選べないよ）"
-        : "妨害：相手の夜行動を止める（フェイクの仲間は選べないよ）");
+        ? "盗み見：相手の本当の役職を調べる（インポスターの仲間は選べないよ）"
+        : "妨害：相手の夜行動を止める（インポスターの仲間は選べないよ）");
     draw();
     focusEl("phaseText");
   }
@@ -1620,8 +1620,8 @@
 
 
   function getFakeAlliesText(player) {
-    if (!player || ROLES[player.roleKey].faction !== "フェイク") return "";
-    const allies = state.players.filter(p => p.id !== player.id && ROLES[p.roleKey].faction === "フェイク");
+    if (!player || ROLES[player.roleKey].faction !== "インポスター") return "";
+    const allies = state.players.filter(p => p.id !== player.id && ROLES[p.roleKey].faction === "インポスター");
     if (!allies.length) return "なし";
     // パス＆プレイでは仲間確認のため P 番号も付ける（誰と相談すればよいか分かるように）。
     if (state.mode === "pnp") {
@@ -1635,8 +1635,8 @@
 
 
   function getAlliesLineForRole(player) {
-    if (!player || ROLES[player.roleKey].faction !== "フェイク") return "";
-    return `フェイク仲間：${getFakeAlliesText(player)}`;
+    if (!player || ROLES[player.roleKey].faction !== "インポスター") return "";
+    return `インポスター仲間：${getFakeAlliesText(player)}`;
   }
   function getPhaseHint(role) {
     if (state.phase === "night") {
@@ -1737,9 +1737,9 @@
       // バカは表示役職として行動するので、自分を選べるかも表示役職で決める。
       const canSelectSelf = !!ROLES[getEffectiveRoleKey(me)].nightAction?.allowSelf;
       if (id === state.playerId && !canSelectSelf) return;
-      // フェイク能力の入力中はフェイクの仲間を選べない（盗み見・妨害の対象は非フェイク）。
+      // インポスター能力の入力中はインポスターの仲間を選べない（盗み見・妨害の対象は非インポスター）。
       if (state.mode === "pnp" && state.pnpStep === "nightFakeAbility"
-        && ROLES[target.roleKey].faction === "フェイク") return;
+        && ROLES[target.roleKey].faction === "インポスター") return;
       state.selectedId = id;
       draw();
       // パス＆プレイの夜入力中は、自分の番だけ選んだ対象へ寄る
@@ -1868,8 +1868,8 @@
       let attackTarget;
       const humanFakeRep = pnpHumanFakeRep();
       if (humanFakeRep) {
-        // パス＆プレイ：フェイク人間の代表者が入力した襲撃先を使う。
-        // 仲間のフェイクを選んでいたらランダムな被害者に振り替える（ソロと同じ）。
+        // パス＆プレイ：インポスター人間の代表者が入力した襲撃先を使う。
+        // 仲間のインポスターを選んでいたらランダムな被害者に振り替える（ソロと同じ）。
         fakeActor = humanFakeRep;
         const input = state.pnpNightInputs?.[humanFakeRep.id];
         attackTarget = input !== undefined && victims.some(x => x.id === input)
@@ -2069,18 +2069,18 @@
         let result = ROLES[target.roleKey].faction;
         if (actor.roleKey === "baka") {
           // Feign's Insane: a baka's investigation result is entirely fake.
-          result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+          result = Math.random() < 0.5 ? "イノセント" : "インポスター";
         } else {
-          if (target.roleKey === "mimic" && Math.random() < 0.65) result = "ピュア";
+          if (target.roleKey === "mimic" && Math.random() < 0.65) result = "イノセント";
           // うっかり個体の占い師は本人も知らないまま 45% で判定がズレる。
-          if (actor.clumsy && Math.random() < 0.45) result = Math.random() < 0.5 ? "ピュア" : "フェイク";
+          if (actor.clumsy && Math.random() < 0.45) result = Math.random() < 0.5 ? "イノセント" : "インポスター";
         }
         state.lastInvestigation[actor.id] = { targetId: target.id, result };
         logFor(actor, formatActionLog("investigate", { actor: ROLES[effectiveRoleKey].name, target: target.name, result }));
         // 人間の調査結果は本人の判断材料で、CPU の疑念には反映しない
         // （ソロで人間の調査が疑念を上げないのと同じ）。
         const isPrivateInvestigator = state.mode === "pnp" && state.humanPlayerIds.includes(actor.id);
-        if (actor.id !== me.id && !isPrivateInvestigator && result === "フェイク") {
+        if (actor.id !== me.id && !isPrivateInvestigator && result === "インポスター") {
           // Difficulty: CPU investigators build suspicion faster on hard,
           // and sometimes fail to follow up on easy.
           if (gameSettings.difficulty === "hard") target.suspicion += 1.5;
@@ -2321,7 +2321,7 @@
     }
     state.revealedRoles[target.id] = shownRoleKey;
     const shown = ROLES[shownRoleKey];
-    target.suspicion = shown.faction === "ピュア" ? -5 : 8;
+    target.suspicion = shown.faction === "イノセント" ? -5 : 8;
     dialogueLog(`🐭 ${actor.name}「ここでマウス能力！ ${target.name} は… ${shown.name}（${shown.faction}）だよ！」`);
     actionLog(formatActionLog("roleReveal", { label: "公開", target: target.name, role: shown.name, faction: shown.faction }));
     showCutin("🐭 役職公開", `${target.name} は ${shown.name}`, "info");
@@ -2409,12 +2409,12 @@
         high: ["昨夜の動きは怪しさ満点。誰か絶対動いてる","痕跡が残ってた。これは普通じゃない","昨夜、誰か確実に動いてる"]
       },
       observe: {
-        low: ["まだ情報が少ないね","誰がフェイクか全然わからない","今日は様子見でいいかも","初手は慎重にいきたいね","まずは話を聞こう"],
-        mid: ["そろそろ絞っていきたい","このままだとフェイクに有利だよ","票を合わせるのが大事だね","昨夜の結果がヒントになるはず"],
-        high: ["もう決めないと危ない","フェイクはこの中にいる。絶対","外したら終わりが見えるよ","情報は出揃ってきた。あとは決断だけ"]
+        low: ["まだ情報が少ないね","誰がインポスターか全然わからない","今日は様子見でいいかも","初手は慎重にいきたいね","まずは話を聞こう"],
+        mid: ["そろそろ絞っていきたい","このままだとインポスターに有利だよ","票を合わせるのが大事だね","昨夜の結果がヒントになるはず"],
+        high: ["もう決めないと危ない","インポスターはこの中にいる。絶対","外したら終わりが見えるよ","情報は出揃ってきた。あとは決断だけ"]
       },
-      claimFake: ["占いの結果なんだけど…{target} がフェイクだったよ","私の占いでは {target} は黒。信じてほしいな","言いにくいけど、{target} がフェイク判定だった","{target}、昨夜調べたらフェイクだったんだ"],
-      claimWhite: ["{target} は私の占いではピュアだったよ","{target} は白判定。疑うなら他を見て","占いでは {target} はピュア。ひとまず安心かな"],
+      claimFake: ["占いの結果なんだけど…{target} がインポスターだったよ","私の占いでは {target} は黒。信じてほしいな","言いにくいけど、{target} がインポスター判定だった","{target}、昨夜調べたらインポスターだったんだ"],
+      claimWhite: ["{target} は私の占いではイノセントだったよ","{target} は白判定。疑うなら他を見て","占いでは {target} はイノセント。ひとまず安心かな"],
       claimNeutral: ["{target}、どっちの陣営でもなさそう。ニュートラル判定だった","占いの反応が変だった。{target} は第三勢力かも","{target} はボマーの可能性。近づかないで"],
       bomb: ["爆弾とか怖すぎる…ボマーがいるってことだよね","昨夜の爆発、ボマーの仕業だ…","爆弾は次の夜に爆発するらしい。今日仕掛けられたら明日…","ボマーを早く見つけないと全員危ない"],
       guardian: ["（守れてよかった…！）","昨夜の襲撃が防げたのは大きいね","誰かが守り切ったんだね、ナイスガード"],
@@ -2446,13 +2446,13 @@
       const inv = state.lastInvestigation?.[p.id];
       const invTarget = inv ? state.players[inv.targetId] : null;
       let category, lineTarget;
-      if (inv && inv.result === "フェイク" && invTarget?.alive) {
+      if (inv && inv.result === "インポスター" && invTarget?.alive) {
         category = "claimFake"; lineTarget = invTarget;
       } else if (state.bombReport?.explodedVictims?.length && Math.random() < 0.5) {
         category = "bomb";
       } else if (inv && inv.result === "ニュートラル" && invTarget?.alive && Math.random() < 0.5) {
         category = "claimNeutral"; lineTarget = invTarget;
-      } else if (inv && inv.result === "ピュア" && invTarget?.alive && Math.random() < 0.35) {
+      } else if (inv && inv.result === "イノセント" && invTarget?.alive && Math.random() < 0.35) {
         category = "claimWhite"; lineTarget = invTarget;
       } else if (p.roleKey === "guardian" && state.nightReport?.type === "blocked" && Math.random() < 0.45) {
         category = "guardian";
@@ -2614,8 +2614,8 @@
   // End-of-game results: winner, your outcome, and the full roster with
   // real roles, factions, and how each player fell.
   function showResults(winText) {
-    const winnerFaction = winText.includes("ピュア陣営の勝利") ? "ピュア"
-      : winText.includes("フェイク陣営の勝利") ? "フェイク" : "ニュートラル";
+    const winnerFaction = winText.includes("イノセント陣営の勝利") ? "イノセント"
+      : winText.includes("インポスター陣営の勝利") ? "インポスター" : "ニュートラル";
     state.winnerFaction = winnerFaction;
     const me = state.players[state.playerId];
     state.myWin = state.mode === "pnp" ? null : ROLES[me.roleKey].faction === winnerFaction;
@@ -2629,7 +2629,7 @@
       const displayNote = p.roleKey === "baka" && p.fakeDisplayRoleKey ? `（表示：${ROLES[p.fakeDisplayRoleKey].name}）` : "";
       // 結果画面でのみ種明かしする：うっかり個体だった占い師を開示する。
       const clumsyNote = p.clumsy ? "（実はうっかり個体でした）" : "";
-      const chipClass = role.faction === "ピュア" ? "pure" : role.faction === "フェイク" ? "fake" : "neutral";
+      const chipClass = role.faction === "イノセント" ? "pure" : role.faction === "インポスター" ? "fake" : "neutral";
       const status = p.alive ? "生存" : `${p.deathDay ?? "?"}日目に脱落${p.deathCause ? `（${p.deathCause}）` : ""}`;
       const img = ICON_IMGS[ICON_SLUGS[p.id]];
       // 勝敗モーション（キャラモーション第1弾）：勝った陣営はジャンプ、
@@ -2655,16 +2655,16 @@
 
   function checkWin() {
     const alive = alivePlayers();
-    const pure = alive.filter(p => ROLES[p.roleKey].faction === "ピュア").length;
-    const fake = alive.filter(p => ROLES[p.roleKey].faction === "フェイク").length;
+    const pure = alive.filter(p => ROLES[p.roleKey].faction === "イノセント").length;
+    const fake = alive.filter(p => ROLES[p.roleKey].faction === "インポスター").length;
     const bomberAlive = alive.some(p => p.roleKey === "bomber");
     if (bomberAlive && pure === 0 && fake === 0) return "💣 ボマーの単独勝利！最後の1人になったよ！";
     // A surviving Bomber who has taken out two or more players with bombs
     // steals the win at the moment the game would otherwise end.
     const bomber = alive.find(p => p.roleKey === "bomber");
     if (bomber && (state.bombKills || 0) >= 2 && (fake === 0 || fake >= pure)) return "💣 ボマーの勝利！爆弾で2人以上を倒し、勝利を横取りした！";
-    if (fake === 0) return "🎉 ピュア陣営の勝利！フェイクを全員追放したよ！";
-    if (fake >= pure) return "💀 フェイク陣営の勝利…生存者数が同数以上になった。";
+    if (fake === 0) return "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！";
+    if (fake >= pure) return "💀 インポスター陣営の勝利…生存者数が同数以上になった。";
     return null;
   }
 
@@ -2746,6 +2746,17 @@
   const STATS_KEY = "fakeBloomStats";
   // 廃止済み役職の旧戦績データを表示するための名前（現行の ROLES にはない）。
   const LEGACY_ROLE_NAMES = { clumsySeer: "うっかり占い師" };
+  // 2026-11-12 の陣営改名（ピュア→イノセント、フェイク→インポスター）より前に
+  // 保存された戦績の陣営キーを、新しい陣営名へ読み替える（後方互換）。
+  const LEGACY_FACTION_NAMES = { "ピュア": "イノセント", "フェイク": "インポスター" };
+  function migrateFactionWins(factionWins) {
+    const out = {};
+    for (const [key, value] of Object.entries(factionWins || {})) {
+      const name = LEGACY_FACTION_NAMES[key] || key;
+      out[name] = (out[name] || 0) + value;
+    }
+    return out;
+  }
   function loadStats() {
     const empty = { games: 0, wins: 0, byRole: {}, factionWins: {}, steals: 0, streak: 0, bestStreak: 0 };
     try {
@@ -2756,7 +2767,7 @@
         games: parsed.games,
         wins: parsed.wins || 0,
         byRole: parsed.byRole || {},
-        factionWins: parsed.factionWins || {},
+        factionWins: migrateFactionWins(parsed.factionWins),
         steals: parsed.steals || 0,
         streak: parsed.streak || 0,
         bestStreak: parsed.bestStreak || 0
@@ -2804,7 +2815,7 @@
       if (typeof localStorage === "undefined") return empty;
       const parsed = JSON.parse(localStorage.getItem(PNP_STATS_KEY) || "null");
       if (!parsed || typeof parsed.games !== "number") return empty;
-      return { games: parsed.games, factionWins: parsed.factionWins || {}, byRole: parsed.byRole || {} };
+      return { games: parsed.games, factionWins: migrateFactionWins(parsed.factionWins), byRole: parsed.byRole || {} };
     } catch {
       return empty;
     }
@@ -2844,7 +2855,7 @@
       return;
     }
     const w = stats.factionWins || {};
-    summary.textContent = `通算 ${stats.games}戦（ピュア勝利 ${w["ピュア"] || 0}・フェイク勝利 ${w["フェイク"] || 0}・ボマー勝利 ${w["ニュートラル"] || 0}）`;
+    summary.textContent = `通算 ${stats.games}戦（イノセント勝利 ${w["イノセント"] || 0}・インポスター勝利 ${w["インポスター"] || 0}・ボマー勝利 ${w["ニュートラル"] || 0}）`;
     rolesBox.innerHTML = Object.entries(stats.byRole)
       .sort((a, b) => b[1].games - a[1].games)
       // 廃止済み役職の旧記録（clumsySeer）は当時の名前で表示する。
@@ -2878,8 +2889,8 @@
     { id: "first-win", name: "初勝利", hint: "初めて勝つ", test: s => s.wins >= 1 },
     { id: "wins10", name: "10勝クラブ", hint: "通算10勝", test: s => s.wins >= 10 },
     { id: "wins30", name: "30勝クラブ", hint: "通算30勝", test: s => s.wins >= 30 },
-    { id: "pure-win", name: "ピュアの勝利", hint: "ピュア陣営で勝つ", test: s => (s.factionWins["ピュア"] || 0) >= 1 },
-    { id: "fake-win", name: "フェイクの勝利", hint: "フェイク陣営で勝つ", test: s => (s.factionWins["フェイク"] || 0) >= 1 },
+    { id: "pure-win", name: "イノセントの勝利", hint: "イノセント陣営で勝つ", test: s => (s.factionWins["イノセント"] || 0) >= 1 },
+    { id: "fake-win", name: "インポスターの勝利", hint: "インポスター陣営で勝つ", test: s => (s.factionWins["インポスター"] || 0) >= 1 },
     { id: "bomber-win", name: "ボマーの勝利", hint: "ボマーで勝つ", test: s => (s.factionWins["ニュートラル"] || 0) >= 1 },
     { id: "steal", name: "横取り屋", hint: "ボマーの横取り勝利", test: s => s.steals >= 1 },
     { id: "roles5", name: "五役の達人", hint: "5種類の役職で勝利", test: s => Object.values(s.byRole).filter(v => v.wins >= 1).length >= 5 },
@@ -3201,7 +3212,7 @@
     } else if (state.pnpStep === "nightNoAction") {
       advancePnpNight();
     } else if (state.pnpStep === "nightFakeConsult" || state.pnpStep === "nightFakeAgree") {
-      // フェイク非代表者：合意確認のあと、能力の対象を入力する（フェーズ3）。
+      // インポスター非代表者：合意確認のあと、能力の対象を入力する（フェーズ3）。
       showPnpFakeAbility();
     } else if (state.pnpIndex + 1 < state.humanPlayerIds.length) {
       state.pnpIndex += 1;
