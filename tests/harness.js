@@ -147,7 +147,7 @@ class FakeAudioContext {
 }
 FakeAudioContext.instances = [];
 
-function createSandbox(seedSettings, { fakeAudio = false } = {}) {
+function createSandbox(seedSettings, { fakeAudio = false, seedStorage = null } = {}) {
   const elements = new Map();
   const storage = new Map();
   const alerts = [];
@@ -165,6 +165,10 @@ function createSandbox(seedSettings, { fakeAudio = false } = {}) {
   // テストしたい設定はここで先に仕込んでおく。
   if (seedSettings) {
     localStorage.setItem("fakeBloomSettings", JSON.stringify(seedSettings));
+  }
+  // ログの折りたたみなど、他の localStorage キーの初期状態も仕込める。
+  if (seedStorage) {
+    for (const [k, v] of Object.entries(seedStorage)) localStorage.setItem(k, v);
   }
   const sandbox = {
     console,
@@ -198,7 +202,8 @@ function createSandbox(seedSettings, { fakeAudio = false } = {}) {
 // index.html を読み込んでゲームを実行し、内部 API とスタブを返す。
 // seedSettings: タイトル画面の設定（fakeCount / bomber / sound / difficulty / bgm）。
 // fakeAudio: true なら FakeAudioContext を差し込み、BGM の発音パスを検証できる。
-function loadGame({ seedSettings, fakeAudio } = {}) {
+// seedStorage: localStorage に先に仕込む任意のキー（折りたたみ状態など）。
+function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   const root = path.resolve(__dirname, "..");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   const m = html.match(/<script>([\s\S]*?)<\/script>/);
@@ -228,9 +233,11 @@ function loadGame({ seedSettings, fakeAudio } = {}) {
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
   nightCutins, stageGhostWalker, stageEventMotion, stageFlashRed, stageOwnActionMotion,
+  setLogFolded, toggleLogFold, LOG_FOLD_KEY,
+  get logFold() { return logFold; },
 };
 `;
-  const { sandbox, alerts, elements, localStorage } = createSandbox(seedSettings, { fakeAudio });
+  const { sandbox, alerts, elements, localStorage } = createSandbox(seedSettings, { fakeAudio, seedStorage });
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox, { filename: "index.html<script>" });
   return { FB: sandbox.__FB__, alerts, elements, localStorage, sandbox, FakeAudioContext };
