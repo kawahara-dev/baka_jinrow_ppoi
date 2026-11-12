@@ -2374,3 +2374,16 @@ test("カットインのキャラアニメ：マウス公開のカットイン�
   assert.equal(elements.get("cutin").dataset.kind, "info");
   assert.equal(elements.get("cutinTitle").textContent, "🐭 役職公開");
 });
+
+test("ファビコン: head にインライン SVG のアイコンがある", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const head = html.match(/<head>([\s\S]*?)<\/head>/)[1];
+  // favicon.ico への外部リクエストを出さないよう、data URI の SVG を1つだけ置く。
+  const links = [...head.matchAll(/<link rel="icon"[^>]*>/g)];
+  assert.equal(links.length, 1, "favicon の link が1つない");
+  const href = links[0][0].match(/href="([^"]*)"/)[1];
+  assert.ok(href.startsWith("data:image/svg+xml,"), "SVG の data URI ではない");
+  assert.ok(href.includes("%3Csvg"), "SVG 本体がない");
+  assert.ok(href.includes("🌸"), "花の絵文字がない");
+  assert.ok(href.includes("%23ff6fb3"), "テーマ色（ピンク）がない");
+});
