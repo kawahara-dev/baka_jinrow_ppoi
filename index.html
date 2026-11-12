@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1055,31 +1055,13 @@
     stopDiscussTimer();
     clearSpeechBubbles();
     clearCutins();
-    const fakeCount = gameSettings.fakeCount === "random"
-      ? (Math.random() < 0.35 ? 1 : 2)
-      : Number(gameSettings.fakeCount);
-    const fixedFakeRoles = ["fakeGirl", "mimic"];
-    const fakePool = fakeCount === 1
-      ? [fixedFakeRoles[Math.floor(Math.random() * fixedFakeRoles.length)]]
-      : [...fixedFakeRoles];
-    // Feign-style draw: the seer and the baka are always in, the other
-    // pure-side power roles are drawn, and about half of games also get
-    // the neutral Bomber.
-    const hasBomber = gameSettings.bomber === "random" ? Math.random() < 0.5 : gameSettings.bomber === "on";
-    const pureSlots = 8 - fakeCount - 1 - (hasBomber ? 1 : 0);
-    const drawPool = INNOCENT_ROLE_KEYS.filter(k => !["apprenticeSeer", "villager"].includes(k))
-      .sort(() => Math.random() - 0.5);
-    const pureRoles = ["apprenticeSeer", ...drawPool.slice(0, Math.max(0, pureSlots - 1))];
-    const roleBag = [
-      ...fakePool,
-      ...(hasBomber ? ["bomber"] : []),
-      "baka",
-      ...pureRoles,
-      ...Array.from({ length: 8 - fakeCount - (hasBomber ? 1 : 0) - 1 - pureRoles.length }, () => "villager")
-    ].sort(() => Math.random() - 0.5);
-    const assignedFakeCount = roleBag.filter(roleKey => fixedFakeRoles.includes(roleKey)).length;
-    if (assignedFakeCount !== fakeCount) {
-      console.warn(`[setupGame] インポスター人数ミスマッチ: expected=${fakeCount}, actual=${assignedFakeCount}`, roleBag);
+    // 配役は共有モジュール（game-logic.js の dealRoles）に切り出し済み。
+    // ここでは配られた役職をプレイヤーへ割り当てるだけ。
+    const dealt = dealRoles(gameSettings);
+    const roleBag = dealt.map(d => d.roleKey);
+    const assignedFakeCount = roleBag.filter(roleKey => ["fakeGirl", "mimic"].includes(roleKey)).length;
+    if (gameSettings.fakeCount !== "random" && assignedFakeCount !== Number(gameSettings.fakeCount)) {
+      console.warn(`[setupGame] インポスター人数ミスマッチ: expected=${gameSettings.fakeCount}, actual=${assignedFakeCount}`, roleBag);
     }
     state = {
       day: 1,
@@ -1105,16 +1087,16 @@
         id: i,
         name: n,
         icon: PLAYER_ICONS[i],
-        roleKey: roleBag[i],
+        roleKey: dealt[i].roleKey,
         iconImg: ICON_IMGS[ICON_SLUGS[i]],
         alive: true,
         voted: false,
         suspicion: 0,
         lastTarget: null,
-        fakeDisplayRoleKey: roleBag[i] === "baka" ? rand(INNOCENT_ROLE_KEYS) : null,
+        fakeDisplayRoleKey: dealt[i].fakeDisplayRoleKey,
         // 占い師の隠し個体（うっかり）。本人にも他プレイヤーにも分から
         // ない。結果画面でのみ開示される。
-        clumsy: roleBag[i] === "apprenticeSeer" ? Math.random() < CLUMSY_SEER_RATE : false,
+        clumsy: dealt[i].clumsy,
         mouseUsed: false,
         deathCause: null,
         deathDay: null
@@ -2512,15 +2494,9 @@
 
   // 投票の集計と追放・勝敗・翌日への遷移（doVote から抽出）。
   function tallyVotes(votes) {
-    let max = -1;
-    let topIds = [];
-    for (const [id, c] of votes.entries()) {
-      if (c > max) {
-        max = c;
-        topIds = [id];
-      } else if (c === max) topIds.push(id);
-    }
-    if (topIds.length !== 1) {
+    // 集計そのものは共有モジュール（resolveVoteTally）に切り出し済み。
+    const { winnerId, max } = resolveVoteTally(votes);
+    if (winnerId === null) {
       actionLog(formatActionLog("voteTie", { label: "投票", votes: max }));
       showCutin("🗳️ 投票結果", "同数のため追放なし", "phase");
       const winTie = checkWin();
@@ -2537,7 +2513,7 @@
       draw();
       return;
     }
-    const maxId = topIds[0];
+    const maxId = winnerId;
 
     const ex = state.players[maxId];
     ex.alive = false;
@@ -2638,18 +2614,8 @@
   }
 
   function checkWin() {
-    const alive = alivePlayers();
-    const pure = alive.filter(p => ROLES[p.roleKey].faction === "イノセント").length;
-    const fake = alive.filter(p => ROLES[p.roleKey].faction === "インポスター").length;
-    const bomberAlive = alive.some(p => p.roleKey === "bomber");
-    if (bomberAlive && pure === 0 && fake === 0) return "💣 ボマーの単独勝利！最後の1人になったよ！";
-    // A surviving Bomber who has taken out two or more players with bombs
-    // steals the win at the moment the game would otherwise end.
-    const bomber = alive.find(p => p.roleKey === "bomber");
-    if (bomber && (state.bombKills || 0) >= 2 && (fake === 0 || fake >= pure)) return "💣 ボマーの勝利！爆弾で2人以上を倒し、勝利を横取りした！";
-    if (fake === 0) return "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！";
-    if (fake >= pure) return "💀 インポスター陣営の勝利…生存者数が同数以上になった。";
-    return null;
+    // 勝敗の判定そのものは共有モジュール（checkWinCondition）に切り出し済み。
+    return checkWinCondition(alivePlayers().map(p => p.roleKey), state.bombKills);
   }
 
   // ---- presentation helpers: cut-ins, screen shake, confetti ----
