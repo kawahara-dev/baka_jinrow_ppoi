@@ -268,10 +268,53 @@
       mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
       transition: filter 0.8s ease; }
     body[data-phase="night"] .stage { filter: brightness(0.66) saturate(0.8); }
-    .stage .walker { animation-duration: 26s; }
+    /* キャラモーション第1弾：待機の呼吸（歩行アニメと干渉しないよう
+       transform は .walker 側、歩行の上下動は .wbody 側で分ける）。
+       animation-delay は共通の --i ずれで呼吸の位相もバラける。 */
+    .stage .walker { animation-name: walkAcross, stageBreathe; animation-duration: 26s, 2.8s;
+      animation-timing-function: linear, ease-in-out; animation-iteration-count: infinite, infinite;
+      animation-direction: normal, alternate; }
+    @keyframes stageBreathe { from { transform: translateY(0) scaleY(1); } to { transform: translateY(-2px) scaleY(1.03); } }
     .stage .wbody img { height: 74px; }
     .stage .walker.speaking .wbody { animation: stageHop 0.45s ease 2; }
     @keyframes stageHop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-13px); } }
+    /* 公開イベントのモーション（公開される結果のみ。CPU の私的な夜行動は
+       絶対に動かさない）。ゴースト歩行者は数秒後に消えるので、最後は
+       フェードアウトする両方向フィルで止める。 */
+    .stage .walker.motion-flinch .wbody { animation: motionFlinch 2.8s ease both; }
+    @keyframes motionFlinch { 0% { transform: translateX(0) rotate(0); opacity: 1; }
+      8% { transform: translateX(-6px) rotate(-7deg); } 16% { transform: translateX(5px) rotate(5deg); }
+      24% { transform: translateX(-3px) rotate(-3deg); } 34% { transform: translateX(0) rotate(-9deg) translateY(4px); }
+      70% { transform: translateX(0) rotate(-9deg) translateY(4px); opacity: 1; }
+      100% { transform: translateY(8px) rotate(-12deg); opacity: 0; } }
+    .stage .walker.motion-blast .wbody { animation: motionBlast 2.4s ease-out both; }
+    @keyframes motionBlast { 0% { transform: translateY(0) scale(1); opacity: 1; }
+      30% { transform: translateY(-30px) scale(1.12); opacity: 1; }
+      70% { transform: translateY(-38px) scale(0.95); opacity: 0.7; }
+      100% { transform: translateY(-48px) scale(0.85); opacity: 0; } }
+    .stage .walker.motion-trap .wbody { animation: motionTrap 2.4s ease both; }
+    @keyframes motionTrap { 0% { transform: scale(1); opacity: 1; }
+      18% { transform: scale(1.28) translateY(-10px); }
+      40% { transform: scale(0.92) translateY(4px) rotate(6deg); }
+      70% { transform: scale(0.85) translateY(6px) rotate(8deg); opacity: 1; }
+      100% { transform: scale(0.7) translateY(10px); opacity: 0; } }
+    .stage .walker.motion-revive .wbody { animation: motionRevive 1.8s ease both; }
+    @keyframes motionRevive { 0% { transform: translateY(12px); opacity: 0.35; filter: drop-shadow(0 0 0 rgba(80,200,140,0)); }
+      45% { transform: translateY(-14px); opacity: 1; filter: drop-shadow(0 0 12px rgba(80,200,140,0.95)); }
+      100% { transform: translateY(0); opacity: 1; filter: drop-shadow(0 0 0 rgba(80,200,140,0)); } }
+    .stage .walker.motion-exile .wbody { animation: motionExile 2.6s ease both; }
+    @keyframes motionExile { 0% { transform: translateY(0); opacity: 1; }
+      55% { transform: translateY(8px); opacity: 0.55; }
+      100% { transform: translateY(16px); opacity: 0; } }
+    .stage.flash-red { animation: stageFlashRed 0.9s ease; }
+    @keyframes stageFlashRed { 0% { box-shadow: inset 0 0 0 4px rgba(224,72,95,0.9); }
+      100% { box-shadow: inset 0 0 0 0 rgba(224,72,95,0); } }
+    /* 勝敗モーション：結果画面で勝利側はジャンプ、敗北側はしょんぼり。 */
+    .result-row.winner .avatar { animation: winJump 0.7s ease 3; }
+    @keyframes winJump { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } }
+    .result-row.loser .avatar { animation: loseDroop 0.9s ease both; }
+    @keyframes loseDroop { from { transform: translateY(0) rotate(0); opacity: 1; }
+      to { transform: translateY(6px) rotate(-5deg); opacity: 0.7; } }
     @media (max-width: 640px) { .stage { height: 64px; } .stage .wbody img { height: 50px; } }
     .settings-panel { display: grid; gap: 8px; justify-items: center; }
     .settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
@@ -311,6 +354,8 @@
     @keyframes btnPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255, 111, 179, 0.45); } 50% { box-shadow: 0 0 0 9px rgba(255, 111, 179, 0); } }
     @media (prefers-reduced-motion: reduce) {
       .petals span, .confetti-piece, .cutin-band, .card, .log p, .shake, .stage .walker.speaking .wbody,
+      .stage .walker, .stage .walker .wbody, .stage.flash-red,
+      .result-row.winner .avatar, .result-row.loser .avatar,
       #actionBtn:not(.hidden), #voteBtn:not(.hidden) { animation: none !important; }
     }
     .avatar { font-size: 1.8rem; position: relative; width: 64px; height: 64px; margin: 0 auto; }
@@ -1878,16 +1923,23 @@
       }
     }
     if (state.nightReport?.type === "eliminated") {
-      showCutin("🌙 夜の襲撃", `${state.players[state.nightReport.victimId].name} が倒れた…`, "attack");
+      const vid = state.nightReport.victimId;
+      showCutin("🌙 夜の襲撃", `${state.players[vid].name} が倒れた…`, "attack", () => {
+        stageGhostWalker(vid, "motion-flinch");
+        stageFlashRed();
+      });
     } else if (state.nightReport?.type === "blocked") {
       showCutin("🛡️ 襲撃は防がれた！", "誰かが守り切った", "protect");
     }
     for (const vid of state.bombReport?.explodedVictims || []) {
-      showCutin("💣 爆弾が爆発！", `${state.players[vid].name} が巻き込まれた…`, "bomb");
+      showCutin("💣 爆弾が爆発！", `${state.players[vid].name} が巻き込まれた…`, "bomb",
+        () => stageGhostWalker(vid, "motion-blast"));
     }
     if (state.bombReport?.fizzled) showCutin("💣 爆弾は不発だった", "護衛が爆発を防いだ", "protect");
-    if (state.trapReport) showCutin("🪤 罠が作動！", "襲撃者が道連れになった", "attack");
-    if (state.doctorReport) showCutin("💉 蘇生した！", `${state.players[state.doctorReport.victimId].name} が助かった`, "protect");
+    if (state.trapReport) showCutin("🪤 罠が作動！", "襲撃者が道連れになった", "attack",
+      () => stageGhostWalker(state.trapReport.attackerId, "motion-trap"));
+    if (state.doctorReport) showCutin("💉 蘇生した！", `${state.players[state.doctorReport.victimId].name} が助かった`, "protect",
+      () => stageEventMotion(state.doctorReport.victimId, "motion-revive"));
     if (winAfterNight) {
       showCutin(winAfterNight, "", "win");
       celebrate();
@@ -2129,6 +2181,55 @@
     void w.offsetWidth;
     w.classList.add("speaking");
     later(() => w.classList.remove("speaking"), 1000);
+  }
+
+  // Character motion phase 1: idle breathing is CSS-only (stageBreathe
+  // on .stage .walker). The public-event motions below trigger only
+  // for outcomes the game already announces publicly; a CPU member's
+  // private night action is never animated (anti-leak).
+  function stageEventMotion(playerId, cls, ms) {
+    const stage = el("stage");
+    if (!stage || !stage.querySelector) return;
+    const w = stage.querySelector(`.walker[data-player="${playerId}"]`);
+    if (!w || !w.classList) return;
+    w.classList.remove(cls);
+    void w.offsetWidth;
+    w.classList.add(cls);
+    later(() => w.classList.remove(cls), ms || 2000);
+  }
+
+  // Briefly re-show a player who just left the stage (attack victim,
+  // bomb victim, trap attacker, exiled player) as a ghost walker so
+  // their public-event motion can play, then remove them again. If
+  // the walker is still on the stage (e.g. a revived patient), just
+  // animate it in place.
+  function stageGhostWalker(playerId, cls, ms) {
+    const stage = el("stage");
+    if (!stage || !stage.querySelector || !stage.appendChild) return;
+    if (stage.querySelector(`.walker[data-player="${playerId}"]`)) {
+      stageEventMotion(playerId, cls, ms);
+      return;
+    }
+    const p = state.players[playerId];
+    if (!p || typeof document === "undefined" || !document.createElement) return;
+    const span = document.createElement("span");
+    span.className = `walker ${cls}`;
+    span.setAttribute("data-player", String(playerId));
+    span.setAttribute("style", `--i:${playerId};--bd:0.34s`);
+    span.innerHTML = `<span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${ICON_SLUGS[playerId]}" data-frame="a" alt=""><img class="frame-b" data-slug="${ICON_SLUGS[playerId]}" data-frame="b" alt=""></span>`;
+    stage.appendChild(span);
+    hydrateWalkImages(span);
+    later(() => { if (span.remove) span.remove(); }, ms || 3200);
+  }
+
+  // Brief red edge-flash on the stage for a public attack.
+  function stageFlashRed() {
+    const stage = el("stage");
+    if (!stage || !stage.classList) return;
+    stage.classList.remove("flash-red");
+    void stage.offsetWidth;
+    stage.classList.add("flash-red");
+    later(() => stage.classList.remove("flash-red"), 1000);
   }
 
   // Mouse: publicly reveal one player's role, once per game. A baka
@@ -2412,6 +2513,8 @@
     }
     if (state.phase === "night" && state.mode === "pnp") startPnpNight();
     draw();
+    // 追放された人のステージ上でのフェードアウト（公開結果のみ）。
+    stageGhostWalker(ex.id, "motion-exile");
   }
 
   // End-of-game highlights: 1-2 lines summarising the match's notable
@@ -2453,7 +2556,10 @@
       const chipClass = role.faction === "ピュア" ? "pure" : role.faction === "フェイク" ? "fake" : "neutral";
       const status = p.alive ? "生存" : `${p.deathDay ?? "?"}日目に脱落${p.deathCause ? `（${p.deathCause}）` : ""}`;
       const img = ICON_IMGS[ICON_SLUGS[p.id]];
-      return `<div class="result-row ${p.alive ? "" : "dead"}">
+      // 勝敗モーション（キャラモーション第1弾）：勝った陣営はジャンプ、
+      // 負けた陣営はしょんぼり。
+      const isWinner = role.faction === winnerFaction;
+      return `<div class="result-row ${p.alive ? "" : "dead"} ${isWinner ? "winner" : "loser"}">
         <div class="avatar"><span>${p.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${p.name}">` : ""}</div>
         <div><div class="result-name">${p.name}${state.mode === "pnp" ? "" : (p.id === state.playerId ? "（あなた）" : "")}<span class="faction-chip ${chipClass}">${role.faction}</span></div>
         <div class="result-role">${role.name}${displayNote}${clumsyNote}</div></div>
@@ -2495,8 +2601,8 @@
     fn();
     return null;
   }
-  function showCutin(title, sub, kind) {
-    cutinQueue.push({ title, sub: sub || "", kind: kind || "phase" });
+  function showCutin(title, sub, kind, onShow) {
+    cutinQueue.push({ title, sub: sub || "", kind: kind || "phase", onShow: typeof onShow === "function" ? onShow : null });
     pumpCutin();
   }
   function pumpCutin() {
@@ -2513,6 +2619,10 @@
     el("cutinSub").textContent = item.sub;
     if (box.dataset) box.dataset.kind = item.kind;
     box.classList.remove("hidden");
+    // カットインの表示に合わせて公開イベントのモーションを動かす
+    // （キャラモーション第1弾）。キューに溜まった分は順番に表示される
+    // ので、対応するカットインが出た瞬間にだけ発火する。
+    if (item.onShow) item.onShow();
     const band = box.querySelector ? box.querySelector(".cutin-band") : null;
     if (band) {
       band.style.animation = "none";
