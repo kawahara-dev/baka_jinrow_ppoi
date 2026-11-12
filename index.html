@@ -615,7 +615,7 @@
   </section>
 
   <section id="roleScreen" class="screen hidden">
-    <h2>あなたの役職</h2>
+    <h2 id="roleScreenTitle" tabindex="-1">あなたの役職</h2>
     <div id="playerRole" class="role-box"></div>
     <div class="control-bar">
       <button id="toGameBtn" class="primary" style="flex:1 1 auto;min-height:48px;">ゲーム開始</button>
@@ -642,7 +642,7 @@
   <section id="gameScreen" class="screen hidden">
     <div class="topbar">
       <div class="stat"><div>Day</div><strong id="dayText">1</strong></div>
-      <div class="stat"><div>現在フェーズ</div><div id="phaseText" class="phase-title">夜行動</div></div>
+      <div class="stat"><div>現在フェーズ</div><div id="phaseText" class="phase-title" tabindex="-1">夜行動</div></div>
       <div class="stat"><div>あなたの陣営</div><strong id="factionText">-</strong></div>
     </div>
     <div id="discussTimer" class="discuss-timer hidden" aria-live="polite"></div>
@@ -678,7 +678,7 @@
     </div>
 
     <section id="resultPanel" class="result-panel hidden">
-      <h3 id="resultTitle" class="result-title"></h3>
+      <h3 id="resultTitle" class="result-title" tabindex="-1"></h3>
       <p id="resultSub" class="result-sub"></p>
       <div id="resultHighlights" class="result-highlights"></div>
       <div id="resultRows" class="result-rows"></div>
@@ -1058,6 +1058,13 @@
   let state = {};
 
   const el = id => document.getElementById(id);
+  // 画面遷移時にキーボードフォーカスを新しい画面の見出し／主ボタンへ移す。
+  // スクリーンリーダーの利用者が、隠れたボタンにフォーカスが残ったまま
+  // 迷子にならないようにする（見出し側は tabindex="-1" で受ける）。
+  function focusEl(id) {
+    const target = el(id);
+    if (target && typeof target.focus === "function") target.focus();
+  }
   const appendLog = (id, msg) => {
     const p = document.createElement("p");
     p.textContent = msg;
@@ -1257,6 +1264,7 @@
     el("pnpCover").classList.remove("hidden");
     el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpIndex + 1}（${player.name}）</strong>さんの番です。<br>周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
     el("pnpRevealBtn").textContent = "タップして役職を見る";
+    focusEl("pnpRevealBtn");
   }
   function showPnpRole() {
     const player = pnpCurrentPlayer();
@@ -1268,6 +1276,7 @@
     el("pnpConfirmBtn").textContent = state.pnpIndex + 1 < state.humanPlayerIds.length
       ? "確認した（次の人へ）"
       : "確認した（ゲーム開始）";
+    focusEl("pnpConfirmBtn");
   }
 
   // ---- pass-and-play: night input (phase 2) ----
@@ -1312,6 +1321,7 @@
     el("pnpCover").classList.remove("hidden");
     el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpNightIndex + 1}（${player.name}）</strong>さんの番です。<br>夜行動の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
     el("pnpRevealBtn").textContent = "タップして夜の番を始める";
+    focusEl("pnpRevealBtn");
   }
   function showPnpNightTurn() {
     const player = pnpNightCurrentPlayer();
@@ -1325,6 +1335,7 @@
       el("pnpPlayerRole").innerHTML = results.map(r => `<div>${r}</div>`).join("");
       el("pnpConfirmBtn").textContent = "夜行動へ進む";
       state.pnpNightResults[player.id] = [];
+      focusEl("pnpConfirmBtn");
     } else {
       showPnpNightAction();
     }
@@ -1357,6 +1368,7 @@
         el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>フェイクの仲間（${rep.name}）と相談してください。<br>今夜の襲撃先は ${rep.name} が決めます。`;
         el("pnpConfirmBtn").textContent = "相談した（能力入力へ）";
       }
+      focusEl("pnpConfirmBtn");
       return;
     }
     if (!role.nightAction) {
@@ -1367,6 +1379,7 @@
       el("pnpRoleTitle").textContent = "夜行動";
       el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>今夜は能力がありません。朝まで静かに過ごしましょう。`;
       el("pnpConfirmBtn").textContent = confirmLabel;
+      focusEl("pnpConfirmBtn");
       return;
     }
     // 能力あり：ゲーム画面で対象を選ぶ。
@@ -1379,6 +1392,7 @@
     el("factionText").textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番`;
     updatePnpTurnBanner(player, role);
     draw();
+    focusEl("phaseText");
   }
   function updatePnpTurnBanner(player, role, hintOverride) {
     const banner = el("pnpTurnBanner");
@@ -1403,6 +1417,7 @@
         ? "盗み見：相手の本当の役職を調べる（フェイクの仲間は選べないよ）"
         : "妨害：相手の夜行動を止める（フェイクの仲間は選べないよ）");
     draw();
+    focusEl("phaseText");
   }
   function confirmPnpNightAction() {
     const playerId = state.pnpNightInputPending;
@@ -1460,6 +1475,7 @@
     el("pnpCover").classList.remove("hidden");
     el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpVoteIndex + 1}（${player.name}）</strong>さんの番です。<br>投票の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
     el("pnpRevealBtn").textContent = "タップして投票の番を始める";
+    focusEl("pnpRevealBtn");
   }
   function showPnpVoteTurn() {
     const player = pnpVoteCurrentPlayer();
@@ -1473,6 +1489,7 @@
     const banner = el("pnpTurnBanner");
     if (banner) banner.textContent = `P${state.pnpVoteIndex + 1}（${player.name}）の番 — 投票：${getPhaseHint(ROLES[player.roleKey])}`;
     draw();
+    focusEl("phaseText");
   }
   function confirmPnpVoteAction() {
     const playerId = state.pnpVoteInputPending;
@@ -2450,6 +2467,8 @@
     const panel = el("resultPanel");
     panel.classList.remove("hidden");
     if (panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    // 結果画面が出たら見出しへフォーカスを移す（キーボード操作の起点）。
+    focusEl("resultTitle");
   }
 
   function checkWin() {
@@ -2966,7 +2985,10 @@
     el("titleScreen").classList.add("hidden");
     // ソロは役職画面へ、パス＆プレイは setupGame 内の startHandoff が
     // 受け渡し画面を出す。
-    if (gameSettings.mode !== "pnp") el("roleScreen").classList.remove("hidden");
+    if (gameSettings.mode !== "pnp") {
+      el("roleScreen").classList.remove("hidden");
+      focusEl("roleScreenTitle");
+    }
     setupGame();
   };
   el("howBtn").onclick = () => el("howTo").classList.toggle("hidden");
@@ -2980,6 +3002,7 @@
   el("toGameBtn").onclick = () => {
     el("roleScreen").classList.add("hidden");
     el("gameScreen").classList.remove("hidden");
+    focusEl("phaseText");
   };
   el("pnpRevealBtn").onclick = () => {
     if (state.pnpStep === "nightCover") showPnpNightTurn();
@@ -3017,7 +3040,10 @@
     el("gameScreen").classList.add("hidden");
     setupGame();
     // パス＆プレイは startHandoff が受け渡し画面を出す。ソロは役職画面へ。
-    if (gameSettings.mode !== "pnp") el("roleScreen").classList.remove("hidden");
+    if (gameSettings.mode !== "pnp") {
+      el("roleScreen").classList.remove("hidden");
+      focusEl("roleScreenTitle");
+    }
   };
 })();
 </script>

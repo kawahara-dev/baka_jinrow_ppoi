@@ -1373,3 +1373,36 @@ test("フルゲーム: 議論タイマー付きのパス＆プレイでも40日�
     assert.equal(localStorage.getItem("fakeBloomStats"), null);
   }
 });
+
+test("画面遷移：結果画面で見出し（resultTitle）にフォーカスが移る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  FB.showResults("🎉 ピュア陣営の勝利！フェイクを全員追放したよ！");
+  assert.equal(elements.get("resultTitle")._focused, true);
+});
+
+test("画面遷移：タイトル→役職画面→ゲーム画面でフォーカスが移る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  elements.get("startBtn").onclick();
+  assert.equal(elements.get("roleScreenTitle")._focused, true, "役職画面の見出しへ");
+  elements.get("toGameBtn").onclick();
+  assert.equal(elements.get("phaseText")._focused, true, "ゲーム画面のフェーズ表示へ");
+});
+
+test("画面遷移：パス＆プレイのカバー→役職確認でボタンにフォーカスが移る", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
+  elements.get("startBtn").onclick();
+  assert.equal(elements.get("pnpRevealBtn")._focused, true, "受け渡しカバーで表示ボタンへ");
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(elements.get("pnpConfirmBtn")._focused, true, "役職確認で確認ボタンへ");
+});
+
+test("画面遷移：リトライで役職画面の見出しにフォーカスが移る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  elements.get("startBtn").onclick();
+  playFullGame(FB, elements);
+  assert.equal(FB.state.phase, "end");
+  elements.get("roleScreenTitle")._focused = false;
+  elements.get("retryBtn").onclick();
+  assert.equal(elements.get("roleScreenTitle")._focused, true);
+});
