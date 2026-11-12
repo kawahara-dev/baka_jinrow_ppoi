@@ -236,7 +236,8 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   get state() { return state; },
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
   nightCutins, stageGhostWalker, stageEventMotion, stageFlashRed, stageOwnActionMotion,
-  showCutin,
+  showCutin, clearCutins,
+  get cutinQueueLength() { return cutinQueue.length; },
   setLogFolded, toggleLogFold, LOG_FOLD_KEY,
   get logFold() { return logFold; },
 };
