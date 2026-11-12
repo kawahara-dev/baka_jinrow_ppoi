@@ -434,14 +434,14 @@ test("役職カードとフェーズヒント: バカは表示役職として見
   me.fakeDisplayRoleKey = "apprenticeSeer";
   s.phase = "night";
   FB.updateInGameRoleCard();
-  assert.equal(elements.get("roleCardName").textContent, "見習い占い師");
+  assert.equal(elements.get("roleCardName").textContent, "🔮 見習い占い師");
   assert.equal(elements.get("roleCardFaction").textContent, "イノセント");
   assert.ok(!FB.getPhaseHint(FB.ROLES[me.roleKey]).includes("偽表示"), "ヒントに偽表示の文言は出ない");
   assert.match(FB.getPhaseHint(FB.ROLES[me.roleKey]), /調査/);
   // 村ガール表示のバカも表示役職のカードになる。
   me.fakeDisplayRoleKey = "villager";
   FB.updateInGameRoleCard();
-  assert.equal(elements.get("roleCardName").textContent, "村ガール");
+  assert.equal(elements.get("roleCardName").textContent, "🏠 村ガール");
 });
 
 test("公開情報: 脱落したバカは表示役職として公開される", () => {
@@ -462,11 +462,13 @@ test("公開情報: 脱落したバカは表示役職として公開される", 
   assert.ok(reveal, `公開ログがある: ${lines.join(" / ")}`);
   assert.ok(reveal.includes("守り手"), `表示役職で公開される: ${reveal}`);
   assert.ok(!reveal.includes("バカ"), `実役職は出ない: ${reveal}`);
-  // カードの表示も表示役職。
+  // カードの表示も表示役職（アイコン1つ）。
   FB.draw();
   const card = elements.get("cards").children[baka.id];
-  assert.ok(card.innerHTML.includes("守り手"), `カードも表示役職: ${card.innerHTML}`);
+  assert.ok(card.innerHTML.includes("🛡️"), `カードも表示役職アイコン: ${card.innerHTML}`);
   assert.ok(!card.innerHTML.includes("バカ"));
+  assert.ok(!card.innerHTML.includes("守り手"), "カードに役職名テキストは出ない（アイコン1つ）");
+  assert.match(card.getAttribute("aria-label"), /守り手、脱落済み/);
   assert.equal(FB.getPublicRoleKey(baka), "guardian");
 });
 
@@ -1996,4 +1998,117 @@ test("脱落アイコンのバッテン：脱落カードと結果行のアバ�
   FB.draw();
   const revivedCard = elements.get("cards").children[target.id];
   assert.ok(!revivedCard.className.includes("dead"), "蘇生したカードから dead クラスが外れる");
+});
+
+test("役職アイコン: ROLES 全役職に仕様通りのアイコンがあり、重複・キャラ絵文字との衝突がない", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  const expected = {
+    apprenticeSeer: "🔮", guardian: "🛡️", tracker: "👣", police: "🚔",
+    lookout: "🔭", trapper: "🪤", doctor: "🩺", mouse: "🐭",
+    politician: "🗳️", villager: "🏠", fakeGirl: "🎭", mimic: "🪞",
+    bomber: "💣", baka: "🃏",
+  };
+  const icons = [];
+  for (const [key, icon] of Object.entries(expected)) {
+    assert.equal(FB.ROLES[key].icon, icon, `${key} のアイコン`);
+    icons.push(icon);
+  }
+  assert.equal(new Set(icons).size, icons.length, "アイコンの重複なし");
+  // キャラ絵文字（プレイヤーアイコン）と被らないこと。
+  const charEmojis = ["🌸", "🪄", "🧁", "🎀", "💫", "🫧", "🍬", "🌙"];
+  for (const icon of icons) {
+    assert.ok(!charEmojis.includes(icon), `キャラ絵文字と衝突: ${icon}`);
+  }
+  // 役職ガイド（静的 HTML）にも同じアイコン付きで並んでいる。
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  for (const [key, icon] of Object.entries(expected)) {
+    const name = FB.ROLES[key].name;
+    assert.ok(html.includes(`<strong>${icon} ${name}`), `ガイドに ${icon} ${name}`);
+  }
+});
+
+test("スマホ1画面レイアウト: ≤980px で右パネルは2列のまま、≤640px でカード4列・ログが詰まる", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  // ≤980px: 外側の .game-ui だけ1列に潰し、右パネルは2列のまま
+  // （セリフ／行動ログの縦積みをやめる）。
+  assert.match(style, /@media \(max-width: 980px\) \{[\s\S]*?\.right-panel \{ position: static; grid-template-columns: 1fr 1fr; \}/);
+  assert.doesNotMatch(style, /@media \(max-width: 980px\) \{[\s\S]*?\.right-panel \{[^}]*grid-template-columns: 1fr;/);
+  // ≤640px: カード4列・縦型、役職カード2列グリッド、ログ高さ 24vh/220px。
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.cards \{ grid-template-columns: repeat\(4, minmax\(0, 1fr\)\); gap: 8px; \}/);
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.card \{[^}]*display: block; text-align: center;/);
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.player-role-meta \{[^}]*grid-template-columns: 1fr 1fr;/);
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.player-role-meta div:nth-child\(n\+3\) \{ grid-column: 1 \/ -1; \}/);
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.log \{ height: min\(24vh, 220px\);/);
+  // 名前・メタは1行省略（狭い4列でも折り返して縦を食わない）。
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.name \{[^}]*white-space: nowrap; overflow: hidden; text-overflow: ellipsis;/);
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.meta \{[^}]*white-space: nowrap; overflow: hidden; text-overflow: ellipsis;/);
+  // 生存者のメタはスマホで「？」だけ（「 ・ 生存中」を隠す）。
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.meta-state \{ display: none; \}/);
+  // 吹き出しのしっぽは中央のまま（縦型カードのアバターは中央）。
+  assert.doesNotMatch(style, /\.speech-bubble::after \{ left: 22px;/);
+});
+
+test("カードのメタ: 脱落は表示役職アイコン1つ、生存は「？」のみ（バカの実役職は漏れない）", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const others = resetToVillagers(FB);
+  // 生存カードは「？」＋「 ・ 生存中」（PC表示。スマホでは CSS が後者を隠す）。
+  const alive = others[0];
+  FB.draw();
+  const aliveCard = elements.get("cards").children[alive.id];
+  assert.ok(aliveCard.innerHTML.includes("？"), "生存カードは「？」");
+  assert.ok(!aliveCard.innerHTML.includes("🏠"), "生存カードに役職アイコンは出ない");
+  // 脱落カードは表示役職のアイコン1つ（役職名テキストなし）。
+  const dead = others[1];
+  dead.roleKey = "guardian";
+  dead.alive = false;
+  FB.draw();
+  const deadCard = elements.get("cards").children[dead.id];
+  assert.ok(deadCard.innerHTML.includes("🛡️"), `脱落カードは守り手アイコン: ${deadCard.innerHTML}`);
+  assert.ok(!deadCard.innerHTML.includes("守り手"), "脱落カードに役職名テキストは出ない");
+  assert.ok(!deadCard.innerHTML.includes("脱落済み"), "脱落カードに「脱落済み」テキストは出ない");
+  assert.match(deadCard.getAttribute("aria-label"), /守り手、脱落済み/);
+  // 脱落したバカは表示役職のアイコンで、🃏（実役職）は出ない。
+  const baka = others[2];
+  baka.roleKey = "baka";
+  baka.fakeDisplayRoleKey = "apprenticeSeer";
+  baka.alive = false;
+  FB.draw();
+  const bakaCard = elements.get("cards").children[baka.id];
+  assert.ok(bakaCard.innerHTML.includes("🔮"), `バカのカードは表示役職アイコン: ${bakaCard.innerHTML}`);
+  assert.ok(!bakaCard.innerHTML.includes("🃏"), "バカの実役職アイコンは出ない");
+  assert.ok(!bakaCard.innerHTML.includes("バカ"));
+  assert.match(bakaCard.getAttribute("aria-label"), /見習い占い師、脱落済み/);
+  // 蘇生で生き返れば「？」に戻る。
+  dead.alive = true;
+  FB.draw();
+  assert.ok(elements.get("cards").children[dead.id].innerHTML.includes("？"));
+});
+
+test("役職アイコン併記: 役職画面・役職カード・結果画面の役職名の前にアイコンが付く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const me = humanOf(FB);
+  me.roleKey = "apprenticeSeer";
+  me.clumsy = false;
+  assert.ok(FB.roleHtmlFor(me).includes("🔮 見習い占い師"), "役職画面にアイコン付き");
+  FB.updateInGameRoleCard();
+  assert.equal(elements.get("roleCardName").textContent, "🔮 見習い占い師");
+  // バカの役職画面・役職カードは表示役職のアイコンになる。
+  me.roleKey = "baka";
+  me.fakeDisplayRoleKey = "guardian";
+  assert.ok(FB.roleHtmlFor(me).includes("🛡️ 守り手"));
+  assert.ok(!FB.roleHtmlFor(me).includes("🃏"));
+  FB.updateInGameRoleCard();
+  assert.equal(elements.get("roleCardName").textContent, "🛡️ 守り手");
+  // 結果画面は種明かしなので実役職のアイコン。
+  const seer = s.players.find((p) => p.id !== me.id);
+  seer.roleKey = "apprenticeSeer";
+  seer.clumsy = false;
+  FB.showResults("🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
+  const rows = elements.get("resultRows").innerHTML;
+  assert.ok(rows.includes("🃏 バカ"), "結果画面にバカの実役職アイコン");
+  assert.ok(rows.includes("🔮 見習い占い師"), "結果画面に占い師アイコン");
 });
