@@ -1153,6 +1153,44 @@
     }
     return out;
   }
+  // ---- 結果画面の表示データ生成 ----
+  // showResults のうち DOM を使わない純粋な部分：勝敗陣営の導出・
+  // 自分の勝敗・サブ文言・各プレイヤーの行データ（役職名・陣営チップ・
+  // 生死・バカの表示注記・うっかり個体の注記）。行の HTML 化と顔画像の
+  // 差し込み、state への代入、戦績記録はブラウザ側に残る。
+  // input: { winText, mode, playerId, humanCount }。
+  // mode が "pnp" のとき myWin は null（勝敗は陣営単位で見るため）。
+  function buildResultSummary(players, input) {
+    const winnerFaction = input.winText.includes("イノセント陣営の勝利") ? "イノセント"
+      : input.winText.includes("インポスター陣営の勝利") ? "インポスター" : "ニュートラル";
+    const me = players.find((p) => p.id === input.playerId);
+    const myWin = input.mode === "pnp" ? null
+      : (me ? ROLES[me.roleKey].faction === winnerFaction : false);
+    const sub = input.mode === "pnp"
+      ? `パス＆プレイ（人間${input.humanCount}人）で遊びました。`
+      : me ? `あなたは「${ROLES[me.roleKey].name}」（${ROLES[me.roleKey].faction}）で ${myWin ? "勝利！" : "敗北…"}${me.clumsy ? "（実はうっかり個体でした）" : ""}`
+      : "";
+    const rows = players.map((p) => {
+      const role = ROLES[p.roleKey];
+      return {
+        id: p.id,
+        name: p.name,
+        icon: p.icon,
+        alive: !!p.alive,
+        roleKey: p.roleKey,
+        roleName: role.name,
+        roleIcon: role.icon,
+        faction: role.faction,
+        chipClass: role.faction === "イノセント" ? "pure" : role.faction === "インポスター" ? "fake" : "neutral",
+        displayNote: p.roleKey === "baka" && p.fakeDisplayRoleKey ? `（表示：${ROLES[p.fakeDisplayRoleKey].name}）` : "",
+        clumsyNote: p.clumsy ? "（実はうっかり個体でした）" : "",
+        status: p.alive ? "生存" : `${p.deathDay ?? "?"}日目に脱落${p.deathCause ? `（${p.deathCause}）` : ""}`,
+        isWinner: role.faction === winnerFaction,
+        isMe: input.mode !== "pnp" && p.id === input.playerId,
+      };
+    });
+    return { winnerFaction, myWin, sub, rows };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1184,5 +1222,6 @@
     migrateFactionWins,
     applySoloStats,
     applyPnpStats,
+    buildResultSummary,
   };
 });
