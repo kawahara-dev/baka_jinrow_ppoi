@@ -1273,3 +1273,106 @@ test("ブラウザ側の recordPnpStats は共有モジュールと同一の戦�
   FB.recordPnpStats("イノセント陣営の勝利");
   assert.equal(localStorage.getItem("fakeBloomPnpStats"), JSON.stringify(expected), "二重記録されない");
 });
+
+// ---- フェーズ0第8歩：結果画面の勝敗・行生成の抽出 ----
+
+const RESULT_PLAYERS = [
+  { id: 0, name: "ルナ", icon: "🌙", roleKey: "guardian", alive: true },
+  { id: 1, name: "ミオ", icon: "🐱", roleKey: "fakeGirl", alive: false, deathDay: 2, deathCause: "追放" },
+  { id: 2, name: "ソラ", icon: "☀️", roleKey: "baka", fakeDisplayRoleKey: "doctor", alive: true },
+  { id: 3, name: "ユイ", icon: "🌸", roleKey: "apprenticeSeer", clumsy: true, alive: false, deathDay: 1, deathCause: "襲撃" },
+  { id: 4, name: "レン", icon: "🔥", roleKey: "bomber", alive: true },
+];
+const INNOCENT_WIN = "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！";
+const IMPOSTOR_WIN = "💀 インポスター陣営の勝利…生存者数が同数以上になった。";
+const BOMBER_STEAL_WIN = "💣 ボマーの勝利！爆弾で2人以上を倒し、勝利を横取りした！";
+
+test("buildResultSummary：イノセント勝利で陣営・自分の勝敗・行データが決まる", () => {
+  const s = Logic.buildResultSummary(RESULT_PLAYERS, { winText: INNOCENT_WIN, mode: "solo", playerId: 0, humanCount: 1 });
+  assert.equal(s.winnerFaction, "イノセント");
+  assert.equal(s.myWin, true);
+  assert.equal(s.sub, "あなたは「守り手」（イノセント）で 勝利！");
+  assert.equal(s.rows.length, 5);
+  const guardian = s.rows[0];
+  assert.equal(guardian.roleName, "守り手");
+  assert.equal(guardian.faction, "イノセント");
+  assert.equal(guardian.chipClass, "pure");
+  assert.equal(guardian.status, "生存");
+  assert.equal(guardian.isWinner, true);
+  assert.equal(guardian.isMe, true);
+  const fakeGirl = s.rows[1];
+  assert.equal(fakeGirl.chipClass, "fake");
+  assert.equal(fakeGirl.status, "2日目に脱落（追放）");
+  assert.equal(fakeGirl.isWinner, false);
+  assert.equal(fakeGirl.isMe, false);
+  const baka = s.rows[2];
+  assert.equal(baka.displayNote, "（表示：ドクター）");
+  assert.equal(baka.roleName, "バカ");
+  const seer = s.rows[3];
+  assert.equal(seer.clumsyNote, "（実はうっかり個体でした）");
+  assert.equal(seer.status, "1日目に脱落（襲撃）");
+  const bomber = s.rows[4];
+  assert.equal(bomber.chipClass, "neutral");
+  assert.equal(bomber.isWinner, false);
+});
+
+test("buildResultSummary：インポスター勝利なら人間は敗北、うっかり個体の注記は自分の文言にも出る", () => {
+  const s = Logic.buildResultSummary(RESULT_PLAYERS, { winText: IMPOSTOR_WIN, mode: "solo", playerId: 3, humanCount: 1 });
+  assert.equal(s.winnerFaction, "インポスター");
+  assert.equal(s.myWin, false);
+  assert.equal(s.sub, "あなたは「見習い占い師」（イノセント）で 敗北…（実はうっかり個体でした）");
+  assert.equal(s.rows[1].isWinner, true);
+  assert.equal(s.rows[0].isWinner, false);
+});
+
+test("buildResultSummary：ボマーの横取り勝利はニュートラル、ボマーだけが勝つ", () => {
+  const s = Logic.buildResultSummary(RESULT_PLAYERS, { winText: BOMBER_STEAL_WIN, mode: "solo", playerId: 4, humanCount: 1 });
+  assert.equal(s.winnerFaction, "ニュートラル");
+  assert.equal(s.myWin, true);
+  const asGuardian = Logic.buildResultSummary(RESULT_PLAYERS, { winText: BOMBER_STEAL_WIN, mode: "solo", playerId: 0, humanCount: 1 });
+  assert.equal(asGuardian.myWin, false);
+  assert.equal(asGuardian.rows[4].isWinner, true);
+  assert.equal(asGuardian.rows[0].isWinner, false);
+});
+
+test("buildResultSummary：パス＆プレイでは myWin が null で人間数入りの文言、（あなた）なし", () => {
+  const s = Logic.buildResultSummary(RESULT_PLAYERS, { winText: INNOCENT_WIN, mode: "pnp", playerId: 0, humanCount: 3 });
+  assert.equal(s.myWin, null);
+  assert.equal(s.sub, "パス＆プレイ（人間3人）で遊びました。");
+  assert.ok(s.rows.every((r) => r.isMe === false), "パス＆プレイの行に（あなた）は付かない");
+});
+
+test("buildResultSummary：入力の players を変更しない（純粋関数）", () => {
+  const snapshot = JSON.stringify(RESULT_PLAYERS);
+  Logic.buildResultSummary(RESULT_PLAYERS, { winText: INNOCENT_WIN, mode: "solo", playerId: 0, humanCount: 1 });
+  assert.equal(JSON.stringify(RESULT_PLAYERS), snapshot);
+});
+
+test("ブラウザ側の showResults は共有モジュールと同一の表示になる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const baka = s.players.find((p) => p.roleKey === "baka");
+  baka.fakeDisplayRoleKey = "guardian";
+  const seer = s.players.find((p) => p.roleKey === "apprenticeSeer");
+  seer.clumsy = true;
+  s.playerId = seer.id;
+  const input = { winText: INNOCENT_WIN, mode: s.mode, playerId: s.playerId, humanCount: s.humanPlayerIds.length };
+  const expected = Logic.buildResultSummary(s.players, input);
+  assert.equal(
+    JSON.stringify(FB.buildResultSummaryLogic(s.players, input)),
+    JSON.stringify(expected),
+    "ハーネス経由のモジュール関数とも一致");
+  FB.showResults(INNOCENT_WIN);
+  assert.equal(s.winnerFaction, expected.winnerFaction);
+  assert.equal(s.myWin, expected.myWin);
+  assert.equal(elements.get("resultSub").textContent, expected.sub);
+  const rowsHtml = elements.get("resultRows").innerHTML;
+  for (const r of expected.rows) {
+    assert.ok(rowsHtml.includes(r.roleName), `行に役職名 ${r.roleName} がある`);
+    assert.ok(rowsHtml.includes(r.status), `行に生死 ${r.status} がある`);
+    if (r.displayNote) assert.ok(rowsHtml.includes(r.displayNote), "バカの表示注記がある");
+    if (r.clumsyNote) assert.ok(rowsHtml.includes(r.clumsyNote), "うっかり個体の注記がある");
+  }
+  assert.ok(rowsHtml.includes("（あなた）"), "自分の行に（あなた）が付く");
+});

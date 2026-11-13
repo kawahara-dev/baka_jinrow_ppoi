@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildResultSummary: buildResultSummaryLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2102,32 +2102,28 @@
   function showResults(winText) {
     // 結果画面に吹き出しを残さない。
     clearSpeechBubbles();
-    const winnerFaction = winText.includes("イノセント陣営の勝利") ? "イノセント"
-      : winText.includes("インポスター陣営の勝利") ? "インポスター" : "ニュートラル";
-    state.winnerFaction = winnerFaction;
-    const me = state.players[state.playerId];
-    state.myWin = state.mode === "pnp" ? null : ROLES[me.roleKey].faction === winnerFaction;
+    // 勝敗陣営・自分の勝敗・サブ文言・各行のデータは共有モジュール
+    // （buildResultSummary）で作る。行の HTML 化と顔画像だけブラウザ側。
+    const summary = buildResultSummaryLogic(state.players, {
+      winText,
+      mode: state.mode,
+      playerId: state.playerId,
+      humanCount: state.humanPlayerIds.length,
+    });
+    state.winnerFaction = summary.winnerFaction;
+    state.myWin = summary.myWin;
     el("resultTitle").textContent = winText;
-    el("resultSub").textContent = state.mode === "pnp"
-      ? `パス＆プレイ（人間${state.humanPlayerIds.length}人）で遊びました。`
-      : `あなたは「${ROLES[me.roleKey].name}」（${ROLES[me.roleKey].faction}）で ${state.myWin ? "勝利！" : "敗北…"}${me.clumsy ? "（実はうっかり個体でした）" : ""}`;
+    el("resultSub").textContent = summary.sub;
     el("resultHighlights").innerHTML = buildHighlights().map(h => `<div class="result-highlight">${h}</div>`).join("");
-    el("resultRows").innerHTML = state.players.map(p => {
-      const role = ROLES[p.roleKey];
-      const displayNote = p.roleKey === "baka" && p.fakeDisplayRoleKey ? `（表示：${ROLES[p.fakeDisplayRoleKey].name}）` : "";
-      // 結果画面でのみ種明かしする：うっかり個体だった占い師を開示する。
-      const clumsyNote = p.clumsy ? "（実はうっかり個体でした）" : "";
-      const chipClass = role.faction === "イノセント" ? "pure" : role.faction === "インポスター" ? "fake" : "neutral";
-      const status = p.alive ? "生存" : `${p.deathDay ?? "?"}日目に脱落${p.deathCause ? `（${p.deathCause}）` : ""}`;
-      const img = ICON_IMGS[ICON_SLUGS[p.id]];
+    el("resultRows").innerHTML = summary.rows.map(r => {
+      const img = ICON_IMGS[ICON_SLUGS[r.id]];
       // 勝敗モーション（キャラモーション第1弾）：勝った陣営はジャンプ、
       // 負けた陣営はしょんぼり。
-      const isWinner = role.faction === winnerFaction;
-      return `<div class="result-row ${p.alive ? "" : "dead"} ${isWinner ? "winner" : "loser"}">
-        <div class="avatar"><span>${p.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${p.name}">` : ""}</div>
-        <div><div class="result-name">${p.name}${state.mode === "pnp" ? "" : (p.id === state.playerId ? "（あなた）" : "")}<span class="faction-chip ${chipClass}">${role.faction}</span></div>
-        <div class="result-role">${role.icon} ${role.name}${displayNote}${clumsyNote}</div></div>
-        <div class="result-status">${status}</div>
+      return `<div class="result-row ${r.alive ? "" : "dead"} ${r.isWinner ? "winner" : "loser"}">
+        <div class="avatar"><span>${r.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${r.name}">` : ""}</div>
+        <div><div class="result-name">${r.name}${r.isMe ? "（あなた）" : ""}<span class="faction-chip ${r.chipClass}">${r.faction}</span></div>
+        <div class="result-role">${r.roleIcon} ${r.roleName}${r.displayNote}${r.clumsyNote}</div></div>
+        <div class="result-status">${r.status}</div>
       </div>`;
     }).join("");
     // パス＆プレイの戦績はソロと別キーに記録する（フェーズ4）。
