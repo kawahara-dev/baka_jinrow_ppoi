@@ -434,14 +434,17 @@ test("役職カードとフェーズヒント: バカは表示役職として見
   me.fakeDisplayRoleKey = "apprenticeSeer";
   s.phase = "night";
   FB.updateInGameRoleCard();
-  assert.equal(elements.get("roleCardName").textContent, "🔮 見習い占い師");
+  assert.equal(elements.get("roleCardName").textContent, "見習い占い師");
+  assert.ok(elements.get("roleCardIcon").innerHTML.includes('data-role-info="apprenticeSeer"'), "役職カードに説明ボタン");
+  assert.ok(elements.get("roleCardIcon").innerHTML.includes("🔮"), "役職カードにアイコン");
   assert.equal(elements.get("roleCardFaction").textContent, "イノセント");
   assert.ok(!FB.getPhaseHint(FB.ROLES[me.roleKey]).includes("偽表示"), "ヒントに偽表示の文言は出ない");
   assert.match(FB.getPhaseHint(FB.ROLES[me.roleKey]), /調査/);
   // 村ガール表示のバカも表示役職のカードになる。
   me.fakeDisplayRoleKey = "villager";
   FB.updateInGameRoleCard();
-  assert.equal(elements.get("roleCardName").textContent, "🏠 村ガール");
+  assert.equal(elements.get("roleCardName").textContent, "村ガール");
+  assert.ok(elements.get("roleCardIcon").innerHTML.includes('data-role-info="villager"'));
 });
 
 test("公開情報: 脱落したバカは表示役職として公開される", () => {
@@ -2081,11 +2084,12 @@ test("役職アイコン: ROLES 全役職に仕様通りのアイコンがあり
   for (const icon of icons) {
     assert.ok(!charEmojis.includes(icon), `キャラ絵文字と衝突: ${icon}`);
   }
-  // 役職ガイド（静的 HTML）にも同じアイコン付きで並んでいる。
+  // 役職ボード（静的 HTML）にも同じアイコンが説明ボタンとして並んでいる。
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   for (const [key, icon] of Object.entries(expected)) {
     const name = FB.ROLES[key].name;
-    assert.ok(html.includes(`<strong>${icon} ${name}`), `ガイドに ${icon} ${name}`);
+    assert.ok(html.includes(`data-role-info="${key}" aria-label="${name}の簡単な説明を見る">${icon}</button>`), `ボードに ${icon} ${name} のボタン`);
+    assert.ok(html.includes(`<strong>${name}</strong>`), `ボードに ${name}`);
   }
 });
 
@@ -2155,24 +2159,34 @@ test("役職アイコン併記: 役職画面・役職カード・結果画面の
   const me = humanOf(FB);
   me.roleKey = "apprenticeSeer";
   me.clumsy = false;
-  assert.ok(FB.roleHtmlFor(me).includes("🔮 見習い占い師"), "役職画面にアイコン付き");
+  assert.ok(FB.roleHtmlFor(me).includes('data-role-info="apprenticeSeer"'), "役職画面に説明ボタン");
+  assert.ok(FB.roleHtmlFor(me).includes("🔮"), "役職画面にアイコン");
+  assert.ok(FB.roleHtmlFor(me).includes("見習い占い師"), "役職画面に役職名");
   FB.updateInGameRoleCard();
-  assert.equal(elements.get("roleCardName").textContent, "🔮 見習い占い師");
+  assert.equal(elements.get("roleCardName").textContent, "見習い占い師");
+  assert.ok(elements.get("roleCardIcon").innerHTML.includes("🔮"), "役職カードにアイコン");
   // バカの役職画面・役職カードは表示役職のアイコンになる。
   me.roleKey = "baka";
   me.fakeDisplayRoleKey = "guardian";
-  assert.ok(FB.roleHtmlFor(me).includes("🛡️ 守り手"));
+  assert.ok(FB.roleHtmlFor(me).includes('data-role-info="guardian"'), "バカの役職画面は表示役職のボタン");
+  assert.ok(FB.roleHtmlFor(me).includes("🛡️"));
   assert.ok(!FB.roleHtmlFor(me).includes("🃏"));
+  assert.ok(!FB.roleHtmlFor(me).includes('data-role-info="baka"'), "バカ実役職のボタンは出ない");
   FB.updateInGameRoleCard();
-  assert.equal(elements.get("roleCardName").textContent, "🛡️ 守り手");
+  assert.equal(elements.get("roleCardName").textContent, "守り手");
+  assert.ok(elements.get("roleCardIcon").innerHTML.includes('data-role-info="guardian"'));
   // 結果画面は種明かしなので実役職のアイコン。
   const seer = s.players.find((p) => p.id !== me.id);
   seer.roleKey = "apprenticeSeer";
   seer.clumsy = false;
   FB.showResults("🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
   const rows = elements.get("resultRows").innerHTML;
-  assert.ok(rows.includes("🃏 バカ"), "結果画面にバカの実役職アイコン");
-  assert.ok(rows.includes("🔮 見習い占い師"), "結果画面に占い師アイコン");
+  assert.ok(rows.includes('data-role-info="baka"'), "結果画面にバカの実役職ボタン");
+  assert.ok(rows.includes("🃏"), "結果画面にバカの実役職アイコン");
+  assert.ok(rows.includes("バカ"), "結果画面にバカの実役職名");
+  assert.ok(rows.includes('data-role-info="apprenticeSeer"'), "結果画面に占い師ボタン");
+  assert.ok(rows.includes("🔮"), "結果画面に占い師アイコン");
+  assert.ok(rows.includes("見習い占い師"), "結果画面に占い師の名前");
 });
 
 test("ログの折りたたみ: 見出しがトグルボタンになり、aria-controls と CSS がある", () => {
@@ -2448,4 +2462,69 @@ test("ファビコン: head にインライン SVG のアイコンがある", ()
   assert.ok(href.includes("%3Csvg"), "SVG 本体がない");
   assert.ok(href.includes("🌸"), "花の絵文字がない");
   assert.ok(href.includes("%23ff6fb3"), "テーマ色（ピンク）がない");
+});
+
+test("役職アイコン拡大とFeign風UI: ボタンは大きく、ゲーム画面は町のボード風ダークテーマ", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  // アイコンボタンは従来の 1.05rem から拡大（基本 1.65rem／ボード 2rem）。
+  assert.match(style, /\.role-icon-btn \{[^}]*width: 44px; height: 44px;[^}]*font-size: 1\.65rem;/);
+  assert.match(style, /\.role-tile \.role-icon-btn \{[^}]*font-size: 2rem;/);
+  assert.match(style, /\.card \.role-icon-btn \{[^}]*font-size: 1\.6rem;/);
+  // 陣営カラーの枠（Feign のダッシュボード風）。
+  assert.match(style, /\.role-icon-btn\.faction-innocent \{ border-color: var\(--innocent\); \}/);
+  assert.match(style, /\.role-icon-btn\.faction-impostor \{ border-color: var\(--impostor\); \}/);
+  assert.match(style, /\.role-icon-btn\.faction-neutral \{ border-color: var\(--neutral\); \}/);
+  // ゲーム画面はダークな町のボード、選択中はゴールド枠、ステージに家並み。
+  assert.match(style, /#gameScreen \{[^}]*linear-gradient\(180deg, #342a55/);
+  assert.match(style, /#gameScreen \.card\.selected \{[^}]*outline: 3px solid var\(--gold\);/);
+  assert.match(style, /#gameScreen \.stage::before \{[^}]*🏠/);
+  // 役職ボードは陣営カラーのタイル一覧。
+  assert.match(style, /\.role-tile\.faction-innocent \{[^}]*border-left-color: var\(--innocent\);/);
+  assert.match(style, /\.role-tile\.faction-impostor \{[^}]*border-left-color: var\(--impostor\);/);
+  assert.ok(html.includes("役職ボード（アイコンを押すと簡単な説明）"), "ボードの見出し");
+  assert.ok(html.includes('id="roleInfoBackdrop"'), "ポップオーバーの土台がある");
+});
+
+test("役職説明ポップオーバー: showRoleInfo で短い説明が出て、閉じられる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  // ハーネスは静的 HTML の class を再現しないため、まず閉じてから検証する
+  // （実ブラウザでは markup の hidden で最初から閉じている）。
+  FB.closeRoleInfo();
+  assert.ok(elements.get("roleInfoBackdrop").classList.contains("hidden"), "閉じている");
+  FB.showRoleInfo("guardian");
+  assert.ok(!elements.get("roleInfoBackdrop").classList.contains("hidden"), "開いた");
+  assert.equal(elements.get("roleInfoName").textContent, "守り手");
+  assert.equal(elements.get("roleInfoDesc").textContent, FB.ROLES.guardian.shortDesc);
+  assert.equal(elements.get("roleInfoFactionChip").textContent, "イノセント");
+  // 未知のキーは何も起きない（開いたままの内容も変わらない）。
+  FB.showRoleInfo("no-such-role");
+  assert.equal(elements.get("roleInfoName").textContent, "守り手");
+  FB.closeRoleInfo();
+  assert.ok(elements.get("roleInfoBackdrop").classList.contains("hidden"), "閉じた");
+});
+
+test("役職説明ポップオーバー: document のキャプチャ委譲でアイコンのクリックだけ拾い、親へ伝えない", () => {
+  const { FB, elements, sandbox } = loadGame({ seedSettings: BASE_SETTINGS });
+  const clicks = (sandbox.document._listeners.click || []);
+  assert.equal(clicks.length, 1, "委譲リスナーが1つ登録されている");
+  assert.equal(clicks[0].capture, true, "キャプチャ段階で拾う");
+  let stopped = false;
+  const btn = { dataset: { roleInfo: "tracker" }, focus() {}, closest(sel) { return sel === "[data-role-info]" ? this : null; } };
+  sandbox.document.dispatch("click", {
+    target: btn,
+    preventDefault() {},
+    stopPropagation() { stopped = true; },
+  });
+  assert.ok(stopped, "親のクリック処理へ伝えない");
+  assert.ok(!elements.get("roleInfoBackdrop").classList.contains("hidden"), "ポップオーバーが開く");
+  assert.equal(elements.get("roleInfoName").textContent, "追跡係");
+  // アイコン以外のクリックは素通りする。
+  FB.closeRoleInfo();
+  sandbox.document.dispatch("click", {
+    target: { closest() { return null; } },
+    preventDefault() { throw new Error("アイコン以外で preventDefault しない"); },
+    stopPropagation() { throw new Error("アイコン以外で stopPropagation しない"); },
+  });
+  assert.ok(elements.get("roleInfoBackdrop").classList.contains("hidden"), "アイコン以外では開かない");
 });

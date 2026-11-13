@@ -16,6 +16,7 @@
       icon: "🔮",
       faction: "イノセント",
       desc: "夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。",
+      shortDesc: "夜に1人の陣営を調べられる。",
       nightActionHint: "怪しい相手を1人選んで調査しよ。",
       resultInterpretation: "表示された陣営をそのまま参考にしてOK。",
       riskNote: "相手が『なりすまし』だと65%でイノセント判定に化けることがある。",
@@ -26,6 +27,7 @@
       icon: "🛡️",
       faction: "イノセント",
       desc: "夜に1人を守る。",
+      shortDesc: "夜に1人を守って、襲撃や爆発から助けられる。",
       nightActionHint: "襲われそうな子を1人選んでガード。",
       resultInterpretation: "夜の報告で襲撃が防がれたらガード成功の可能性あり。",
       riskNote: "誰を守ったかは公開されない。読み負けると守り切れない。",
@@ -36,6 +38,7 @@
       icon: "👣",
       faction: "イノセント",
       desc: "夜に1人が誰を訪ねたか分かる。",
+      shortDesc: "夜に1人が誰の家を訪ねたか分かる。",
       nightActionHint: "行動が怪しい相手を1人選んで追跡。",
       resultInterpretation: "『誰を訪れたか』は間接情報。単体で黒確定にはしないのがコツ。",
       riskNote: "追跡先の行動理由までは分からないため、早とちり注意。",
@@ -46,6 +49,7 @@
       icon: "🚔",
       faction: "イノセント",
       desc: "夜に1人を訪ねて、その夜の行動を封じる（FeignのPolice方式）。",
+      shortDesc: "夜に1人の行動を封じられる。",
       nightActionHint: "能力を使いそうな相手を1人選んで足止め。",
       resultInterpretation: "妨害した相手はその夜、能力を使えない（調査・護衛・追跡・盗み見・爆弾など）。ただしインポスター陣営の襲撃そのものは止められない。",
       riskNote: "味方の能力者を止めると損。相手の役職読みが大事。",
@@ -56,6 +60,7 @@
       icon: "🔭",
       faction: "イノセント",
       desc: "夜に1人の家を見張り、その夜に訪れた全員が分かる（FeignのLookout方式）。",
+      shortDesc: "夜に1人の家を訪れた人たちを調べられる。",
       nightActionHint: "狙われそうな子や怪しい子の家を見張ろう。",
       resultInterpretation: "訪問者の中に襲撃者や能力者が混ざっている。誰が何をしたかまでは分からない。",
       riskNote: "訪問＝黒ではない。護衛や調査の訪問も見えてしまう。",
@@ -66,6 +71,7 @@
       icon: "🪤",
       faction: "イノセント",
       desc: "夜に1人の家へ罠を設置。その人が襲撃されて倒れたら、襲撃者も道連れになる（FeignのTrapper方式）。",
+      shortDesc: "1人の家に罠をしかけ、襲撃者を道連れにできる。",
       nightActionHint: "襲われそうな子の家に罠を仕掛けよう。自分の家にも設置できる。",
       resultInterpretation: "罠が作動したら朝の報告で分かる。罠はその夜かぎり。",
       riskNote: "護衛と重なると襲撃自体が防がれて罠は不発。爆弾には反応しない。",
@@ -76,6 +82,7 @@
       icon: "🩺",
       faction: "イノセント",
       desc: "夜に1人を診察。その人がその夜に襲撃や爆発で倒れたら、朝までに蘇生させる。",
+      shortDesc: "選んだ人がその夜倒れたら、朝までに蘇生できる。",
       nightActionHint: "狙われそうな子を診察しておこう。自分も選べる。",
       resultInterpretation: "蘇生が起きると朝の報告で公開される（倒れた人の役職は公開されたまま）。",
       riskNote: "倒れなかった相手では何も起きない。妨害されると蘇生できない。",
@@ -86,6 +93,7 @@
       icon: "🐭",
       faction: "イノセント",
       desc: "能力は昼。ゲーム中1回だけ、議論中に1人の本当の役職を全員に公開できる（FeignのMouse方式）。",
+      shortDesc: "議論中に1回だけ、1人の本当の役職をみんなに公開できる。",
       nightActionHint: "夜は能力なし。昼の議論で公開ボタンのタイミングを計ろう。",
       resultInterpretation: "公開された役職は確定情報。インポスターがバレれば追放まっしぐら。",
       riskNote: "1回きり。誰を公開するかで勝敗が動く。",
@@ -96,6 +104,7 @@
       icon: "🗳️",
       faction: "イノセント",
       desc: "能力は投票。自分の票が常に2票分になる（FeignのPolitician方式）。",
+      shortDesc: "自分の投票が2票分になる。",
       nightActionHint: "夜は能力なし。昼は投票で決着をつける動きを考えよう。",
       resultInterpretation: "票が割れそうな場面で特に強い。",
       riskNote: "票の重さから正体を推測されることもある。",
@@ -106,6 +115,7 @@
       icon: "🏠",
       faction: "イノセント",
       desc: "能力なし。議論と投票で戦う。",
+      shortDesc: "特別な能力はない。議論と投票で戦う。",
       nightActionHint: "夜は情報整理に集中。朝ログと発言の矛盾を探そう。",
       resultInterpretation: "自分の夜結果はないので、他者の報告の整合性がカギ。",
       riskNote: "強い能力はないぶん、ミスリードに流されやすい。",
@@ -116,6 +126,7 @@
       icon: "🎭",
       faction: "インポスター",
       desc: "インポスター陣営として夜に1人を脱落させる。襲撃しない夜は、イノセント側1人の夜行動を妨害する。",
+      shortDesc: "夜に仲間と1人を襲撃できる。襲撃しない夜は1人の行動を妨害できる。",
       nightActionHint: "仲間と相談した想定で、インポスター陣営として襲撃先を1人に絞る。",
       resultInterpretation: "襲撃が通れば盤面有利、守られると計画を立て直し。妨害された相手はその夜、能力を使えない。",
       riskNote: "守り手の防衛先に当たると襲撃失敗。襲撃は陣営で1回だけ。",
@@ -126,6 +137,7 @@
       icon: "🪞",
       faction: "インポスター",
       desc: "調査でイノセントに見えることがある。襲撃しない夜は、イノセント側1人の実役職を盗み見る。得た情報は陣営の襲撃先決定に使われる。",
+      shortDesc: "調査でイノセントに見えることがある。襲撃しない夜は1人の役職を盗み見できる。",
       nightActionHint: "占いをいなしつつ、インポスター陣営の襲撃先相談に乗る立ち回り。",
       resultInterpretation: "調査を受けると、相手視点でイノセント結果が出る可能性がある。盗み見で占い師や守り手が割れると、優先的に狙われる。",
       riskNote: "target.roleKey === \"mimic\" のとき65%でイノセント判定に化ける。襲撃実行はインポスター陣営で1回だけ。",
@@ -136,6 +148,7 @@
       icon: "💣",
       faction: "ニュートラル",
       desc: "第三勢力。夜に1人へ爆弾を仕掛け、翌日の夜に爆発する（FeignのBomber方式）。最後の1人になるか、爆弾で2人以上を倒して生き残ると勝利。",
+      shortDesc: "毎晩1人に爆弾をしかけ、翌日の夜に爆発させる第三勢力。",
       nightActionHint: "毎晩だれか1人に爆弾を仕掛けよう。自分以外を全員倒せば勝ち。",
       resultInterpretation: "爆弾は護衛されている相手には効かない。占われると『ニュートラル』とバレる。",
       riskNote: "イノセント・インポスターどちらの勝利条件にも数えられない。両陣営から狙われる孤独な役職。",
@@ -146,6 +159,7 @@
       icon: "🃏",
       faction: "イノセント",
       desc: "本人には分からないが、別のイノセント役職として振る舞うトリッキー枠。表示された役職で夜行動できるが、その結果はすべて偽物（FeignのInsane方式）。",
+      shortDesc: "本人には別の役職に見えるけれど、夜の結果は全部デタラメになる。",
       nightActionHint: "表示された役職として夜行動しよう（能力なしのこともある）。ただし結果は信用できない。",
       resultInterpretation: "夜の結果はすべて偽物。占い判定はランダム、護衛は実際には守れず、追跡情報もデタラメ。実役職が分かるのは結果画面だけ。",
       riskNote: "自分の結果を根拠に推理すると論理が破綻して疑われる。周りから見ると、結果の矛盾がバカのサイン。",
@@ -1258,12 +1272,28 @@
     return `インポスター仲間：${getFakeAlliesText(players, player, opts)}`;
   }
 
+  // 役職アイコンのボタンの HTML。クリックするとブラウザ側が
+  // data-role-info を拾って簡単な説明（shortDesc）をポップオーバーで出す。
+  // 陣営カラーの枠（Feign のダッシュボード風）を付けるため faction
+  // クラスも返す。未知のキーは空文字。
+  function roleIconButtonHtml(roleKey, opts) {
+    const r = ROLES[roleKey];
+    if (!r) return "";
+    const factionClass = r.faction === "イノセント" ? "faction-innocent"
+      : r.faction === "インポスター" ? "faction-impostor" : "faction-neutral";
+    // カード上では役職名テキストを出さない（アイコン1つのデザイン）ため、
+    // 呼び出し側が aria-label を差し替えられるようにする。
+    const ariaLabel = (opts && opts.ariaLabel) || `${r.name}の簡単な説明を見る`;
+    return `<button type="button" class="role-icon-btn ${factionClass}" data-role-info="${roleKey}" aria-label="${ariaLabel}">${r.icon}</button>`;
+  }
+
   // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
   // 受け渡し画面で共通して使う。バカには表示役職だけを本物として見せる。
   function roleHtmlFor(player, players, opts) {
-    const r = ROLES[getEffectiveRoleKey(player)];
+    const effectiveKey = getEffectiveRoleKey(player);
+    const r = ROLES[effectiveKey];
     return `
-      <strong>${player.name} の役職：${r.icon} ${r.name}</strong><br>
+      <strong>${player.name} の役職：${roleIconButtonHtml(effectiveKey)} ${r.name}</strong><br>
       陣営：${r.faction}<br>
       説明：${r.desc}<br>
       夜の推奨行動：${r.nightActionHint}<br>
@@ -1280,9 +1310,13 @@
     if (!players || !players.length) return null;
     const me = players[playerId];
     if (!me) return null;
-    const role = ROLES[getEffectiveRoleKey(me)];
+    const roleKey = getEffectiveRoleKey(me);
+    const role = ROLES[roleKey];
     return {
       name: `${role.icon} ${role.name}`,
+      roleKey,
+      roleName: role.name,
+      iconButtonHtml: roleIconButtonHtml(roleKey),
       faction: role.faction,
       phaseHint: getPhaseHint(opts && opts.phase, me),
       riskNote: role.riskNote,
@@ -1309,7 +1343,7 @@
       // 「 ・ 生存中」は .meta-state に入れて、スマホでは CSS で隠す。
       const metaHtml = p.alive
         ? `？<span class="meta-state"> ・ 生存中</span>`
-        : `<span class="role-icon" aria-hidden="true">${ROLES[getPublicRoleKey(p)].icon}</span>`;
+        : roleIconButtonHtml(getPublicRoleKey(p), { ariaLabel: "役職の簡単な説明を見る" });
       const img = iconImgs[ICON_SLUGS[p.id]];
       const avatarHtml = `<span>${p.icon}</span>${img ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[p.id]}" src="${img}" alt="${p.name}" onerror="this.remove()">` : ""}`;
       const innerHtml = `
@@ -1370,6 +1404,7 @@
     getFakeAlliesText,
     getAlliesLineForRole,
     roleHtmlFor,
+    roleIconButtonHtml,
     buildRoleCardView,
     buildCardsView,
   };

@@ -191,6 +191,16 @@ function createSandbox(seedSettings, { fakeAudio = false, seedStorage = null } =
       createElement: () => makeElement(),
       querySelector: () => null,
       querySelectorAll: () => [],
+      // 役職説明ポップオーバーの委譲リスナー検証用：document 直付けの
+      // リスナーを記録し、テストから dispatch できるようにする。
+      _listeners: {},
+      addEventListener(type, fn, opts) {
+        if (!this._listeners[type]) this._listeners[type] = [];
+        this._listeners[type].push({ fn, capture: !!(opts && opts.capture) || opts === true });
+      },
+      dispatch(type, event = {}) {
+        for (const l of this._listeners[type] || []) l.fn(event);
+      },
     },
   };
   sandbox.window = sandbox;
@@ -221,7 +231,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   ROLES, PHASE_META, CHAR_TALK, charTalkPool, pickTalkLine, setupGame, runNight, resolveNightActions, doVote,
   morningToDiscussion, discussionToVote, revealMouse, checkWin, dealRoles, resolveVoteTally, checkWinCondition,
   getEffectiveRoleKey, getPublicRoleKey, getPhaseHint, updateInGameRoleCard,
-  getFakeAlliesText, getAlliesLineForRole,
+  getFakeAlliesText, getAlliesLineForRole, showRoleInfo, closeRoleInfo,
   renderStats, CLUMSY_SEER_RATE, showResults, buildHighlights, gameSettings,
   draw, paintSettings, roleHtmlFor, startHandoff, showPnpCover, showPnpRole,
   startPnpNight, showPnpNightCover, showPnpNightTurn, showPnpNightAction,
@@ -235,7 +245,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   get speechQueue() { return speechQueue; },
   recordPnpStats, loadPnpStats, renderPnpStats, recordStats, loadStats, focusEl,
   get state() { return state; },
-  resolveNightActionsLogic, cpuVotePickLogic, planNightActionsLogic, planDiscussionTalksLogic, buildHighlightsLogic, applySoloStatsLogic, applyPnpStatsLogic, buildStatsViewLogic, buildResultSummaryLogic, getPhaseHintLogic, getFakeAlliesTextLogic, getAlliesLineForRoleLogic, roleHtmlForLogic, buildRoleCardViewLogic, buildCardsViewLogic, formatActionLog,
+  resolveNightActionsLogic, cpuVotePickLogic, planNightActionsLogic, planDiscussionTalksLogic, buildHighlightsLogic, applySoloStatsLogic, applyPnpStatsLogic, buildStatsViewLogic, buildResultSummaryLogic, getPhaseHintLogic, getFakeAlliesTextLogic, getAlliesLineForRoleLogic, roleHtmlForLogic, buildRoleCardViewLogic, buildCardsViewLogic, roleIconButtonHtmlLogic, formatActionLog,
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
   nightCutins, stageGhostWalker, stageEventMotion, stageFlashRed, stageOwnActionMotion,
   showCutin, clearCutins,
