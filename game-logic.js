@@ -1536,6 +1536,55 @@
     if (!logFold || typeof logFold !== "object" || !(key in LOG_FOLD_DEFAULT)) return null;
     return { ...normalizeLogFold(logFold), [key]: !!folded };
   }
+  // タイトル画面の実績チップの定義。id・名前・ヒントだけのデータで、
+  // 達成条件は isAchievementUnlocked が id で分岐して判定する
+  // （ブラウザ側にあった ACHIEVEMENTS の test と同じ条件）。
+  const ACHIEVEMENT_DEFS = [
+    { id: "first-win", name: "初勝利", hint: "初めて勝つ" },
+    { id: "wins10", name: "10勝クラブ", hint: "通算10勝" },
+    { id: "wins30", name: "30勝クラブ", hint: "通算30勝" },
+    { id: "pure-win", name: "イノセントの勝利", hint: "イノセント陣営で勝つ" },
+    { id: "fake-win", name: "インポスターの勝利", hint: "インポスター陣営で勝つ" },
+    { id: "bomber-win", name: "ボマーの勝利", hint: "ボマーで勝つ" },
+    { id: "steal", name: "横取り屋", hint: "ボマーの横取り勝利" },
+    { id: "roles5", name: "五役の達人", hint: "5種類の役職で勝利" },
+    { id: "roles10", name: "十役の達人", hint: "10種類の役職で勝利" },
+    { id: "streak3", name: "3連勝", hint: "3連勝する" },
+    { id: "games50", name: "常連さん", hint: "通算50戦" },
+  ];
+  // 戦績から実績ひとつの達成可否を返す純粋関数。欠けた数値は 0、
+  // 欠けた集計は空として扱うので、古い保存形式でも記録ベースの
+  // 実績は遡って解除される（後方互換）。未知の id は未達成。
+  function isAchievementUnlocked(id, stats) {
+    const s = stats && typeof stats === "object" ? stats : {};
+    const num = v => (typeof v === "number" ? v : 0);
+    const factionWins = s.factionWins && typeof s.factionWins === "object" ? s.factionWins : {};
+    const byRole = s.byRole && typeof s.byRole === "object" ? s.byRole : {};
+    const rolesWon = Object.values(byRole)
+      .filter(v => v && typeof v.wins === "number" && v.wins >= 1).length;
+    switch (id) {
+      case "first-win": return num(s.wins) >= 1;
+      case "wins10": return num(s.wins) >= 10;
+      case "wins30": return num(s.wins) >= 30;
+      case "pure-win": return num(factionWins["イノセント"]) >= 1;
+      case "fake-win": return num(factionWins["インポスター"]) >= 1;
+      case "bomber-win": return num(factionWins["ニュートラル"]) >= 1;
+      case "steal": return num(s.steals) >= 1;
+      case "roles5": return rolesWon >= 5;
+      case "roles10": return rolesWon >= 10;
+      case "streak3": return num(s.bestStreak) >= 3;
+      case "games50": return num(s.games) >= 50;
+      default: return false;
+    }
+  }
+  // 実績チップの表示データを定義順に返す純粋関数。達成済みは 🏅、
+  // 未達成は 🔒。DOM への代入はブラウザ側（renderAchievements）が行う。
+  function buildAchievementsView(stats) {
+    return ACHIEVEMENT_DEFS.map(def => {
+      const unlocked = isAchievementUnlocked(def.id, stats);
+      return { id: def.id, name: def.name, hint: def.hint, unlocked, icon: unlocked ? "🏅" : "🔒" };
+    });
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1588,5 +1637,8 @@
     normalizeLogFold,
     buildLogFoldView,
     withLogFolded,
+    ACHIEVEMENT_DEFS,
+    isAchievementUnlocked,
+    buildAchievementsView,
   };
 });
