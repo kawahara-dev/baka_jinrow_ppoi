@@ -1287,6 +1287,23 @@
     return `<button type="button" class="role-icon-btn ${factionClass}" data-role-info="${roleKey}" aria-label="${ariaLabel}">${r.icon}</button>`;
   }
 
+  // 役職説明ポップオーバーの表示データ。showRoleInfo が画面に反映する
+  // 内容（アイコン・名前・陣営とチップのクラス・短い説明）を返す純粋関数。
+  // 未知のキー・null は null。DOM への代入とフォーカス移動はブラウザ側。
+  // 秘匿は呼び出し側が渡すキーで決まる（バカのカードは表示役職キー経由）
+  // ため、ここでは渡されたキーの役職しか絶対に出さない。
+  function buildRoleInfoView(roleKey) {
+    const r = ROLES[roleKey];
+    if (!r) return null;
+    return {
+      icon: r.icon,
+      name: r.name,
+      faction: r.faction,
+      factionChipClass: `faction-chip ${r.faction === "イノセント" ? "pure" : r.faction === "インポスター" ? "fake" : "neutral"}`,
+      desc: r.shortDesc || r.desc,
+    };
+  }
+
   // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
   // 受け渡し画面で共通して使う。バカには表示役職だけを本物として見せる。
   function roleHtmlFor(player, players, opts) {
@@ -1511,6 +1528,7 @@
     getAlliesLineForRole,
     roleHtmlFor,
     roleIconButtonHtml,
+    buildRoleInfoView,
     buildRoleCardView,
     buildCardsView,
     buildStageView,
