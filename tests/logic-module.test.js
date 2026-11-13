@@ -1629,3 +1629,102 @@ test("ブラウザ側の roleHtmlFor / getFakeAlliesText / getAlliesLineForRole 
     assert.equal(pnp.FB.getFakeAlliesText(p), Logic.getFakeAlliesText(ps.players, p, popts), `PnP ${p.name} の仲間表示が一致`);
   }
 });
+
+test("buildRoleCardView：役職名・陣営・フェーズヒント・注意書き・仲間文言を返す", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "apprenticeSeer" },
+    { id: 1, name: "ミオ", roleKey: "fakeGirl" },
+    { id: 2, name: "アオイ", roleKey: "mimic" },
+  ];
+  const view = Logic.buildRoleCardView(players, 0, { phase: "night" });
+  assert.equal(view.name, "🔮 見習い占い師");
+  assert.equal(view.faction, "イノセント");
+  assert.equal(view.phaseHint, Logic.ROLES.apprenticeSeer.nightActionHint);
+  assert.equal(view.riskNote, Logic.ROLES.apprenticeSeer.riskNote);
+  assert.equal(view.alliesText, "");
+  // 議論フェーズは固定文言（getPhaseHint と同じ）。
+  assert.equal(
+    Logic.buildRoleCardView(players, 0, { phase: "discussion" }).phaseHint,
+    Logic.getPhaseHint("discussion", players[0])
+  );
+  // インポスターには仲間文言が入る。
+  const fake = Logic.buildRoleCardView(players, 1, { phase: "night" });
+  assert.equal(fake.name, "🎭 フェイクガール");
+  assert.equal(fake.faction, "インポスター");
+  assert.equal(fake.alliesText, "アオイ");
+});
+
+test("buildRoleCardView：バカには表示役職だけを見せる", () => {
+  const players = [{ id: 0, name: "ルナ", roleKey: "baka", fakeDisplayRoleKey: "guardian" }];
+  const view = Logic.buildRoleCardView(players, 0, { phase: "night" });
+  assert.equal(view.name, "🛡️ 守り手");
+  assert.equal(view.phaseHint, Logic.ROLES.guardian.nightActionHint);
+  assert.ok(!view.name.includes("バカ"), `バカの文言が出ない: ${view.name}`);
+  assert.ok(!view.faction.includes("バカ"));
+});
+
+test("buildRoleCardView：パス＆プレイは P 番号つきの仲間文言、空・対象なしは null", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "fakeGirl" },
+    { id: 1, name: "ミオ", roleKey: "mimic" },
+  ];
+  const view = Logic.buildRoleCardView(players, 0, { phase: "night", mode: "pnp", humanPlayerIds: [1, 0] });
+  assert.equal(view.alliesText, "P1（ミオ）");
+  assert.equal(Logic.buildRoleCardView([], 0, { phase: "night" }), null);
+  assert.equal(Logic.buildRoleCardView(null, 0, { phase: "night" }), null);
+  assert.equal(Logic.buildRoleCardView(players, 99, { phase: "night" }), null);
+});
+
+test("buildRoleCardView：入力の players を変更しない（純粋関数）", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "baka", fakeDisplayRoleKey: "guardian" },
+    { id: 1, name: "ミオ", roleKey: "mimic" },
+  ];
+  const before = JSON.stringify(players);
+  Logic.buildRoleCardView(players, 0, { phase: "night", mode: "pnp", humanPlayerIds: [1, 0] });
+  assert.equal(JSON.stringify(players), before);
+});
+
+test("ブラウザ側の updateInGameRoleCard は共有モジュールの buildRoleCardView と同一の表示になる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const opts = { phase: s.phase, mode: s.mode, humanPlayerIds: s.humanPlayerIds };
+  const checkCard = (playerId) => {
+    const view = Logic.buildRoleCardView(s.players, playerId, opts);
+    assert.ok(view, `表示データがある (playerId=${playerId})`);
+    FB.updateInGameRoleCard();
+    assert.equal(elements.get("roleCardName").textContent, view.name);
+    assert.equal(elements.get("roleCardFaction").textContent, view.faction);
+    assert.equal(elements.get("roleCardPhaseHint").textContent, view.phaseHint);
+    assert.equal(elements.get("roleCardRisk").textContent, view.riskNote);
+    assert.equal(elements.get("roleCardAllies").textContent, view.alliesText);
+    // ハーネスの closest() は自分自身を返すため、仲間行の hidden は
+    // roleCardAllies 自身のクラスで判定する。
+    assert.equal(elements.get("roleCardAllies")._classes.has("hidden"), !view.alliesText);
+    // 別レルムのオブジェクトは deepStrictEqual がプロトタイプ差で
+    // 失敗するため JSON で比べる（PR #80 の教訓と同じ）。
+    assert.equal(
+      JSON.stringify(FB.buildRoleCardViewLogic(s.players, playerId, opts)),
+      JSON.stringify(view),
+      `ハーネス経由のモジュール関数とも同一 (playerId=${playerId})`
+    );
+  };
+  // 人間（ソロの自分）のカード。
+  checkCard(s.playerId);
+  // インポスターのプレイヤーに切り替えると仲間文言が出て行も表示される。
+  const impostor = s.players.find((p) => Logic.ROLES[p.roleKey].faction === "インポスター");
+  assert.ok(impostor, "インポスターがいる");
+  const savedPlayerId = s.playerId;
+  s.playerId = impostor.id;
+  checkCard(impostor.id);
+  assert.ok(elements.get("roleCardAllies").textContent.length > 0, "仲間文言がある");
+  s.playerId = savedPlayerId;
+  // バカ表示のときも役職カードは表示役職のもの。
+  const me = s.players[s.playerId];
+  me.roleKey = "baka";
+  me.fakeDisplayRoleKey = "guardian";
+  FB.updateInGameRoleCard();
+  assert.equal(elements.get("roleCardName").textContent, "🛡️ 守り手");
+  assert.ok(!elements.get("roleCardName").textContent.includes("バカ"));
+});

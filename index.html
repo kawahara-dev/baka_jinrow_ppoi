@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1428,19 +1428,18 @@
     return getPhaseHintLogic(state.phase, state.players[state.playerId]);
   }
 
+  // ゲーム画面の役職カードは共有モジュールで表示データを生成し、
+  // ブラウザ側は要素への代入だけをする。
   function updateInGameRoleCard() {
-    if (!state.players || !state.players.length) return;
-    const me = state.players[state.playerId];
-    // バカの役職カードも表示役職で出す（本人には分からない）。
-    const role = ROLES[getEffectiveRoleKey(me)];
-    el("roleCardName").textContent = `${role.icon} ${role.name}`;
-    el("roleCardFaction").textContent = role.faction;
-    el("roleCardPhaseHint").textContent = getPhaseHint(role);
-    el("roleCardRisk").textContent = role.riskNote;
-    const alliesText = getFakeAlliesText(me);
+    const view = buildRoleCardViewLogic(state.players, state.playerId, { phase: state.phase, mode: state.mode, humanPlayerIds: state.humanPlayerIds });
+    if (!view) return;
+    el("roleCardName").textContent = view.name;
+    el("roleCardFaction").textContent = view.faction;
+    el("roleCardPhaseHint").textContent = view.phaseHint;
+    el("roleCardRisk").textContent = view.riskNote;
     const alliesRow = el("roleCardAllies").closest("div");
-    el("roleCardAllies").textContent = alliesText;
-    alliesRow.classList.toggle("hidden", !alliesText);
+    el("roleCardAllies").textContent = view.alliesText;
+    alliesRow.classList.toggle("hidden", !view.alliesText);
   }
 
   function draw() {
