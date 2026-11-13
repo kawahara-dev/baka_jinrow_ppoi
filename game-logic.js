@@ -1367,6 +1367,66 @@
       };
     });
   }
+
+  // ゲーム画面のステージに並ぶ歩行者（生存者）の表示データ。生存者だけを
+  // players の順に返し、1人分は歩行者の span 全体の HTML。--bd は歩行の
+  // 周期で、id を 4 で割った余りで 0.31s / 0.34s / 0.37s / 0.40s になる。
+  // players が空のときは空配列を返す。
+  function buildStageView(players) {
+    if (!players || !players.length) return [];
+    return players.filter(p => p.alive).map(p => {
+      const slug = ICON_SLUGS[p.id];
+      const duration = (0.31 + (p.id % 4) * 0.03).toFixed(2);
+      return {
+        id: p.id,
+        slug,
+        duration: `${duration}s`,
+        html: `
+        <span class="walker" data-player="${p.id}" style="--i:${p.id};--bd:${duration}s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${slug}" data-frame="a" alt=""><img class="frame-b" data-slug="${slug}" data-frame="b" alt=""></span></span>`,
+      };
+    });
+  }
+
+  // draw() が画面に反映する表示データ（カードとステージ歩行者を除く）。
+  // 日数・フェーズ表示、役職カードの表示有無、3つのボタン、マウス公開
+  // ボタン、パス＆プレイの手番バナーの文言と表示有無。DOM への代入は
+  // ブラウザ側（draw）が行う。state がないときはすべて非表示の表示を返す。
+  function buildDrawView(state) {
+    const hidden = { hidden: true };
+    if (!state) {
+      return {
+        dayText: "", phaseText: "", roleCardHidden: false,
+        actionBtn: { text: "実行", hidden: true },
+        voteBtn: { text: "投票する", hidden: true },
+        nextBtn: hidden, mouseBtn: hidden, pnpBanner: hidden,
+      };
+    }
+    const phase = state.phase;
+    const meta = PHASE_META[phase] || {};
+    const me = state.players ? state.players[state.playerId] : undefined;
+    const mouseAvailable = state.mode !== "pnp" && phase === "discussion"
+      && !!me && getEffectiveRoleKey(me) === "mouse" && !me.mouseUsed;
+    const pnpInputPending = state.mode === "pnp"
+      && (state.pnpNightInputPending != null || state.pnpVoteInputPending != null);
+    return {
+      dayText: String(state.day),
+      phaseText: meta.label || "",
+      roleCardHidden: state.mode === "pnp",
+      actionBtn: {
+        text: (state.mode === "pnp" && state.pnpNightInputPending != null)
+          ? "この対象で決める" : (meta.button || "実行"),
+        hidden: phase !== "night",
+      },
+      voteBtn: {
+        text: (state.mode === "pnp" && state.pnpVoteInputPending != null)
+          ? "この相手に投票する" : "投票する",
+        hidden: phase !== "vote",
+      },
+      nextBtn: { hidden: !["morning", "discussion"].includes(phase) },
+      mouseBtn: { hidden: !mouseAvailable },
+      pnpBanner: { hidden: !pnpInputPending },
+    };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1407,5 +1467,7 @@
     roleIconButtonHtml,
     buildRoleCardView,
     buildCardsView,
+    buildStageView,
+    buildDrawView,
   };
 });
