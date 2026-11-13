@@ -1694,7 +1694,8 @@ test("ブラウザ側の updateInGameRoleCard は共有モジュールの buildR
     const view = Logic.buildRoleCardView(s.players, playerId, opts);
     assert.ok(view, `表示データがある (playerId=${playerId})`);
     FB.updateInGameRoleCard();
-    assert.equal(elements.get("roleCardName").textContent, view.name);
+    assert.equal(elements.get("roleCardName").textContent, view.roleName);
+    assert.equal(elements.get("roleCardIcon").innerHTML, view.iconButtonHtml);
     assert.equal(elements.get("roleCardFaction").textContent, view.faction);
     assert.equal(elements.get("roleCardPhaseHint").textContent, view.phaseHint);
     assert.equal(elements.get("roleCardRisk").textContent, view.riskNote);
@@ -1725,8 +1726,10 @@ test("ブラウザ側の updateInGameRoleCard は共有モジュールの buildR
   me.roleKey = "baka";
   me.fakeDisplayRoleKey = "guardian";
   FB.updateInGameRoleCard();
-  assert.equal(elements.get("roleCardName").textContent, "🛡️ 守り手");
+  assert.equal(elements.get("roleCardName").textContent, "守り手");
+  assert.ok(elements.get("roleCardIcon").innerHTML.includes('data-role-info="guardian"'), "アイコンは表示役職のボタン");
   assert.ok(!elements.get("roleCardName").textContent.includes("バカ"));
+  assert.ok(!elements.get("roleCardIcon").innerHTML.includes("バカ"));
 });
 
 test("buildCardsView：生存カードは「？」と生存中、クラス・aria・tabIndex を返す", () => {
@@ -1767,7 +1770,9 @@ test("buildCardsView：脱落カードは表示役職のアイコンと脱落済
   assert.equal(view.ariaLabel, "ユイ、なりすまし、脱落済み");
   assert.equal(view.tabIndex, -1);
   assert.equal(view.ariaDisabled, true);
-  assert.equal(view.metaHtml, `<span class="role-icon" aria-hidden="true">${Logic.ROLES.mimic.icon}</span>`);
+  assert.equal(view.metaHtml, Logic.roleIconButtonHtml("mimic", { ariaLabel: "役職の簡単な説明を見る" }));
+  assert.ok(view.metaHtml.includes('data-role-info="mimic"'), "脱落カードのアイコンは説明ボタン");
+  assert.ok(!view.metaHtml.includes("なりすまし"), "カードに役職名テキストは出ない");
   assert.ok(view.innerHtml.includes(Logic.ROLES.mimic.icon));
   assert.ok(!view.innerHtml.includes("？"), "脱落カードに「？」は出ない");
 });
@@ -1850,4 +1855,37 @@ test("ブラウザ側の draw は共有モジュールの buildCardsView と同�
   const bakaCard = elements.get("cards").children[1];
   assert.ok(!bakaCard.innerHTML.includes("バカ"), "バカの実役職がカードに出ない");
   assert.ok(bakaCard.innerHTML.includes(Logic.ROLES.guardian.icon), "表示役職のアイコンが出る");
+});
+
+test("ROLES：全役職に簡単な説明 shortDesc がある（40字以内）", () => {
+  for (const [key, role] of Object.entries(Logic.ROLES)) {
+    assert.ok(role.shortDesc, `${key} に shortDesc がある`);
+    assert.ok(role.shortDesc.length <= 40, `${key} の shortDesc が短い: ${role.shortDesc}`);
+    assert.notEqual(role.shortDesc, role.desc, `${key} の shortDesc は desc の流用ではない`);
+  }
+});
+
+test("roleIconButtonHtml：陣営カラーのクラスと説明ボタンを返し、未知のキーは空文字", () => {
+  const seer = Logic.roleIconButtonHtml("apprenticeSeer");
+  assert.ok(seer.includes('class="role-icon-btn faction-innocent"'), seer);
+  assert.ok(seer.includes('data-role-info="apprenticeSeer"'), seer);
+  assert.ok(seer.includes('aria-label="見習い占い師の簡単な説明を見る"'), seer);
+  assert.ok(seer.includes(`>${Logic.ROLES.apprenticeSeer.icon}</button>`), seer);
+  assert.ok(Logic.roleIconButtonHtml("fakeGirl").includes("faction-impostor"));
+  assert.ok(Logic.roleIconButtonHtml("bomber").includes("faction-neutral"));
+  // カード用に aria-label を差し替えられる（役職名テキストを出さないため）。
+  const card = Logic.roleIconButtonHtml("guardian", { ariaLabel: "役職の簡単な説明を見る" });
+  assert.ok(card.includes('aria-label="役職の簡単な説明を見る"'), card);
+  assert.ok(!card.includes("守り手"), card);
+  assert.equal(Logic.roleIconButtonHtml("no-such-role"), "");
+  assert.equal(Logic.roleIconButtonHtml(undefined), "");
+});
+
+test("buildRoleCardView：roleKey・roleName・iconButtonHtml を返し、バカは表示役職になる", () => {
+  const players = [{ id: 0, name: "ルナ", roleKey: "baka", fakeDisplayRoleKey: "guardian" }];
+  const view = Logic.buildRoleCardView(players, 0, { phase: "night" });
+  assert.equal(view.roleKey, "guardian");
+  assert.equal(view.roleName, "守り手");
+  assert.equal(view.iconButtonHtml, Logic.roleIconButtonHtml("guardian"));
+  assert.ok(!JSON.stringify(view).includes("バカ"), "バカの文言が出ない");
 });

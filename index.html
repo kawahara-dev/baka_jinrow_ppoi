@@ -21,6 +21,12 @@
       --danger: #ff5f7a;
       --muted: #8a7ca8;
       --ok: #64be8b;
+      --innocent: #2f9e6e;
+      --impostor: #e0485f;
+      --neutral: #e07b2a;
+      --town: #2a2145;
+      --town-deep: #1d1733;
+      --gold: #ffc94d;
       --shadow: 0 10px 25px rgba(181, 146, 255, 0.18);
     }
 
@@ -547,7 +553,95 @@
     .avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
     .name { font-weight: 700; margin-top: 4px; }
     .meta { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
-    .card .role-icon { font-size: 1.05rem; line-height: 1; }
+    /* 役職アイコン：大きくして押しやすく。クリックで簡単な説明の
+       ポップオーバーが出る（data-role-info を持つボタン）。枠色は
+       Feign のダッシュボード風に陣営カラー。 */
+    .role-icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; min-height: 44px; padding: 0;
+      font-size: 1.65rem; line-height: 1;
+      background: #fff; border: 2px solid var(--line); border-radius: 14px;
+      box-shadow: 0 3px 8px rgba(92, 52, 140, 0.16);
+      vertical-align: middle;
+    }
+    .role-icon-btn.faction-innocent { border-color: var(--innocent); }
+    .role-icon-btn.faction-impostor { border-color: var(--impostor); }
+    .role-icon-btn.faction-neutral { border-color: var(--neutral); }
+    .card .role-icon-btn { width: 42px; height: 42px; min-height: 42px; font-size: 1.6rem; border-radius: 12px; }
+    .result-role .role-icon-btn { width: 38px; height: 38px; min-height: 38px; font-size: 1.45rem; border-radius: 11px; }
+    .role-tile .role-icon-btn { width: 58px; height: 58px; min-height: 58px; font-size: 2rem; border-radius: 16px; flex: 0 0 auto; }
+
+    /* 役職の簡単な説明ポップオーバー：画面下に張り付くシート型。
+       どの画面（役職確認・ゲーム中・結果）からでも同じ見た目で出す。 */
+    .role-info-backdrop {
+      position: fixed; inset: 0; z-index: 80;
+      background: rgba(24, 16, 44, 0.45);
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 12px;
+    }
+    .role-info-card {
+      position: relative; width: 100%; max-width: 430px;
+      background: #fff; border-radius: 18px; padding: 18px 18px 16px;
+      box-shadow: 0 18px 40px rgba(24, 16, 44, 0.35);
+      text-align: center; animation: bubblePop 0.18s ease both;
+    }
+    .role-info-icon { font-size: 2.6rem; line-height: 1.1; }
+    .role-info-name { font-size: 1.15rem; font-weight: 900; margin-top: 4px; }
+    .role-info-faction { margin-top: 6px; }
+    .role-info-desc { margin-top: 8px; font-size: 0.95rem; line-height: 1.55; }
+    .role-info-close {
+      position: absolute; top: 8px; right: 8px;
+      width: 36px; height: 36px; min-height: 36px; padding: 0;
+      border-radius: 50%; background: var(--violet-soft); color: var(--text);
+      font-size: 1rem; line-height: 1;
+    }
+    @media (min-width: 641px) {
+      .role-info-backdrop { align-items: center; }
+    }
+
+    /* 役職ボード（Feign 風）：陣営カラーの太枠タイルで一覧する。
+       アイコンが大きく、押すと上のポップオーバーで説明が出る。 */
+    .role-guide ul {
+      list-style: none; margin: 10px 0 0; padding: 0;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px;
+    }
+    .role-tile {
+      display: flex; gap: 10px; align-items: center;
+      background: #fff; border: 1px solid #f0e6ff; border-left: 6px solid var(--line);
+      border-radius: 12px; padding: 8px 10px; text-align: left;
+      font-size: 0.86rem; line-height: 1.45;
+    }
+    .role-tile.faction-innocent { border-left-color: var(--innocent); background: #f2fbf6; }
+    .role-tile.faction-impostor { border-left-color: var(--impostor); background: #fdf2f4; }
+    .role-tile.faction-neutral { border-left-color: var(--neutral); background: #fdf6ec; }
+    .role-tile .role-faction { display: block; font-size: 0.74rem; font-weight: 800; color: var(--muted); }
+
+    /* Feign 風UI第1弾：ゲーム画面を「町のボード」風のダークテーマに。
+       上部のステータスは濃紺のチップ、ステージは町の広場、選択中の
+       カードはゴールド枠で光る。レイアウト寸法は従来のまま。 */
+    #gameScreen {
+      background: linear-gradient(180deg, #342a55 0%, #4b356e 58%, #5d407a 100%);
+      border: 2px solid var(--town-deep);
+    }
+    #gameScreen .topbar .stat {
+      background: rgba(20, 14, 38, 0.85); border-color: rgba(255, 255, 255, 0.25); color: #fff;
+    }
+    #gameScreen .topbar .stat > div:first-child { color: #cfc2ee; }
+    #gameScreen .phase-title {
+      background: linear-gradient(90deg, var(--gold), var(--pink));
+      -webkit-background-clip: text; background-clip: text;
+    }
+    #gameScreen .stage { border: 2px solid var(--town-deep); box-shadow: inset 0 -16px 22px rgba(30, 20, 60, 0.20); }
+    #gameScreen .stage::before {
+      content: "🏠 🏡 🏠 🏘️ 🏠"; position: absolute; top: 3px; left: 0; right: 0; z-index: 0;
+      text-align: center; font-size: 21px; letter-spacing: 14px; opacity: 0.55; pointer-events: none;
+    }
+    #gameScreen .card { border: 2px solid #d9c8ff; }
+    #gameScreen .card.selected {
+      outline: 3px solid var(--gold);
+      box-shadow: 0 0 0 5px rgba(255, 201, 77, 0.30), 0 10px 18px rgba(24, 16, 44, 0.35);
+    }
+    #gameScreen .right-panel .screen { border: 2px solid rgba(255, 255, 255, 0.35); }
 
     .right-panel {
       display: grid;
@@ -663,12 +757,6 @@
       cursor: pointer;
       user-select: none;
     }
-    .role-guide ul {
-      margin: 8px 0 0;
-      padding-left: 1.1rem;
-      display: grid;
-      gap: 6px;
-    }
     .role-guide li strong {
       color: #6d4ca1;
     }
@@ -730,6 +818,8 @@
       .avatar { width: 52px; height: 52px; font-size: 1.5rem; }
       .name { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .meta { font-size: 0.74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* スマホ4列でも役職アイコンは大きく（38px）。メタ行のはみ出し防止に縦だけ詰める。 */
+      .card .role-icon-btn { width: 38px; height: 38px; min-height: 38px; font-size: 1.45rem; }
       /* 生存者のメタは「？」だけに短縮（「 ・ 生存中」を隠す）。 */
       .meta-state { display: none; }
       .card.voted::after { font-size: 0.66rem; padding: 1px 6px; top: 6px; right: 6px; }
@@ -920,7 +1010,7 @@
         <span class="player-role-heading">🪪 あなたの役職カード</span>
       </summary>
       <div class="player-role-meta">
-        <div><span>役職名：</span><strong id="roleCardName">-</strong></div>
+        <div><span>役職名：</span><span id="roleCardIcon"></span> <strong id="roleCardName">-</strong></div>
         <div><span>陣営：</span><strong id="roleCardFaction">-</strong></div>
         <div><span>今フェーズでやること：</span><span id="roleCardPhaseHint">-</span></div>
         <div><span>注意点：</span><span id="roleCardRisk">-</span></div>
@@ -962,27 +1052,37 @@
     </div>
 
     <details class="role-guide">
-      <summary>役職一覧</summary>
+      <summary>役職ボード（アイコンを押すと簡単な説明）</summary>
       <ul>
-        <li><strong>🔮 見習い占い師（イノセント）</strong>：夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。</li>
-        <li><strong>🛡️ 守り手（イノセント）</strong>：夜に1人を襲撃や爆発から守る。</li>
-        <li><strong>👣 追跡係（イノセント）</strong>：夜に1人が誰を訪ねたか分かる。</li>
-        <li><strong>🚔 ポリス（イノセント）</strong>：夜に1人の行動を封じる（襲撃そのものは止められない）。</li>
-        <li><strong>🔭 見張り役（イノセント）</strong>：夜に1人の家を訪れた全員が分かる。</li>
-        <li><strong>🪤 トラッパー（イノセント）</strong>：夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。</li>
-        <li><strong>🩺 ドクター（イノセント）</strong>：夜に1人を診察。その人がその夜倒れたら蘇生させる。</li>
-        <li><strong>🐭 マウス（イノセント）</strong>：昼に1回だけ、1人の本当の役職を全員に公開できる。</li>
-        <li><strong>🗳️ 政治家（イノセント）</strong>：投票の票が2票分になる。</li>
-        <li><strong>🏠 村ガール（イノセント）</strong>：能力なし。議論と投票が主軸。</li>
-        <li><strong>🎭 フェイクガール（インポスター）</strong>：襲撃しない夜は、イノセント側1人の行動を妨害する。</li>
-        <li><strong>🪞 なりすまし（インポスター）</strong>：調査でイノセントに見えることがある。襲撃しない夜はイノセント側1人の実役職を盗み見する。</li>
-        <li><strong>💣 ボマー（ニュートラル）</strong>：約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</li>
-        <li><strong>🃏 バカ（イノセント）</strong>：本人は別のイノセント役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。</li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="apprenticeSeer" aria-label="見習い占い師の簡単な説明を見る">🔮</button><div><strong>見習い占い師</strong><span class="role-faction">イノセント</span>夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="guardian" aria-label="守り手の簡単な説明を見る">🛡️</button><div><strong>守り手</strong><span class="role-faction">イノセント</span>夜に1人を襲撃や爆発から守る。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="tracker" aria-label="追跡係の簡単な説明を見る">👣</button><div><strong>追跡係</strong><span class="role-faction">イノセント</span>夜に1人が誰を訪ねたか分かる。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="police" aria-label="ポリスの簡単な説明を見る">🚔</button><div><strong>ポリス</strong><span class="role-faction">イノセント</span>夜に1人の行動を封じる（襲撃そのものは止められない）。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="lookout" aria-label="見張り役の簡単な説明を見る">🔭</button><div><strong>見張り役</strong><span class="role-faction">イノセント</span>夜に1人の家を訪れた全員が分かる。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="trapper" aria-label="トラッパーの簡単な説明を見る">🪤</button><div><strong>トラッパー</strong><span class="role-faction">イノセント</span>夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="doctor" aria-label="ドクターの簡単な説明を見る">🩺</button><div><strong>ドクター</strong><span class="role-faction">イノセント</span>夜に1人を診察。その人がその夜倒れたら蘇生させる。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="mouse" aria-label="マウスの簡単な説明を見る">🐭</button><div><strong>マウス</strong><span class="role-faction">イノセント</span>昼に1回だけ、1人の本当の役職を全員に公開できる。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="politician" aria-label="政治家の簡単な説明を見る">🗳️</button><div><strong>政治家</strong><span class="role-faction">イノセント</span>投票の票が2票分になる。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="villager" aria-label="村ガールの簡単な説明を見る">🏠</button><div><strong>村ガール</strong><span class="role-faction">イノセント</span>能力なし。議論と投票が主軸。</div></li>
+        <li class="role-tile faction-impostor"><button type="button" class="role-icon-btn faction-impostor" data-role-info="fakeGirl" aria-label="フェイクガールの簡単な説明を見る">🎭</button><div><strong>フェイクガール</strong><span class="role-faction">インポスター</span>襲撃しない夜は、イノセント側1人の行動を妨害する。</div></li>
+        <li class="role-tile faction-impostor"><button type="button" class="role-icon-btn faction-impostor" data-role-info="mimic" aria-label="なりすましの簡単な説明を見る">🪞</button><div><strong>なりすまし</strong><span class="role-faction">インポスター</span>調査でイノセントに見えることがある。襲撃しない夜はイノセント側1人の実役職を盗み見する。</div></li>
+        <li class="role-tile faction-neutral"><button type="button" class="role-icon-btn faction-neutral" data-role-info="bomber" aria-label="ボマーの簡単な説明を見る">💣</button><div><strong>ボマー</strong><span class="role-faction">ニュートラル</span>約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</div></li>
+        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="baka" aria-label="バカの簡単な説明を見る">🃏</button><div><strong>バカ</strong><span class="role-faction">イノセント</span>本人は別のイノセント役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。</div></li>
       </ul>
       <p style="margin-top:8px;">イノセント側の役職（占い師・バカ以外）は毎ゲーム抽選で、登場しないこともあります。インポスター陣営の襲撃は陣営で1回だけ。</p>
     </details>
 
   </section>
+
+  <div id="roleInfoBackdrop" class="role-info-backdrop hidden">
+    <div class="role-info-card" role="dialog" aria-modal="false" aria-labelledby="roleInfoName">
+      <button id="roleInfoClose" type="button" class="role-info-close" aria-label="説明を閉じる">✕</button>
+      <div id="roleInfoIcon" class="role-info-icon">🔮</div>
+      <div id="roleInfoName" class="role-info-name"></div>
+      <div class="role-info-faction"><span id="roleInfoFactionChip" class="faction-chip pure"></span></div>
+      <p id="roleInfoDesc" class="role-info-desc"></p>
+    </div>
+  </div>
 
   <div id="ad-space">広告スペース</div>
 </div>
@@ -993,7 +1093,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1433,7 +1533,8 @@
   function updateInGameRoleCard() {
     const view = buildRoleCardViewLogic(state.players, state.playerId, { phase: state.phase, mode: state.mode, humanPlayerIds: state.humanPlayerIds });
     if (!view) return;
-    el("roleCardName").textContent = view.name;
+    el("roleCardIcon").innerHTML = view.iconButtonHtml;
+    el("roleCardName").textContent = view.roleName;
     el("roleCardFaction").textContent = view.faction;
     el("roleCardPhaseHint").textContent = view.phaseHint;
     el("roleCardRisk").textContent = view.riskNote;
@@ -1441,6 +1542,49 @@
     el("roleCardAllies").textContent = view.alliesText;
     alliesRow.classList.toggle("hidden", !view.alliesText);
   }
+
+  // 役職アイコンを押したときの簡単な説明ポップオーバー。出すのは
+  // ROLES の shortDesc（1〜2文）だけ。バカの実役職など秘匿情報は
+  // 呼び出し側が渡すキーで決まる（カードは表示役職キー経由）ので、
+  // ここでは渡されたキーの役職しか絶対に出さない。
+  let roleInfoTrigger = null;
+  function showRoleInfo(roleKey, trigger) {
+    const role = ROLES[roleKey];
+    if (!role) return;
+    roleInfoTrigger = trigger || null;
+    el("roleInfoIcon").textContent = role.icon;
+    el("roleInfoName").textContent = role.name;
+    const chip = el("roleInfoFactionChip");
+    chip.textContent = role.faction;
+    chip.className = `faction-chip ${role.faction === "イノセント" ? "pure" : role.faction === "インポスター" ? "fake" : "neutral"}`;
+    el("roleInfoDesc").textContent = role.shortDesc || role.desc;
+    el("roleInfoBackdrop").classList.remove("hidden");
+    el("roleInfoClose").focus();
+  }
+  function closeRoleInfo() {
+    el("roleInfoBackdrop").classList.add("hidden");
+    if (roleInfoTrigger && roleInfoTrigger.focus) roleInfoTrigger.focus();
+    roleInfoTrigger = null;
+  }
+  // アイコンボタンはカードや行の中に動的に差し込まれるため、document の
+  // キャプチャ段階で拾う。stopPropagation でカード選択などの親の
+  // クリック処理へ伝わるのを止める（説明を見るだけの操作にする）。
+  if (document.addEventListener) {
+    document.addEventListener("click", (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest("[data-role-info]") : null;
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showRoleInfo(btn.dataset.roleInfo, btn);
+    }, true);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !el("roleInfoBackdrop").classList.contains("hidden")) closeRoleInfo();
+    });
+  }
+  el("roleInfoClose").addEventListener("click", closeRoleInfo);
+  el("roleInfoBackdrop").addEventListener("click", (e) => {
+    if (e.target === el("roleInfoBackdrop")) closeRoleInfo();
+  });
 
   function draw() {
     if (document.body && document.body.dataset) document.body.dataset.phase = state.phase;
@@ -2083,7 +2227,7 @@
       return `<div class="result-row ${r.alive ? "" : "dead"} ${r.isWinner ? "winner" : "loser"}">
         <div class="avatar"><span>${r.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${r.name}">` : ""}</div>
         <div><div class="result-name">${r.name}${r.isMe ? "（あなた）" : ""}<span class="faction-chip ${r.chipClass}">${r.faction}</span></div>
-        <div class="result-role">${r.roleIcon} ${r.roleName}${r.displayNote}${r.clumsyNote}</div></div>
+        <div class="result-role">${roleIconButtonHtmlLogic(r.roleKey)} ${r.roleName}${r.displayNote}${r.clumsyNote}</div></div>
         <div class="result-status">${r.status}</div>
       </div>`;
     }).join("");
