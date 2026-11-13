@@ -2169,3 +2169,64 @@ test("ブラウザ側の paintSettings は共有モジュールの buildSettings
   assert.equal(elements.get("humanCountRow").classList.contains("hidden"), view.humanCountHidden, "参加人数の行");
   assert.equal(elements.get("discussTimerRow").classList.contains("hidden"), view.discussTimerHidden, "議論タイマーの行");
 });
+
+test("buildRoleInfoView：守り手はアイコン・名前・陣営・チップのクラス・短い説明を返す", () => {
+  const view = Logic.buildRoleInfoView("guardian");
+  assert.equal(view.icon, "🛡️");
+  assert.equal(view.name, "守り手");
+  assert.equal(view.faction, "イノセント");
+  assert.equal(view.factionChipClass, "faction-chip pure");
+  assert.equal(view.desc, Logic.ROLES.guardian.shortDesc);
+});
+
+test("buildRoleInfoView：陣営ごとにチップのクラスが変わる", () => {
+  assert.equal(Logic.buildRoleInfoView("fakeGirl").factionChipClass, "faction-chip fake");
+  assert.equal(Logic.buildRoleInfoView("fakeGirl").faction, "インポスター");
+  assert.equal(Logic.buildRoleInfoView("bomber").factionChipClass, "faction-chip neutral");
+  assert.equal(Logic.buildRoleInfoView("bomber").faction, "ニュートラル");
+});
+
+test("buildRoleInfoView：全14役職で表示データが揃い、未知のキー・null は null", () => {
+  for (const key of Object.keys(Logic.ROLES)) {
+    const view = Logic.buildRoleInfoView(key);
+    assert.ok(view, `${key} の表示データがある`);
+    for (const field of ["icon", "name", "faction", "factionChipClass", "desc"]) {
+      assert.equal(typeof view[field], "string", `${key}.${field} は文字列`);
+      assert.ok(view[field].length > 0, `${key}.${field} は空でない`);
+    }
+    assert.ok(view.factionChipClass.startsWith("faction-chip "), `${key} のチップは faction-chip 付き`);
+  }
+  assert.equal(Logic.buildRoleInfoView("no-such-role"), null);
+  assert.equal(Logic.buildRoleInfoView(null), null);
+  assert.equal(Logic.buildRoleInfoView(undefined), null);
+});
+
+test("buildRoleInfoView：ROLES を変更しない（純粋関数）", () => {
+  const before = JSON.stringify(Logic.ROLES);
+  Logic.buildRoleInfoView("guardian");
+  Logic.buildRoleInfoView("bomber");
+  Logic.buildRoleInfoView("no-such-role");
+  assert.equal(JSON.stringify(Logic.ROLES), before, "ROLES は不変");
+});
+
+test("ブラウザ側の showRoleInfo は共有モジュールの buildRoleInfoView と同一に描く", () => {
+  const { FB, elements } = loadGame();
+  for (const key of ["guardian", "fakeGirl", "bomber", "baka"]) {
+    const view = Logic.buildRoleInfoView(key);
+    assert.equal(JSON.stringify(FB.buildRoleInfoViewLogic(key)), JSON.stringify(view), `ハーネス経由の buildRoleInfoView とも同一 (${key})`);
+    FB.showRoleInfo(key);
+    assert.ok(!elements.get("roleInfoBackdrop").classList.contains("hidden"), `${key} で開く`);
+    assert.equal(elements.get("roleInfoIcon").textContent, view.icon, `${key} のアイコン`);
+    assert.equal(elements.get("roleInfoName").textContent, view.name, `${key} の名前`);
+    assert.equal(elements.get("roleInfoFactionChip").textContent, view.faction, `${key} の陣営`);
+    assert.equal(elements.get("roleInfoFactionChip").className, view.factionChipClass, `${key} のチップのクラス`);
+    assert.equal(elements.get("roleInfoDesc").textContent, view.desc, `${key} の説明`);
+    FB.closeRoleInfo();
+    assert.ok(elements.get("roleInfoBackdrop").classList.contains("hidden"), `${key} で閉じる`);
+  }
+  // 未知のキーは何も変えない（直前の表示が残る）。
+  FB.showRoleInfo("guardian");
+  FB.showRoleInfo("no-such-role");
+  assert.equal(elements.get("roleInfoName").textContent, "守り手");
+  FB.closeRoleInfo();
+});
