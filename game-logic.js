@@ -1099,6 +1099,60 @@
     }
     return out;
   }
+
+  // ---- 戦績記録（ソロ／パス＆プレイ）の純粋コア ----
+  // ブラウザ側の loadStats / loadPnpStats が読み込んだ戦績を受け取り、
+  // 1試合分を加算した新しい戦績を返す。入力の stats は変更しない。
+  // 保存・描画・二重記録防止（state.statsRecorded）はブラウザ側に残る。
+  // input: { myWin, roleKey, faction, winText }。winText は「横取り」
+  // （ボマーの勝利の横取り）の判定にだけ使う。
+  function applySoloStats(stats, input) {
+    const base = stats || {};
+    const out = {
+      games: (base.games || 0) + 1,
+      wins: base.wins || 0,
+      byRole: { ...(base.byRole || {}) },
+      factionWins: { ...(base.factionWins || {}) },
+      steals: base.steals || 0,
+      streak: base.streak || 0,
+      bestStreak: base.bestStreak || 0,
+    };
+    if (input.myWin) {
+      out.wins += 1;
+      out.factionWins[input.faction] = (out.factionWins[input.faction] || 0) + 1;
+      if (input.winText && input.winText.includes("横取り")) out.steals += 1;
+      out.streak += 1;
+      out.bestStreak = Math.max(out.bestStreak, out.streak);
+    } else {
+      out.streak = 0;
+    }
+    const entry = { ...(out.byRole[input.roleKey] || { games: 0, wins: 0 }) };
+    entry.games += 1;
+    if (input.myWin) entry.wins += 1;
+    out.byRole[input.roleKey] = entry;
+    return out;
+  }
+  // input: { winnerFaction, humanRoles: [{ roleKey, faction }] }。
+  // 勝った陣営と、各人間の役職ごとの戦績を加算する。
+  function applyPnpStats(stats, input) {
+    const base = stats || {};
+    const out = {
+      games: (base.games || 0) + 1,
+      factionWins: { ...(base.factionWins || {}) },
+      byRole: { ...(base.byRole || {}) },
+    };
+    if (input.winnerFaction) {
+      out.factionWins[input.winnerFaction] = (out.factionWins[input.winnerFaction] || 0) + 1;
+    }
+    for (const h of input.humanRoles || []) {
+      if (!h) continue;
+      const entry = { ...(out.byRole[h.roleKey] || { games: 0, wins: 0 }) };
+      entry.games += 1;
+      if (h.faction === input.winnerFaction) entry.wins += 1;
+      out.byRole[h.roleKey] = entry;
+    }
+    return out;
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1128,5 +1182,7 @@
     LEGACY_ROLE_NAMES,
     LEGACY_FACTION_NAMES,
     migrateFactionWins,
+    applySoloStats,
+    applyPnpStats,
   };
 });
