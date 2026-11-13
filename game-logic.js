@@ -1272,6 +1272,23 @@
       ${getAlliesLineForRole(players, player, opts)}
     `;
   }
+
+  // ゲーム画面の役職カードに出す表示データ。表示役職（バカは表示役職）
+  // の名前・陣営・フェーズヒント・注意書きと、インポスターの仲間文言。
+  // players が空のときや対象がいないときは null（ブラウザ側は描画しない）。
+  function buildRoleCardView(players, playerId, opts) {
+    if (!players || !players.length) return null;
+    const me = players[playerId];
+    if (!me) return null;
+    const role = ROLES[getEffectiveRoleKey(me)];
+    return {
+      name: `${role.icon} ${role.name}`,
+      faction: role.faction,
+      phaseHint: getPhaseHint(opts && opts.phase, me),
+      riskNote: role.riskNote,
+      alliesText: getFakeAlliesText(players, me, opts),
+    };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1309,5 +1326,6 @@
     getFakeAlliesText,
     getAlliesLineForRole,
     roleHtmlFor,
+    buildRoleCardView,
   };
 });
