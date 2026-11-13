@@ -250,6 +250,8 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   nightCutins, stageGhostWalker, stageEventMotion, stageFlashRed, stageOwnActionMotion,
   showCutin, clearCutins,
   get cutinQueueLength() { return cutinQueue.length; },
+  get cutinQueue() { return cutinQueue; },
+  buildCutinItemLogic, buildCutinFaceHtmlLogic, cutinSfxForLogic,
   setLogFolded, toggleLogFold, LOG_FOLD_KEY,
   get logFold() { return logFold; },
 };

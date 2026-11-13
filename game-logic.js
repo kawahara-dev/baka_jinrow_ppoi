@@ -1585,6 +1585,37 @@
       return { id: def.id, name: def.name, hint: def.hint, unlocked, icon: unlocked ? "🏅" : "🔒" };
     });
   }
+  // カットインの効果音：種類ごとの対応表。phase は専用の音、info は
+  // 汎用の pop。表にない種類（win など）も pop。DOM を使わない純粋関数。
+  const CUTIN_SFX = { attack: "attack", bomb: "bomb", protect: "protect", info: "pop", phase: "phase" };
+  function cutinSfxFor(kind) {
+    return CUTIN_SFX[kind] || "pop";
+  }
+  // カットイン1件分の表示データを返す純粋関数。sub がなければ ""、
+  // kind がなければ "phase"、charId／targetCharId は数値だけ、
+  // motion は文字列だけを採用し、それ以外は null。
+  // onShow（表示時コールバック）は関数なので含まない。ブラウザ側の
+  // showCutin が付け足す（表示時コールバックはキューに残って遅れて
+  // 発火するため、対象 id は呼び出し側で値として固定する）。
+  function buildCutinItem(title, sub, kind, opts) {
+    const o = opts && typeof opts === "object" ? opts : {};
+    return {
+      title,
+      sub: sub || "",
+      kind: kind || "phase",
+      charId: typeof o.charId === "number" ? o.charId : null,
+      targetCharId: typeof o.targetCharId === "number" ? o.targetCharId : null,
+      motion: typeof o.motion === "string" ? o.motion : null,
+    };
+  }
+  // カットインに載せる顔の HTML を返す純粋関数。カードと同じ顔画像
+  // （iconImg）＋絵文字フォールバックで、キャラの顔だけを出す
+  // （役職は出さない）。player がなければ ""。iconImg がなければ
+  // 絵文字だけ。small は自分の夜アクションの相手の顔（小さい表示）。
+  function buildCutinFaceHtml(player, iconImg, slug, small) {
+    if (!player) return "";
+    return `<span class="cutin-face${small ? " small" : ""}"><span>${player.icon}</span>${iconImg ? `<img class="avatar-img" data-icon-slug="${slug}" src="${iconImg}" alt="${player.name}" onerror="this.remove()">` : ""}</span>`;
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1640,5 +1671,9 @@
     ACHIEVEMENT_DEFS,
     isAchievementUnlocked,
     buildAchievementsView,
+    CUTIN_SFX,
+    cutinSfxFor,
+    buildCutinItem,
+    buildCutinFaceHtml,
   };
 });

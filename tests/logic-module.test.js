@@ -2395,3 +2395,110 @@ test("ブラウザ側の renderAchievements は共有モジュールの buildAch
   assert.ok(fresh.elements.get("achvList").innerHTML.includes("🔒 初勝利"));
   assert.ok(!fresh.elements.get("achvList").innerHTML.includes("🏅"));
 });
+
+test("buildCutinItem：既定値（sub 空・kind phase・顔とモーションなし）", () => {
+  assert.equal(JSON.stringify(Logic.buildCutinItem("タイトル")),
+    JSON.stringify({ title: "タイトル", sub: "", kind: "phase", charId: null, targetCharId: null, motion: null }));
+  assert.equal(JSON.stringify(Logic.buildCutinItem("タイトル", "サブ", null, null)),
+    JSON.stringify({ title: "タイトル", sub: "サブ", kind: "phase", charId: null, targetCharId: null, motion: null }));
+});
+
+test("buildCutinItem：指定した値はそのまま残り、不正な値は null になる", () => {
+  const full = Logic.buildCutinItem("🌙 夜の襲撃", "ルナ が倒れた…", "attack",
+    { charId: 0, targetCharId: 1, motion: "peek" });
+  assert.equal(JSON.stringify(full),
+    JSON.stringify({ title: "🌙 夜の襲撃", sub: "ルナ が倒れた…", kind: "attack", charId: 0, targetCharId: 1, motion: "peek" }));
+  // 表にない kind（"win" など）はそのまま通す（ブラウザ側と同じ）。
+  assert.equal(Logic.buildCutinItem("勝利", "", "win").kind, "win");
+  assert.equal(Logic.buildCutinItem("タイトル", "", "").kind, "phase");
+  const weird = Logic.buildCutinItem("タイトル", "", "bomb", { charId: "3", targetCharId: 1.5, motion: 123 });
+  assert.equal(weird.charId, null, "文字列の charId は null");
+  assert.equal(weird.targetCharId, 1.5, "数値なら小数は通る（ブラウザ側と同じ）");
+  assert.equal(weird.motion, null, "数値の motion は null");
+  const noOpts = Logic.buildCutinItem("タイトル", "", "phase", "not-an-object");
+  assert.equal(noOpts.charId, null);
+  assert.equal(noOpts.motion, null);
+});
+
+test("cutinSfxFor：種類ごとの効果音と、表にない種類は pop", () => {
+  assert.equal(Logic.cutinSfxFor("attack"), "attack");
+  assert.equal(Logic.cutinSfxFor("bomb"), "bomb");
+  assert.equal(Logic.cutinSfxFor("protect"), "protect");
+  assert.equal(Logic.cutinSfxFor("info"), "pop");
+  assert.equal(Logic.cutinSfxFor("phase"), "phase");
+  assert.equal(Logic.cutinSfxFor("win"), "pop", "表にない種類は pop");
+  assert.equal(Logic.cutinSfxFor(undefined), "pop");
+  assert.equal(Logic.cutinSfxFor(null), "pop");
+});
+
+test("buildCutinFaceHtml：顔なしは空文字、画像あり・なし・小さい表示", () => {
+  assert.equal(Logic.buildCutinFaceHtml(null, undefined, "luna", false), "");
+  assert.equal(Logic.buildCutinFaceHtml(undefined, undefined, "luna", false), "");
+  const player = { icon: "🌸", name: "ルナ" };
+  const withImg = Logic.buildCutinFaceHtml(player, "data:image/webp;base64,AAA", "luna", false);
+  assert.ok(withImg.includes('class="cutin-face"'), "小さい表示でなければ cutin-face だけ");
+  assert.ok(!withImg.includes("cutin-face small"));
+  assert.ok(withImg.includes("<span>🌸</span>"));
+  assert.ok(withImg.includes('data-icon-slug="luna"'));
+  assert.ok(withImg.includes('src="data:image/webp;base64,AAA"'));
+  assert.ok(withImg.includes('alt="ルナ"'));
+  const noImg = Logic.buildCutinFaceHtml(player, undefined, "luna", false);
+  assert.ok(noImg.includes("<span>🌸</span>"));
+  assert.ok(!noImg.includes("<img"), "画像がなければ絵文字だけ");
+  const small = Logic.buildCutinFaceHtml(player, undefined, "luna", true);
+  assert.ok(small.includes('class="cutin-face small"'), "小さい表示は small 付き");
+});
+
+test("buildCutinItem／buildCutinFaceHtml／cutinSfxFor：入力を変更しない（純粋関数）", () => {
+  const opts = { charId: 0, targetCharId: 1, motion: "peek" };
+  const beforeOpts = JSON.stringify(opts);
+  const beforeSfx = JSON.stringify(Logic.CUTIN_SFX);
+  Logic.buildCutinItem("タイトル", "サブ", "attack", opts);
+  Logic.buildCutinFaceHtml({ icon: "🌸", name: "ルナ" }, "data:image/webp;base64,AAA", "luna", false);
+  Logic.cutinSfxFor("bomb");
+  assert.equal(JSON.stringify(opts), beforeOpts);
+  assert.equal(JSON.stringify(Logic.CUTIN_SFX), beforeSfx);
+});
+
+test("ブラウザ側の showCutin／pumpCutin は共有モジュールの buildCutinItem／buildCutinFaceHtml／cutinSfxFor と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  // ハーネス経由のモジュール関数とも同一。
+  assert.equal(JSON.stringify(FB.buildCutinItemLogic("タイトル", "サブ", "attack", { charId: 0, targetCharId: 1, motion: "peek" })),
+    JSON.stringify(Logic.buildCutinItem("タイトル", "サブ", "attack", { charId: 0, targetCharId: 1, motion: "peek" })));
+  assert.equal(FB.cutinSfxForLogic("bomb"), Logic.cutinSfxFor("bomb"));
+  assert.equal(FB.buildCutinFaceHtmlLogic(s.players[0], undefined, Logic.ICON_SLUGS[0], false),
+    Logic.buildCutinFaceHtml(s.players[0], undefined, Logic.ICON_SLUGS[0], false));
+  // 顔つきカットイン：タイトル・サブ・種類・顔の HTML がモジュール通り。
+  // （ハーネスではアイコン画像の fetch が失敗するため絵文字だけの顔になる。）
+  FB.showCutin("🌙 夜の襲撃", `${s.players[0].name} が倒れた…`, "attack", null, { charId: 0 });
+  assert.equal(elements.get("cutinTitle").textContent, "🌙 夜の襲撃");
+  assert.equal(elements.get("cutinSub").textContent, `${s.players[0].name} が倒れた…`);
+  assert.equal(elements.get("cutin").dataset.kind, "attack");
+  assert.equal(elements.get("cutin").classList.contains("hidden"), false);
+  assert.equal(elements.get("cutinChar").innerHTML,
+    Logic.buildCutinFaceHtml(s.players[0], undefined, Logic.ICON_SLUGS[0], false));
+  assert.equal(elements.get("cutinChar").classList.contains("hidden"), false);
+  // 表示中にもう1件積むとキューに残り、モジュールの生成結果と同一になる。
+  FB.showCutin("🛡️ 襲撃は防がれた！", "誰かが守り切った", "protect");
+  assert.equal(FB.cutinQueueLength, 1);
+  const queued = { ...FB.cutinQueue[0] };
+  delete queued.onShow;
+  assert.equal(JSON.stringify(queued),
+    JSON.stringify(Logic.buildCutinItem("🛡️ 襲撃は防がれた！", "誰かが守り切った", "protect")));
+  // 顔なしカットイン：顔の箱は隠れたまま。
+  FB.clearCutins();
+  FB.showCutin("🌙 夜行動", "あなたは静かに夜を過ごした", "phase");
+  assert.equal(elements.get("cutinChar").innerHTML, "");
+  assert.equal(elements.get("cutinChar").classList.contains("hidden"), true);
+  assert.equal(elements.get("cutinChar").dataset.own, "");
+  // 自分の夜アクション：自分の顔（系統モーション付き）＋相手の顔（小）。
+  FB.clearCutins();
+  FB.showCutin("🔍 調査", `→ ${s.players[1].name}`, "info", null,
+    { charId: 0, targetCharId: 1, motion: "peek" });
+  assert.equal(elements.get("cutinChar").innerHTML,
+    Logic.buildCutinFaceHtml(s.players[0], undefined, Logic.ICON_SLUGS[0], false)
+    + Logic.buildCutinFaceHtml(s.players[1], undefined, Logic.ICON_SLUGS[1], true));
+  assert.equal(elements.get("cutinChar").dataset.own, "peek");
+});
