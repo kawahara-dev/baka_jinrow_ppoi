@@ -1222,6 +1222,19 @@
     });
     return { winnerFaction, myWin, sub, rows };
   }
+  // ---- フェーズヒントの生成 ----
+  // 役職カードとパス＆プレイの手番バナーに出す、そのフェーズでの行動の指針。
+  // 夜は自分の表示役職（バカは表示役職）の nightActionHint、それ以外は
+  // フェーズごとの固定文言。ヒントの決定に state は使わない。
+  function getPhaseHint(phase, me) {
+    if (phase === "night") {
+      return ROLES[getEffectiveRoleKey(me)].nightActionHint;
+    }
+    if (phase === "morning") return "朝の報告を整理して、発言方針を決めよう。";
+    if (phase === "vote") return "ログと投票履歴から、いちばん矛盾が大きい相手に投票しよ。";
+    if (phase === "discussion") return "朝の報告と発言のズレを比較して、投票候補を絞ろう。";
+    return "勝敗ログを見て、次ゲームの立ち回りメモを作ろう。";
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1255,5 +1268,6 @@
     applyPnpStats,
     buildStatsView,
     buildResultSummary,
+    getPhaseHint,
   };
 });
