@@ -1093,7 +1093,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1588,11 +1588,15 @@
 
   function draw() {
     if (document.body && document.body.dataset) document.body.dataset.phase = state.phase;
-    el("dayText").textContent = state.day;
-    el("phaseText").textContent = PHASE_META[state.phase].label;
+    // 日数・フェーズ表示、ボタン類、マウスボタン、手番バナーの文言と
+    // 表示有無は共有モジュール（buildDrawView）で作る。DOM への代入と
+    // カード・ステージの描画だけここで行う。
+    const view = buildDrawViewLogic(state);
+    el("dayText").textContent = view.dayText;
+    el("phaseText").textContent = view.phaseText;
     updateInGameRoleCard();
     // パス＆プレイでは役職カードを出さない（1人の役職が全員に見えてしまうため）。
-    el("inGameRoleCard").classList.toggle("hidden", state.mode === "pnp");
+    el("inGameRoleCard").classList.toggle("hidden", view.roleCardHidden);
 
     const cards = el("cards"); cards.innerHTML = "";
     // カード1枚分の表示データは共有モジュールで作る（クラス・aria・
@@ -1622,26 +1626,21 @@
       cards.appendChild(div);
     }
 
-    el("actionBtn").textContent = (state.mode === "pnp" && state.pnpNightInputPending != null)
-      ? "この対象で決める"
-      : (PHASE_META[state.phase]?.button || "実行");
-    el("actionBtn").classList.toggle("hidden", state.phase !== "night");
-    el("voteBtn").textContent = (state.mode === "pnp" && state.pnpVoteInputPending != null)
-      ? "この相手に投票する"
-      : "投票する";
-    el("voteBtn").classList.toggle("hidden", state.phase !== "vote");
-    el("nextBtn").classList.toggle("hidden", !["morning", "discussion"].includes(state.phase));
+    el("actionBtn").textContent = view.actionBtn.text;
+    el("actionBtn").classList.toggle("hidden", view.actionBtn.hidden);
+    el("voteBtn").textContent = view.voteBtn.text;
+    el("voteBtn").classList.toggle("hidden", view.voteBtn.hidden);
+    el("nextBtn").classList.toggle("hidden", view.nextBtn.hidden);
     const stage = el("stage");
     if (stage) {
-      stage.innerHTML = state.players.filter(p => p.alive).map(p => `
-        <span class="walker" data-player="${p.id}" style="--i:${p.id};--bd:${(0.31 + (p.id % 4) * 0.03).toFixed(2)}s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${ICON_SLUGS[p.id]}" data-frame="a" alt=""><img class="frame-b" data-slug="${ICON_SLUGS[p.id]}" data-frame="b" alt=""></span></span>`).join("");
+      // ステージの歩行者は共有モジュール（buildStageView）で作る。
+      stage.innerHTML = buildStageViewLogic(state.players).map(w => w.html).join("");
       hydrateWalkImages(stage);
     }
-    const meForMouse = state.players?.[state.playerId];
-    el("mouseBtn").classList.toggle("hidden", !(state.mode !== "pnp" && state.phase === "discussion" && meForMouse && getEffectiveRoleKey(meForMouse) === "mouse" && !meForMouse.mouseUsed));
+    el("mouseBtn").classList.toggle("hidden", view.mouseBtn.hidden);
     // パス＆プレイの夜・投票の入力中だけ、誰の番かを示す帯を出す。
     const pnpBanner = el("pnpTurnBanner");
-    if (pnpBanner) pnpBanner.classList.toggle("hidden", !(state.mode === "pnp" && (state.pnpNightInputPending != null || state.pnpVoteInputPending != null)));
+    if (pnpBanner) pnpBanner.classList.toggle("hidden", view.pnpBanner.hidden);
     // カードの再構築で表示中の吹き出しが DOM から外れるため、あれば
     // 発言者の新しいカードへ付け直す（キューは触らない）。
     reattachSpeechBubble();

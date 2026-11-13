@@ -1857,6 +1857,180 @@ test("ブラウザ側の draw は共有モジュールの buildCardsView と同�
   assert.ok(bakaCard.innerHTML.includes(Logic.ROLES.guardian.icon), "表示役職のアイコンが出る");
 });
 
+test("buildStageView：生存者だけを歩行者の HTML で返し、周期は id%4 で決まる", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "apprenticeSeer", alive: true },
+    { id: 1, name: "ミオ", roleKey: "fakeGirl", alive: false },
+    { id: 5, name: "リリ", roleKey: "guardian", alive: true },
+  ];
+  const views = Logic.buildStageView(players);
+  assert.equal(views.length, 2, "脱落者は出ない");
+  assert.equal(views[0].id, 0);
+  assert.equal(views[0].slug, "luna");
+  assert.equal(views[0].duration, "0.31s");
+  assert.ok(views[0].html.includes('class="walker"'), views[0].html);
+  assert.ok(views[0].html.includes('data-player="0"'), views[0].html);
+  assert.ok(views[0].html.includes('style="--i:0;--bd:0.31s"'), views[0].html);
+  assert.ok(views[0].html.includes('data-slug="luna" data-frame="a"'), views[0].html);
+  assert.ok(views[0].html.includes('data-slug="luna" data-frame="b"'), views[0].html);
+  // id 5 は 5%4=1 なので 0.34s。
+  assert.equal(views[1].id, 5);
+  assert.equal(views[1].slug, "riri");
+  assert.equal(views[1].duration, "0.34s");
+  assert.ok(views[1].html.includes('style="--i:5;--bd:0.34s"'), views[1].html);
+});
+
+test("buildStageView：空・null は空配列、入力の players を変更しない（純粋関数）", () => {
+  assert.deepEqual(Logic.buildStageView([], {}), []);
+  assert.deepEqual(Logic.buildStageView(null, {}), []);
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "apprenticeSeer", alive: true },
+    { id: 1, name: "ミオ", roleKey: "fakeGirl", alive: false },
+  ];
+  const before = JSON.stringify(players);
+  Logic.buildStageView(players);
+  assert.equal(JSON.stringify(players), before);
+});
+
+test("buildDrawView：夜のソロは夜行動ボタンだけが出て、他は隠れる", () => {
+  const state = {
+    day: 2, phase: "night", mode: "solo", playerId: 0,
+    players: [{ id: 0, name: "ルナ", roleKey: "apprenticeSeer", alive: true, mouseUsed: false }],
+    pnpNightInputPending: null, pnpVoteInputPending: null,
+  };
+  const view = Logic.buildDrawView(state);
+  assert.equal(view.dayText, "2");
+  assert.equal(view.phaseText, "夜行動");
+  assert.equal(view.roleCardHidden, false);
+  assert.deepEqual(view.actionBtn, { text: "夜行動を実行", hidden: false });
+  assert.deepEqual(view.voteBtn, { text: "投票する", hidden: true });
+  assert.deepEqual(view.nextBtn, { hidden: true });
+  assert.deepEqual(view.mouseBtn, { hidden: true });
+  assert.deepEqual(view.pnpBanner, { hidden: true });
+});
+
+test("buildDrawView：朝・議論は次へボタンが出て、投票は投票ボタンが出る", () => {
+  const base = {
+    day: 1, mode: "solo", playerId: 0,
+    players: [{ id: 0, name: "ルナ", roleKey: "apprenticeSeer", alive: true, mouseUsed: false }],
+    pnpNightInputPending: null, pnpVoteInputPending: null,
+  };
+  const morning = Logic.buildDrawView({ ...base, phase: "morning" });
+  assert.equal(morning.phaseText, "朝の報告");
+  assert.deepEqual(morning.nextBtn, { hidden: false });
+  assert.deepEqual(morning.actionBtn, { text: "報告を読む", hidden: true });
+  const discussion = Logic.buildDrawView({ ...base, phase: "discussion" });
+  assert.equal(discussion.phaseText, "昼の議論");
+  assert.deepEqual(discussion.nextBtn, { hidden: false });
+  const vote = Logic.buildDrawView({ ...base, phase: "vote" });
+  assert.equal(vote.phaseText, "投票");
+  assert.deepEqual(vote.voteBtn, { text: "投票する", hidden: false });
+  assert.deepEqual(vote.nextBtn, { hidden: true });
+  const end = Logic.buildDrawView({ ...base, phase: "end" });
+  assert.equal(end.phaseText, "勝敗");
+  assert.deepEqual(end.actionBtn, { text: "-", hidden: true });
+  assert.deepEqual(end.voteBtn, { text: "投票する", hidden: true });
+  assert.deepEqual(end.nextBtn, { hidden: true });
+});
+
+test("buildDrawView：議論でマウス未使用の自分だけマウスボタンが出る", () => {
+  const mouse = { id: 0, name: "ルナ", roleKey: "mouse", alive: true, mouseUsed: false };
+  const base = {
+    day: 1, phase: "discussion", mode: "solo", playerId: 0,
+    pnpNightInputPending: null, pnpVoteInputPending: null,
+  };
+  assert.deepEqual(Logic.buildDrawView({ ...base, players: [mouse] }).mouseBtn, { hidden: false });
+  assert.deepEqual(Logic.buildDrawView({ ...base, players: [{ ...mouse, mouseUsed: true }] }).mouseBtn, { hidden: true }, "使い済みは出ない");
+  assert.deepEqual(Logic.buildDrawView({ ...base, players: [{ ...mouse, roleKey: "guardian" }] }).mouseBtn, { hidden: true }, "マウス以外は出ない");
+  assert.deepEqual(Logic.buildDrawView({ ...base, mode: "pnp", players: [mouse] }).mouseBtn, { hidden: true }, "パス＆プレイは出ない");
+  assert.deepEqual(Logic.buildDrawView({ ...base, phase: "night", players: [mouse] }).mouseBtn, { hidden: true }, "議論以外は出ない");
+  // バカがマウスを表示役職にしていても、自分はマウスとして扱われる。
+  assert.deepEqual(Logic.buildDrawView({ ...base, players: [{ ...mouse, roleKey: "baka", fakeDisplayRoleKey: "mouse" }] }).mouseBtn, { hidden: false });
+});
+
+test("buildDrawView：パス＆プレイは役職カードが隠れ、入力中は専用文言と手番バナーが出る", () => {
+  const base = {
+    day: 1, mode: "pnp", playerId: 0,
+    players: [{ id: 0, name: "ルナ", roleKey: "apprenticeSeer", alive: true, mouseUsed: false }],
+    pnpNightInputPending: null, pnpVoteInputPending: null,
+  };
+  const night = Logic.buildDrawView({ ...base, phase: "night", pnpNightInputPending: 0 });
+  assert.equal(night.roleCardHidden, true);
+  assert.deepEqual(night.actionBtn, { text: "この対象で決める", hidden: false });
+  assert.deepEqual(night.pnpBanner, { hidden: false });
+  const vote = Logic.buildDrawView({ ...base, phase: "vote", pnpVoteInputPending: 1 });
+  assert.deepEqual(vote.voteBtn, { text: "この相手に投票する", hidden: false });
+  assert.deepEqual(vote.pnpBanner, { hidden: false });
+  const idle = Logic.buildDrawView({ ...base, phase: "discussion" });
+  assert.equal(idle.roleCardHidden, true);
+  assert.deepEqual(idle.pnpBanner, { hidden: true }, "入力中でなければバナーは出ない");
+});
+
+test("buildDrawView：state がないときはすべて非表示の表示を返す", () => {
+  const view = Logic.buildDrawView(null);
+  assert.equal(view.dayText, "");
+  assert.equal(view.phaseText, "");
+  assert.deepEqual(view.actionBtn, { text: "実行", hidden: true });
+  assert.deepEqual(view.voteBtn, { text: "投票する", hidden: true });
+  assert.deepEqual(view.nextBtn, { hidden: true });
+  assert.deepEqual(view.mouseBtn, { hidden: true });
+  assert.deepEqual(view.pnpBanner, { hidden: true });
+});
+
+test("ブラウザ側の draw は共有モジュールの buildStageView・buildDrawView と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const checkDraw = (label) => {
+    FB.draw();
+    const view = Logic.buildDrawView(s);
+    assert.equal(elements.get("dayText").textContent, view.dayText, `${label}：日数`);
+    assert.equal(elements.get("phaseText").textContent, view.phaseText, `${label}：フェーズ`);
+    assert.equal(elements.get("inGameRoleCard").classList.contains("hidden"), view.roleCardHidden, `${label}：役職カード`);
+    assert.equal(elements.get("actionBtn").textContent, view.actionBtn.text, `${label}：夜行動ボタン文言`);
+    assert.equal(elements.get("actionBtn").classList.contains("hidden"), view.actionBtn.hidden, `${label}：夜行動ボタン表示`);
+    assert.equal(elements.get("voteBtn").textContent, view.voteBtn.text, `${label}：投票ボタン文言`);
+    assert.equal(elements.get("voteBtn").classList.contains("hidden"), view.voteBtn.hidden, `${label}：投票ボタン表示`);
+    assert.equal(elements.get("nextBtn").classList.contains("hidden"), view.nextBtn.hidden, `${label}：次へボタン`);
+    assert.equal(elements.get("mouseBtn").classList.contains("hidden"), view.mouseBtn.hidden, `${label}：マウスボタン`);
+    assert.equal(elements.get("pnpTurnBanner").classList.contains("hidden"), view.pnpBanner.hidden, `${label}：手番バナー`);
+    assert.equal(
+      elements.get("stage").innerHTML,
+      Logic.buildStageView(s.players).map(w => w.html).join(""),
+      `${label}：ステージ歩行者`
+    );
+    // 別レルムのオブジェクトは JSON で比べる（PR #80 の教訓と同じ）。
+    assert.equal(
+      JSON.stringify(FB.buildDrawViewLogic(s)),
+      JSON.stringify(view),
+      `${label}：ハーネス経由の buildDrawView とも同一`
+    );
+    assert.equal(
+      JSON.stringify(FB.buildStageViewLogic(s.players)),
+      JSON.stringify(Logic.buildStageView(s.players)),
+      `${label}：ハーネス経由の buildStageView とも同一`
+    );
+  };
+  checkDraw("初期状態（夜）");
+  // 議論フェーズでマウス未使用の自分ならマウスボタンが出る。
+  s.phase = "discussion";
+  s.players[0].roleKey = "mouse";
+  s.players[0].mouseUsed = false;
+  s.playerId = 0;
+  checkDraw("議論・マウス未使用");
+  // 投票フェーズ。
+  s.phase = "vote";
+  checkDraw("投票");
+  // パス＆プレイの夜入力中。
+  s.mode = "pnp";
+  s.phase = "night";
+  s.pnpNightInputPending = 0;
+  checkDraw("パス＆プレイ・夜入力中");
+  // 脱落者がいると歩行者から消える。
+  s.players[1].alive = false;
+  checkDraw("脱落者あり");
+});
+
 test("ROLES：全役職に簡単な説明 shortDesc がある（40字以内）", () => {
   for (const [key, role] of Object.entries(Logic.ROLES)) {
     assert.ok(role.shortDesc, `${key} に shortDesc がある`);
