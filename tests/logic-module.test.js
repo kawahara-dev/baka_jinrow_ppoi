@@ -831,3 +831,232 @@ test("ブラウザ側の runNight は共有モジュールと同一の対象選�
   assert.equal(snapSet(FB2.state.protectedTargets), snapSet(planned.protectedTargets), "runNight とモジュールで protectedTargets が一致");
   void alive2;
 });
+
+// ---- フェーズ0第5歩：議論の CPU セリフ選択の抽出 ----
+
+// 議論テスト用の最小状態。roleKeys は8人分。
+function makeDiscussionState(roleKeys, extra = {}) {
+  const players = roleKeys.map((roleKey, i) => makeNightPlayer(i, roleKey));
+  return {
+    day: 1, mode: "solo", humanPlayerIds: [0], playerId: 0,
+    players,
+    nightReport: { type: "none", victimId: null },
+    bombReport: { explodedVictims: [], fizzled: false },
+    lastInvestigation: {},
+    ...extra,
+  };
+}
+function discussionAlive(state) { return state.players.filter(p => p.alive); }
+
+// そのカテゴリ（tier 付きならその tier）で出うるセリフ全文の集合。
+// {target} は全キャラ名と「みんな」で置換したものを入れる。
+function possibleDiscussionTexts(category, tier) {
+  const set = new Set();
+  const add = (line) => {
+    for (const name of [...Logic.PLAYER_NAMES, "みんな"]) set.add(line.replaceAll("{target}", name));
+  };
+  const generic = Logic.DISCUSSION_TEMPLATES[category];
+  const pools = Array.isArray(generic) ? [generic] : [generic[tier]];
+  for (const pool of pools) for (const line of pool) add(line);
+  for (const char of Object.values(Logic.CHAR_TALK)) {
+    const pool = char[category];
+    if (!pool) continue;
+    const lines = Array.isArray(pool) ? pool : (tier ? pool[tier] || [] : []);
+    for (const line of lines) add(line);
+  }
+  return set;
+}
+
+test("planDiscussionTalks：占い結果がインポスターなら claimFake で対象の名を呼ぶ", () => {
+  const roles = ["villager", "apprenticeSeer", "fakeGirl", "villager", "villager", "villager", "villager", "villager"];
+  const state = makeDiscussionState(roles, {
+    lastInvestigation: { 1: { targetId: 2, result: "インポスター" } },
+  });
+  // 乱数 0.99 固定：キャラ別プールは選ばれず汎用プールの末尾になる。
+  const events = Logic.planDiscussionTalks(state, discussionAlive(state), { random: () => 0.99 });
+  assert.equal(events.length, 7, "ソロは人間(0)以外の7人全員が発言する");
+  const seer = events.find(e => e.speakerId === 1);
+  assert.equal(seer.type, "talk");
+  assert.equal(seer.text, Logic.DISCUSSION_TEMPLATES.claimFake[3].replaceAll("{target}", state.players[2].name),
+    "占い師は汎用 claimFake の末尾で対象を名指しする");
+  for (const e of events) assert.ok(!e.text.includes("{target}"), "置換し忘れの {target} が残らない");
+});
+
+test("planDiscussionTalks：占い結果の白・ニュートラルは確率ゲート付きで主張する", () => {
+  const roles = ["villager", "apprenticeSeer", "fakeGirl", "villager", "villager", "villager", "villager", "villager"];
+  // 乱数 0 固定：claimWhite(0.35)・claimNeutral(0.5)のゲートを両方通る。
+  const white = makeDiscussionState(roles, {
+    lastInvestigation: { 1: { targetId: 2, result: "イノセント" } },
+  });
+  const ew = Logic.planDiscussionTalks(white, discussionAlive(white), { random: () => 0 });
+  const whiteEvent = ew.find(e => e.speakerId === 1);
+  assert.equal(whiteEvent.type, "talk");
+  assert.ok(possibleDiscussionTexts("claimWhite").has(whiteEvent.text), `白主張の文面: ${whiteEvent.text}`);
+  assert.ok(whiteEvent.text.includes(white.players[2].name), "白主張は対象の名を呼ぶ");
+  const neutral = makeDiscussionState(roles, {
+    lastInvestigation: { 1: { targetId: 2, result: "ニュートラル" } },
+  });
+  const en = Logic.planDiscussionTalks(neutral, discussionAlive(neutral), { random: () => 0 });
+  const neutralEvent = en.find(e => e.speakerId === 1);
+  assert.equal(neutralEvent.type, "talk");
+  assert.ok(possibleDiscussionTexts("claimNeutral").has(neutralEvent.text), `中立主張の文面: ${neutralEvent.text}`);
+});
+
+test("planDiscussionTalks：爆発があれば bomb、守り手は防衛成功で guardian を語る", () => {
+  const roles = ["villager", "guardian", "villager", "villager", "villager", "villager", "villager", "villager"];
+  const bombed = makeDiscussionState(roles, { bombReport: { explodedVictims: [3], fizzled: false } });
+  const eb = Logic.planDiscussionTalks(bombed, discussionAlive(bombed), { random: () => 0 });
+  for (const e of eb) {
+    assert.equal(e.type, "talk");
+    assert.ok(possibleDiscussionTexts("bomb").has(e.text), `爆弾の文面: ${e.text}`);
+  }
+  const blocked = makeDiscussionState(roles, { nightReport: { type: "blocked", victimId: null } });
+  const eg = Logic.planDiscussionTalks(blocked, discussionAlive(blocked), { random: () => 0 });
+  const guard = eg.find(e => e.speakerId === 1);
+  assert.equal(guard.type, "talk");
+  assert.ok(possibleDiscussionTexts("guardian").has(guard.text), `守り手の文面: ${guard.text}`);
+});
+
+test("planDiscussionTalks：前夜の対象が残る追跡係は tracker、4人以下なら endgame を語る", () => {
+  const roles = ["villager", "villager", "tracker", "villager", "villager", "villager", "villager", "villager"];
+  const state = makeDiscussionState(roles);
+  state.players[2].lastTarget = 5;
+  const events = Logic.planDiscussionTalks(state, discussionAlive(state), { random: () => 0.99 });
+  const tracker = events.find(e => e.speakerId === 2);
+  assert.equal(tracker.type, "talk");
+  assert.ok(possibleDiscussionTexts("tracker", "low").has(tracker.text), `追跡の文面: ${tracker.text}`);
+  // 生存者を4人まで減らす（0 は人間、1・2・3 が生存）。
+  const few = makeDiscussionState(roles);
+  for (let i = 4; i < 8; i++) few.players[i].alive = false;
+  const ef = Logic.planDiscussionTalks(few, discussionAlive(few), { random: () => 0 });
+  assert.equal(ef.length, 3, "人間以外の生存者3人が発言する");
+  for (const e of ef) {
+    assert.equal(e.type, "talk");
+    assert.ok(possibleDiscussionTexts("endgame").has(e.text), `終盤の文面: ${e.text}`);
+  }
+});
+
+test("planDiscussionTalks：それ以外は defense / pressure / observe で疑念の tier に応じる", () => {
+  const roles = ["villager", "villager", "villager", "villager", "villager", "villager", "villager", "villager"];
+  const state = makeDiscussionState(roles);
+  // 2 は疑念が高い（high tier）、ほかは 0（low tier）。
+  state.players[2].suspicion = 5;
+  // 乱数 0.99 固定：lineTarget は others の末尾、defense/pressure は
+  // pressure になり、observe への振り替え（0.2）は起きない。
+  const events = Logic.planDiscussionTalks(state, discussionAlive(state), { random: () => 0.99 });
+  assert.equal(events.length, 7);
+  for (const e of events) {
+    assert.equal(e.type, "talk");
+    assert.ok(!e.text.includes("{target}"));
+  }
+  // 発言者 1 の lineTarget は others[6]＝7（疑念 0 → low tier の pressure）。
+  const first = events.find(e => e.speakerId === 1);
+  assert.equal(first.text, Logic.DISCUSSION_TEMPLATES.pressure.low[3].replaceAll("{target}", state.players[7].name));
+});
+
+test("planDiscussionTalks：マウスは疑念が最も高い相手を公開し、疑念を更新する", () => {
+  const roles = ["villager", "mouse", "villager", "villager", "villager", "villager", "villager", "villager"];
+  const state = makeDiscussionState(roles);
+  state.players[3].suspicion = 5;
+  state.players[4].suspicion = 2;
+  const events = Logic.planDiscussionTalks(state, discussionAlive(state), { random: () => 0 });
+  const mouse = events.find(e => e.speakerId === 1);
+  assert.equal(mouse.type, "mouse");
+  assert.equal(mouse.targetId, 3, "疑念が最も高い 3 を公開する");
+  assert.equal(state.players[1].mouseUsed, true, "マウス能力は使用済みになる");
+  assert.equal(state.players[3].suspicion, -5, "イノセントの公開は疑念 -5");
+  // 使用済みのマウスはもう公開しない。
+  const again = Logic.planDiscussionTalks(state, discussionAlive(state), { random: () => 0 });
+  assert.ok(!again.some(e => e.type === "mouse"), "使用済みならマウス公開は出ない");
+});
+
+test("planDiscussionTalks：バカがマウス表示なら公開し、表示役職の疑念を更新する", () => {
+  const roles = ["villager", "baka", "villager", "villager", "villager", "villager", "villager", "villager"];
+  const state = makeDiscussionState(roles);
+  state.players[1].fakeDisplayRoleKey = "mouse";
+  state.players[3].suspicion = 5;
+  const events = Logic.planDiscussionTalks(state, discussionAlive(state), { random: () => 0 });
+  const mouse = events.find(e => e.speakerId === 1);
+  assert.equal(mouse.type, "mouse");
+  assert.equal(mouse.targetId, 3);
+  assert.equal(state.players[1].mouseUsed, true);
+  assert.ok([-5, 8].includes(state.players[3].suspicion), "公開後の疑念は -5 か 8");
+});
+
+test("planDiscussionTalks：パス＆プレイでは人間の発言はなく CPU 発言数に上限がある", () => {
+  const roles = ["villager", "villager", "villager", "villager", "villager", "villager", "villager", "villager"];
+  // 人間2人：CPU 6人中4人まで。
+  const pnp2 = makeDiscussionState(roles, { mode: "pnp", humanPlayerIds: [0, 1], playerId: 0 });
+  const e2 = Logic.planDiscussionTalks(pnp2, discussionAlive(pnp2), { random: seededRandom(3) });
+  assert.equal(e2.length, 4);
+  assert.ok(e2.every(e => ![0, 1].includes(e.speakerId)), "人間の発言はない");
+  // 人間6人：CPU 2人中1人まで。
+  const pnp6 = makeDiscussionState(roles, { mode: "pnp", humanPlayerIds: [0, 1, 2, 3, 4, 5], playerId: 0 });
+  const e6 = Logic.planDiscussionTalks(pnp6, discussionAlive(pnp6), { random: seededRandom(3) });
+  assert.equal(e6.length, 1);
+  assert.ok([6, 7].includes(e6[0].speakerId), "残りの CPU のどちらか1人");
+  // 人間8人：CPU がいないので発言は0行。
+  const pnp8 = makeDiscussionState(roles, { mode: "pnp", humanPlayerIds: [0, 1, 2, 3, 4, 5, 6, 7], playerId: 0 });
+  const e8 = Logic.planDiscussionTalks(pnp8, discussionAlive(pnp8), { random: seededRandom(3) });
+  assert.equal(e8.length, 0);
+});
+
+test("planDiscussionTalks：同じ seed なら同じイベント列になる", () => {
+  const roles = ["guardian", "apprenticeSeer", "mouse", "tracker", "fakeGirl", "mimic", "bomber", "doctor"];
+  const a = makeDiscussionState(roles, {
+    nightReport: { type: "blocked", victimId: null },
+    bombReport: { explodedVictims: [4], fizzled: false },
+    lastInvestigation: { 1: { targetId: 4, result: "インポスター" } },
+  });
+  a.players[3].lastTarget = 6;
+  a.players[4].suspicion = 4;
+  const b = makeDiscussionState(roles, {
+    nightReport: { type: "blocked", victimId: null },
+    bombReport: { explodedVictims: [4], fizzled: false },
+    lastInvestigation: { 1: { targetId: 4, result: "インポスター" } },
+  });
+  b.players[3].lastTarget = 6;
+  b.players[4].suspicion = 4;
+  const ea = Logic.planDiscussionTalks(a, discussionAlive(a), { random: seededRandom(11) });
+  const eb = Logic.planDiscussionTalks(b, discussionAlive(b), { random: seededRandom(11) });
+  assert.equal(JSON.stringify(ea), JSON.stringify(eb), "同じ seed は同じイベント列");
+});
+
+test("ブラウザ側の morningToDiscussion は共有モジュールと同一のセリフ選択をする", () => {
+  const script = (FB) => {
+    FB.setupGame();
+    const roles = ["guardian", "apprenticeSeer", "police", "tracker", "fakeGirl", "mimic", "bomber", "doctor"];
+    FB.state.players.forEach((p, i) => {
+      p.roleKey = roles[i];
+      p.fakeDisplayRoleKey = null;
+      p.clumsy = false;
+      p.suspicion = [0, 4, 1, 2, 0, 0, 3, 0][i];
+    });
+    FB.state.playerId = 0;
+    FB.state.humanPlayerIds = [0];
+    FB.state.mode = "solo";
+    FB.state.day = 1;
+    FB.state.selectedId = 1;
+    FB.state.fakeIntel = { 1: "apprenticeSeer" };
+    FB.state.bombs = [{ targetId: 4, explodeDay: 2 }];
+    FB.state.phase = "morning";
+    return FB.state.players.filter(p => p.alive);
+  };
+  // モジュール直接（seed 固定）。マウス役職はいないのでイベントは talk のみ。
+  const { FB: FB1 } = loadGame({ seedSettings: BASE_SETTINGS });
+  const alive1 = script(FB1);
+  const events = FB1.planDiscussionTalksLogic(FB1.state, alive1, { random: seededRandom(7) });
+  const expectedLines = events.map(e => `${FB1.state.players[e.speakerId].name}：${e.text}`);
+  // ブラウザの morningToDiscussion：同じ seed の乱数で回す。
+  const { FB: FB2, elements: el2, sandbox } = loadGame({ seedSettings: BASE_SETTINGS });
+  const alive2 = script(FB2);
+  // Math のスタブ：{...Math} では列挙不可の floor 等が拾えないため、
+  // 実 Math をプロトタイプにして random だけ差し替える。
+  sandbox.Math = Object.create(Math);
+  sandbox.Math.random = seededRandom(7);
+  const before = el2.get("dialogueLog").children.length;
+  FB2.morningToDiscussion();
+  const lines = el2.get("dialogueLog").children.slice(before).map(c => c.textContent);
+  assert.equal(JSON.stringify(lines), JSON.stringify(expectedLines), "ラッパーとモジュールで議論セリフが一致");
+  void alive2;
+});
