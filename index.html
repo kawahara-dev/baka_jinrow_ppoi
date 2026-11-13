@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1442,16 +1442,10 @@
     if (!player || ROLES[player.roleKey].faction !== "インポスター") return "";
     return `インポスター仲間：${getFakeAlliesText(player)}`;
   }
+  // フェーズヒントは共有モジュールで生成する。role 引数は従来の呼び出し
+  // 互換のために残す（夜のヒントは state の現在プレイヤーから決まる）。
   function getPhaseHint(role) {
-    if (state.phase === "night") {
-      // バカには表示役職のヒントをそのまま出す（偽表示の言及なし）。
-      const me = state.players[state.playerId];
-      return ROLES[getEffectiveRoleKey(me)].nightActionHint;
-    }
-    if (state.phase === "morning") return "朝の報告を整理して、発言方針を決めよう。";
-    if (state.phase === "vote") return "ログと投票履歴から、いちばん矛盾が大きい相手に投票しよ。";
-    if (state.phase === "discussion") return "朝の報告と発言のズレを比較して、投票候補を絞ろう。";
-    return "勝敗ログを見て、次ゲームの立ち回りメモを作ろう。";
+    return getPhaseHintLogic(state.phase, state.players[state.playerId]);
   }
 
   function updateInGameRoleCard() {

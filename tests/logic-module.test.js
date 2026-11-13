@@ -1468,3 +1468,45 @@ test("ブラウザ側の renderStats / renderPnpStats は共有モジュール�
   assert.equal(fresh.elements.get("pnpStatsSummary").textContent, "まだパス＆プレイの記録がありません");
 });
 
+test("getPhaseHint：夜は自分の表示役職の nightActionHint、他フェーズは固定文言", () => {
+  const seer = { roleKey: "apprenticeSeer" };
+  assert.equal(Logic.getPhaseHint("night", seer), Logic.ROLES.apprenticeSeer.nightActionHint);
+  assert.match(Logic.getPhaseHint("night", seer), /調査/);
+  assert.equal(Logic.getPhaseHint("night", { roleKey: "guardian" }), "襲われそうな子を1人選んでガード。");
+  assert.equal(Logic.getPhaseHint("morning", seer), "朝の報告を整理して、発言方針を決めよう。");
+  assert.equal(Logic.getPhaseHint("vote", seer), "ログと投票履歴から、いちばん矛盾が大きい相手に投票しよ。");
+  assert.equal(Logic.getPhaseHint("discussion", seer), "朝の報告と発言のズレを比較して、投票候補を絞ろう。");
+  assert.equal(Logic.getPhaseHint("end", seer), "勝敗ログを見て、次ゲームの立ち回りメモを作ろう。");
+  assert.equal(Logic.getPhaseHint("unknown", seer), "勝敗ログを見て、次ゲームの立ち回りメモを作ろう。");
+});
+
+test("getPhaseHint：夜のバカは表示役職のヒントで「バカ」「偽表示」は出ない", () => {
+  const baka = { roleKey: "baka", fakeDisplayRoleKey: "apprenticeSeer" };
+  const hint = Logic.getPhaseHint("night", baka);
+  assert.equal(hint, Logic.ROLES.apprenticeSeer.nightActionHint);
+  assert.ok(!hint.includes("バカ"));
+  assert.ok(!hint.includes("偽表示"));
+  // 表示役職なしのバカは村ガールのヒント。
+  assert.equal(Logic.getPhaseHint("night", { roleKey: "baka", fakeDisplayRoleKey: null }), Logic.ROLES.villager.nightActionHint);
+});
+
+test("ブラウザ側の getPhaseHint は共有モジュールと同一のヒントを返す", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const me = s.players[s.playerId];
+  for (const phase of ["night", "morning", "discussion", "vote", "end"]) {
+    s.phase = phase;
+    assert.equal(FB.getPhaseHint(FB.ROLES[me.roleKey]), Logic.getPhaseHint(phase, me), `${phase} のヒントが一致`);
+    assert.equal(FB.getPhaseHintLogic(phase, me), Logic.getPhaseHint(phase, me), `ハーネス経由のモジュール関数とも一致（${phase}）`);
+  }
+  // バカ表示のときも夜ヒントは表示役職のもの。
+  me.roleKey = "baka";
+  me.fakeDisplayRoleKey = "apprenticeSeer";
+  s.phase = "night";
+  assert.equal(FB.getPhaseHint(FB.ROLES.baka), Logic.getPhaseHint("night", me));
+  assert.match(FB.getPhaseHint(FB.ROLES.baka), /調査/);
+  // 役職カードのヒント表示もモジュール通り。
+  FB.updateInGameRoleCard();
+  assert.equal(elements.get("roleCardPhaseHint").textContent, Logic.getPhaseHint("night", me));
+});
