@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildResultSummary: buildResultSummaryLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2355,42 +2355,24 @@
     renderPnpStats();
   }
   function renderPnpStats() {
-    const stats = loadPnpStats();
+    // サマリー文言と役職チップの生成は共有モジュール（buildStatsView）
+    // に切り出し済み。要素への代入だけがブラウザ側に残る。
+    const view = buildStatsViewLogic(loadPnpStats(), { kind: "pnp" });
     const summary = el("pnpStatsSummary");
     const rolesBox = el("pnpStatsRoles");
     if (!summary || !rolesBox) return;
-    if (stats.games === 0) {
-      summary.textContent = "まだパス＆プレイの記録がありません";
-      rolesBox.innerHTML = "";
-      return;
-    }
-    const w = stats.factionWins || {};
-    summary.textContent = `通算 ${stats.games}戦（イノセント勝利 ${w["イノセント"] || 0}・インポスター勝利 ${w["インポスター"] || 0}・ボマー勝利 ${w["ニュートラル"] || 0}）`;
-    rolesBox.innerHTML = Object.entries(stats.byRole)
-      .sort((a, b) => b[1].games - a[1].games)
-      // 廃止済み役職の旧記録（clumsySeer）は当時の名前で表示する。
-      .map(([key, v]) => `<span class="stats-chip">${ROLES[key]?.name || LEGACY_ROLE_NAMES[key] || key}：${v.games}戦${v.wins}勝</span>`)
-      .join("");
+    summary.textContent = view.summary;
+    rolesBox.innerHTML = view.chips;
   }
   function renderStats() {
     renderPnpStats();
-    const stats = loadStats();
+    // サマリー文言と役職チップの生成は共有モジュール（buildStatsView）
+    // に切り出し済み。要素への代入と実績の描画だけがブラウザ側に残る。
+    const view = buildStatsViewLogic(loadStats(), { kind: "solo" });
     const summary = el("statsSummary");
     const rolesBox = el("statsRoles");
-    if (stats.games === 0) {
-      summary.textContent = "まだ対戦記録がありません";
-      rolesBox.innerHTML = "";
-      renderAchievements();
-      return;
-    }
-    const rate = Math.round((stats.wins / stats.games) * 100);
-    summary.textContent = `通算 ${stats.games}戦 ${stats.wins}勝 ${stats.games - stats.wins}敗（勝率 ${rate}%）`;
-    rolesBox.innerHTML = Object.entries(stats.byRole)
-      .sort((a, b) => b[1].games - a[1].games)
-      // 廃止済み役職の旧記録（clumsySeer）は当時の名前で表示する。
-      // それ以外は現行の役職表から引く。
-      .map(([key, v]) => `<span class="stats-chip">${ROLES[key]?.name || LEGACY_ROLE_NAMES[key] || key}：${v.games}戦${v.wins}勝</span>`)
-      .join("");
+    summary.textContent = view.summary;
+    rolesBox.innerHTML = view.chips;
     renderAchievements();
   }
   // Achievements derived from the match records. Older saves without the

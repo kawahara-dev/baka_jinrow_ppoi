@@ -1153,6 +1153,37 @@
     }
     return out;
   }
+  // ---- 戦績の表示生成（ソロ／パス＆プレイ共通） ----
+  // renderStats / renderPnpStats のうち DOM を使わない純粋な部分：
+  // サマリー文言と役職チップの HTML。要素への代入と実績の描画は
+  // ブラウザ側に残る。input は { kind: "solo" | "pnp" }。
+  function buildStatsView(stats, input) {
+    const base = stats || {};
+    const chips = Object.entries(base.byRole || {})
+      .sort((a, b) => b[1].games - a[1].games)
+      // 廃止済み役職の旧記録（clumsySeer）は当時の名前で表示する。
+      // それ以外は現行の役職表から引く。どれにも無ければキーそのまま。
+      .map(([key, v]) => `<span class="stats-chip">${ROLES[key]?.name || LEGACY_ROLE_NAMES[key] || key}：${v.games}戦${v.wins}勝</span>`)
+      .join("");
+    if (!base.games) {
+      return {
+        summary: input.kind === "pnp" ? "まだパス＆プレイの記録がありません" : "まだ対戦記録がありません",
+        chips: "",
+      };
+    }
+    if (input.kind === "pnp") {
+      const w = base.factionWins || {};
+      return {
+        summary: `通算 ${base.games}戦（イノセント勝利 ${w["イノセント"] || 0}・インポスター勝利 ${w["インポスター"] || 0}・ボマー勝利 ${w["ニュートラル"] || 0}）`,
+        chips,
+      };
+    }
+    const rate = Math.round(((base.wins || 0) / base.games) * 100);
+    return {
+      summary: `通算 ${base.games}戦 ${base.wins || 0}勝 ${base.games - (base.wins || 0)}敗（勝率 ${rate}%）`,
+      chips,
+    };
+  }
   // ---- 結果画面の表示データ生成 ----
   // showResults のうち DOM を使わない純粋な部分：勝敗陣営の導出・
   // 自分の勝敗・サブ文言・各プレイヤーの行データ（役職名・陣営チップ・
@@ -1222,6 +1253,7 @@
     migrateFactionWins,
     applySoloStats,
     applyPnpStats,
+    buildStatsView,
     buildResultSummary,
   };
 });

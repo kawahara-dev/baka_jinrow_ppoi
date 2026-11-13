@@ -1376,3 +1376,95 @@ test("ブラウザ側の showResults は共有モジュールと同一の表示�
   }
   assert.ok(rowsHtml.includes("（あなた）"), "自分の行に（あなた）が付く");
 });
+
+// ---- フェーズ0第9歩：戦績の表示生成の抽出 ----
+
+const SOLO_STATS = {
+  games: 10, wins: 6,
+  byRole: {
+    guardian: { games: 4, wins: 3 },
+    apprenticeSeer: { games: 3, wins: 1 },
+    clumsySeer: { games: 2, wins: 2 },
+    unknownRoleKey: { games: 1, wins: 0 },
+  },
+  factionWins: { "イノセント": 5, "インポスター": 1 },
+  steals: 0, streak: 2, bestStreak: 3,
+};
+const PNP_STATS = {
+  games: 5,
+  factionWins: { "イノセント": 3, "インポスター": 2 },
+  byRole: { villager: { games: 4, wins: 2 }, fakeGirl: { games: 1, wins: 1 } },
+};
+
+test("buildStatsView：ソロは勝率つきサマリーと試合数順の役職チップを返す", () => {
+  const v = Logic.buildStatsView(SOLO_STATS, { kind: "solo" });
+  assert.equal(v.summary, "通算 10戦 6勝 4敗（勝率 60%）");
+  assert.ok(v.chips.includes("守り手：4戦3勝"), `チップ: ${v.chips}`);
+  assert.ok(v.chips.includes("見習い占い師：3戦1勝"), `チップ: ${v.chips}`);
+  // 試合数の多い順に並ぶ（守り手→見習い占い師→うっかり占い師→未知キー）。
+  assert.ok(
+    v.chips.indexOf("守り手") < v.chips.indexOf("見習い占い師")
+      && v.chips.indexOf("見習い占い師") < v.chips.indexOf("うっかり占い師"),
+    `並び順: ${v.chips}`);
+});
+
+test("buildStatsView：ソロで0戦なら「まだ対戦記録がありません」でチップなし", () => {
+  const v = Logic.buildStatsView({ games: 0, wins: 0, byRole: {}, factionWins: {} }, { kind: "solo" });
+  assert.equal(v.summary, "まだ対戦記録がありません");
+  assert.equal(v.chips, "");
+});
+
+test("buildStatsView：廃止済み役職は当時の名前、未知のキーはキーそのままで表示する", () => {
+  const v = Logic.buildStatsView(SOLO_STATS, { kind: "solo" });
+  assert.ok(v.chips.includes("うっかり占い師：2戦2勝"), `旧記録: ${v.chips}`);
+  assert.ok(v.chips.includes("unknownRoleKey：1戦0勝"), `未知キー: ${v.chips}`);
+});
+
+test("buildStatsView：パス＆プレイは陣営勝利数つきサマリーを返す", () => {
+  const v = Logic.buildStatsView(PNP_STATS, { kind: "pnp" });
+  assert.equal(v.summary, "通算 5戦（イノセント勝利 3・インポスター勝利 2・ボマー勝利 0）");
+  assert.ok(v.chips.includes("村ガール：4戦2勝"), `チップ: ${v.chips}`);
+  assert.ok(v.chips.includes("フェイクガール：1戦1勝"), `チップ: ${v.chips}`);
+});
+
+test("buildStatsView：パス＆プレイで0戦なら専用の文言でチップなし", () => {
+  const v = Logic.buildStatsView({ games: 0, factionWins: {}, byRole: {} }, { kind: "pnp" });
+  assert.equal(v.summary, "まだパス＆プレイの記録がありません");
+  assert.equal(v.chips, "");
+});
+
+test("buildStatsView：入力の stats を変更しない（純粋関数）", () => {
+  const soloSnapshot = JSON.stringify(SOLO_STATS);
+  const pnpSnapshot = JSON.stringify(PNP_STATS);
+  Logic.buildStatsView(SOLO_STATS, { kind: "solo" });
+  Logic.buildStatsView(PNP_STATS, { kind: "pnp" });
+  assert.equal(JSON.stringify(SOLO_STATS), soloSnapshot);
+  assert.equal(JSON.stringify(PNP_STATS), pnpSnapshot);
+});
+
+test("ブラウザ側の renderStats / renderPnpStats は共有モジュールと同一の表示になる", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  localStorage.setItem("fakeBloomStats", JSON.stringify(SOLO_STATS));
+  localStorage.setItem("fakeBloomPnpStats", JSON.stringify(PNP_STATS));
+  const soloExpected = Logic.buildStatsView(SOLO_STATS, { kind: "solo" });
+  const pnpExpected = Logic.buildStatsView(PNP_STATS, { kind: "pnp" });
+  assert.equal(
+    JSON.stringify(FB.buildStatsViewLogic(SOLO_STATS, { kind: "solo" })),
+    JSON.stringify(soloExpected),
+    "ハーネス経由のモジュール関数とも一致");
+  FB.renderStats();
+  assert.equal(elements.get("statsSummary").textContent, soloExpected.summary);
+  assert.equal(elements.get("statsRoles").innerHTML, soloExpected.chips);
+  // renderStats はパス＆プレイ側も一緒に描く。
+  assert.equal(elements.get("pnpStatsSummary").textContent, pnpExpected.summary);
+  assert.equal(elements.get("pnpStatsRoles").innerHTML, pnpExpected.chips);
+  FB.renderPnpStats();
+  assert.equal(elements.get("pnpStatsSummary").textContent, pnpExpected.summary);
+  assert.equal(elements.get("pnpStatsRoles").innerHTML, pnpExpected.chips);
+  // 0戦の表示もモジュール通り。
+  const fresh = loadGame({ seedSettings: BASE_SETTINGS });
+  fresh.FB.renderStats();
+  assert.equal(fresh.elements.get("statsSummary").textContent, "まだ対戦記録がありません");
+  assert.equal(fresh.elements.get("pnpStatsSummary").textContent, "まだパス＆プレイの記録がありません");
+});
+
