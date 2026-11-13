@@ -1235,6 +1235,43 @@
     if (phase === "discussion") return "朝の報告と発言のズレを比較して、投票候補を絞ろう。";
     return "勝敗ログを見て、次ゲームの立ち回りメモを作ろう。";
   }
+  // ---- 仲間表示と役職表示の生成 ----
+  // インポスター仲間の名前列と、役職画面・受け渡し画面に出す1人分の
+  // 役職表示 HTML。表示の決定に state は使わず、players・mode・
+  // humanPlayerIds を引数で受け取る純粋関数。
+  function getFakeAlliesText(players, player, opts) {
+    if (!player || ROLES[player.roleKey].faction !== "インポスター") return "";
+    const allies = (players || []).filter((p) => p.id !== player.id && ROLES[p.roleKey].faction === "インポスター");
+    if (!allies.length) return "なし";
+    // パス＆プレイでは仲間確認のため P 番号も付ける（誰と相談すればよいか分かるように）。
+    if (opts && opts.mode === "pnp") {
+      return allies.map((p) => {
+        const idx = (opts.humanPlayerIds || []).indexOf(p.id);
+        return idx >= 0 ? `P${idx + 1}（${p.name}）` : p.name;
+      }).join("、");
+    }
+    return allies.map((p) => p.name).join("、");
+  }
+
+  function getAlliesLineForRole(players, player, opts) {
+    if (!player || ROLES[player.roleKey].faction !== "インポスター") return "";
+    return `インポスター仲間：${getFakeAlliesText(players, player, opts)}`;
+  }
+
+  // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
+  // 受け渡し画面で共通して使う。バカには表示役職だけを本物として見せる。
+  function roleHtmlFor(player, players, opts) {
+    const r = ROLES[getEffectiveRoleKey(player)];
+    return `
+      <strong>${player.name} の役職：${r.icon} ${r.name}</strong><br>
+      陣営：${r.faction}<br>
+      説明：${r.desc}<br>
+      夜の推奨行動：${r.nightActionHint}<br>
+      結果の見方：${r.resultInterpretation}<br>
+      注意：${r.riskNote}<br>
+      ${getAlliesLineForRole(players, player, opts)}
+    `;
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1269,5 +1306,8 @@
     buildStatsView,
     buildResultSummary,
     getPhaseHint,
+    getFakeAlliesText,
+    getAlliesLineForRole,
+    roleHtmlFor,
   };
 });

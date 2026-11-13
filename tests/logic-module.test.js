@@ -1510,3 +1510,122 @@ test("ブラウザ側の getPhaseHint は共有モジュールと同一のヒン
   FB.updateInGameRoleCard();
   assert.equal(elements.get("roleCardPhaseHint").textContent, Logic.getPhaseHint("night", me));
 });
+
+test("getFakeAlliesText：インポスター以外・player なしは空文字、仲間なしは「なし」", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "fakeGirl" },
+    { id: 1, name: "ミオ", roleKey: "villager" },
+  ];
+  assert.equal(Logic.getFakeAlliesText(players, players[1]), "");
+  assert.equal(Logic.getFakeAlliesText(players, null), "");
+  assert.equal(Logic.getFakeAlliesText(players, players[0]), "なし");
+  assert.equal(Logic.getFakeAlliesText([], players[0]), "なし");
+});
+
+test("getFakeAlliesText：ソロは仲間名を「、」でつなぐ（脱落した仲間も含む）", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "fakeGirl", alive: true },
+    { id: 1, name: "ミオ", roleKey: "mimic", alive: true },
+    { id: 2, name: "アオイ", roleKey: "mimic", alive: false },
+    { id: 3, name: "ユキ", roleKey: "villager", alive: true },
+  ];
+  assert.equal(Logic.getFakeAlliesText(players, players[0]), "ミオ、アオイ");
+  assert.equal(Logic.getFakeAlliesText(players, players[1]), "ルナ、アオイ");
+});
+
+test("getFakeAlliesText：パス＆プレイは人間の仲間に P 番号、CPU の仲間は名前だけ", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "fakeGirl" },
+    { id: 1, name: "ミオ", roleKey: "mimic" },
+    { id: 2, name: "アオイ", roleKey: "mimic" },
+  ];
+  const opts = { mode: "pnp", humanPlayerIds: [1, 0] };
+  assert.equal(Logic.getFakeAlliesText(players, players[0], opts), "P1（ミオ）、アオイ");
+  // mode が pnp でなければ P 番号は付かない。
+  assert.equal(Logic.getFakeAlliesText(players, players[0], { mode: "solo", humanPlayerIds: [1, 0] }), "ミオ、アオイ");
+  assert.equal(Logic.getFakeAlliesText(players, players[0]), "ミオ、アオイ");
+});
+
+test("getAlliesLineForRole：インポスターだけ「インポスター仲間：…」を返す", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "fakeGirl" },
+    { id: 1, name: "ミオ", roleKey: "mimic" },
+    { id: 2, name: "ユキ", roleKey: "villager" },
+  ];
+  assert.equal(Logic.getAlliesLineForRole(players, players[0]), "インポスター仲間：ミオ");
+  assert.equal(Logic.getAlliesLineForRole(players, players[2]), "");
+  assert.equal(Logic.getAlliesLineForRole(players, null), "");
+  const solo = [{ id: 0, name: "ルナ", roleKey: "fakeGirl" }];
+  assert.equal(Logic.getAlliesLineForRole(solo, solo[0]), "インポスター仲間：なし");
+});
+
+test("roleHtmlFor：バカには表示役職だけを見せ、「バカ」「偽表示」は出ない", () => {
+  const players = [{ id: 0, name: "ルナ", roleKey: "baka", fakeDisplayRoleKey: "guardian" }];
+  const html = Logic.roleHtmlFor(players[0], players);
+  assert.ok(html.includes("守り手"), `表示役職が出る: ${html}`);
+  assert.ok(!html.includes("バカ"), `バカの文言が出ない: ${html}`);
+  assert.ok(!html.includes("偽表示"), `偽表示の文言が出ない: ${html}`);
+  // 占い師表示のバカも同じ。
+  players[0].fakeDisplayRoleKey = "apprenticeSeer";
+  assert.ok(Logic.roleHtmlFor(players[0], players).includes("見習い占い師"));
+  // バカ以外は従来通り自分の役職が出る。
+  players[0].roleKey = "tracker";
+  players[0].fakeDisplayRoleKey = null;
+  assert.ok(Logic.roleHtmlFor(players[0], players).includes("追跡係"));
+});
+
+test("roleHtmlFor：インポスターには仲間行、イノセントには仲間行なし", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "fakeGirl" },
+    { id: 1, name: "ミオ", roleKey: "mimic" },
+    { id: 2, name: "ユキ", roleKey: "villager" },
+  ];
+  assert.ok(Logic.roleHtmlFor(players[0], players).includes("インポスター仲間：ミオ"));
+  assert.ok(!Logic.roleHtmlFor(players[2], players).includes("インポスター仲間"));
+  assert.ok(Logic.roleHtmlFor(players[2], players).includes("村ガール"));
+});
+
+test("roleHtmlFor：入力の players を変更しない（純粋関数）", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "fakeGirl" },
+    { id: 1, name: "ミオ", roleKey: "mimic" },
+  ];
+  const before = JSON.stringify(players);
+  Logic.roleHtmlFor(players[0], players);
+  Logic.getFakeAlliesText(players, players[0]);
+  Logic.getAlliesLineForRole(players, players[0]);
+  assert.equal(JSON.stringify(players), before);
+});
+
+test("ブラウザ側の roleHtmlFor / getFakeAlliesText / getAlliesLineForRole は共有モジュールと同一の表示になる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const opts = { mode: s.mode, humanPlayerIds: s.humanPlayerIds };
+  const me = s.players[s.playerId];
+  for (const p of s.players) {
+    assert.equal(FB.roleHtmlFor(p), Logic.roleHtmlFor(p, s.players, opts), `${p.name} の役職表示が一致`);
+    assert.equal(FB.getFakeAlliesText(p), Logic.getFakeAlliesText(s.players, p, opts), `${p.name} の仲間表示が一致`);
+    assert.equal(FB.getAlliesLineForRole(p), Logic.getAlliesLineForRole(s.players, p, opts), `${p.name} の仲間行が一致`);
+    assert.equal(FB.getFakeAlliesTextLogic(s.players, p, opts), Logic.getFakeAlliesText(s.players, p, opts), `ハーネス経由のモジュール関数とも一致（${p.name}）`);
+    assert.equal(FB.roleHtmlForLogic(p, s.players, opts), Logic.roleHtmlFor(p, s.players, opts), `ハーネス経由の roleHtmlFor とも一致（${p.name}）`);
+  }
+  // バカ表示のときも役職表示は表示役職のもの。
+  me.roleKey = "baka";
+  me.fakeDisplayRoleKey = "apprenticeSeer";
+  assert.equal(FB.roleHtmlFor(me), Logic.roleHtmlFor(me, s.players, opts));
+  assert.match(FB.roleHtmlFor(me), /見習い占い師/);
+  assert.ok(!FB.roleHtmlFor(me).includes("バカ"));
+  // 役職カードの仲間表示もモジュール通り。
+  FB.updateInGameRoleCard();
+  assert.equal(elements.get("roleCardAllies").textContent, Logic.getFakeAlliesText(s.players, me, opts));
+  // パス＆プレイでは P 番号つきの仲間表示になる。
+  const pnp = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
+  pnp.FB.setupGame();
+  const ps = pnp.FB.state;
+  const popts = { mode: ps.mode, humanPlayerIds: ps.humanPlayerIds };
+  for (const p of ps.players) {
+    assert.equal(pnp.FB.roleHtmlFor(p), Logic.roleHtmlFor(p, ps.players, popts), `PnP ${p.name} の役職表示が一致`);
+    assert.equal(pnp.FB.getFakeAlliesText(p), Logic.getFakeAlliesText(ps.players, p, popts), `PnP ${p.name} の仲間表示が一致`);
+  }
+});
