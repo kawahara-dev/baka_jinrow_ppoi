@@ -1093,7 +1093,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2721,17 +2721,8 @@
     try {
       const raw = typeof localStorage !== "undefined" ? localStorage.getItem(SETTINGS_KEY) : null;
       if (!raw) return { ...fallback };
-      const parsed = JSON.parse(raw);
-      return {
-        fakeCount: ["random", "1", "2"].includes(parsed.fakeCount) ? parsed.fakeCount : fallback.fakeCount,
-        bomber: ["random", "on", "off"].includes(parsed.bomber) ? parsed.bomber : fallback.bomber,
-        sound: ["on", "off"].includes(parsed.sound) ? parsed.sound : fallback.sound,
-        difficulty: ["easy", "normal", "hard"].includes(parsed.difficulty) ? parsed.difficulty : fallback.difficulty,
-        bgm: ["on", "off"].includes(parsed.bgm) ? parsed.bgm : fallback.bgm,
-        mode: ["solo", "pnp"].includes(parsed.mode) ? parsed.mode : fallback.mode,
-        humanCount: ["2", "3", "4", "5", "6", "7", "8"].includes(parsed.humanCount) ? parsed.humanCount : fallback.humanCount,
-        discussTimer: ["0", "60", "120", "180"].includes(parsed.discussTimer) ? parsed.discussTimer : fallback.discussTimer
-      };
+      // 検証と既定値への戻しは共有モジュール（normalizeSettingsLogic）。
+      return normalizeSettingsLogic(JSON.parse(raw));
     } catch {
       return { ...fallback };
     }
@@ -2742,20 +2733,28 @@
     } catch { /* storage unavailable: settings just won't persist */ }
   }
   function paintSettings() {
-    document.querySelectorAll(".seg").forEach(seg => {
-      const key = seg.dataset.setting;
-      seg.querySelectorAll("button").forEach(b => {
-      const active = b.dataset.value === gameSettings[key];
-      b.classList.toggle("active", active);
-      b.setAttribute("aria-pressed", String(active));
-    });
+    // 表示データは共有モジュール（buildSettingsViewLogic）が作り、
+    // ここでは DOM への代入だけを行う。
+    const segs = [...document.querySelectorAll(".seg")];
+    const view = buildSettingsViewLogic(gameSettings, segs.map(seg => ({
+      key: seg.dataset.setting,
+      values: [...seg.querySelectorAll("button")].map(b => b.dataset.value),
+    })));
+    segs.forEach((seg, i) => {
+      const segView = view.segments[i];
+      seg.querySelectorAll("button").forEach((b, j) => {
+        const btn = segView && segView.buttons[j];
+        const active = btn ? btn.active : false;
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-pressed", btn ? btn.ariaPressed : "false");
+      });
     });
     // 参加人数はパス＆プレイのときだけ表示する。
     const humanCountRow = document.getElementById("humanCountRow");
-    if (humanCountRow) humanCountRow.classList.toggle("hidden", gameSettings.mode !== "pnp");
+    if (humanCountRow) humanCountRow.classList.toggle("hidden", view.humanCountHidden);
     // 議論タイマーもパス＆プレイのときだけ表示する。
     const discussTimerRow = document.getElementById("discussTimerRow");
-    if (discussTimerRow) discussTimerRow.classList.toggle("hidden", gameSettings.mode !== "pnp");
+    if (discussTimerRow) discussTimerRow.classList.toggle("hidden", view.discussTimerHidden);
   }
   document.querySelectorAll(".seg button").forEach(b => {
     b.addEventListener("click", () => {

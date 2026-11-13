@@ -2063,3 +2063,109 @@ test("buildRoleCardView：roleKey・roleName・iconButtonHtml を返し、バカ
   assert.equal(view.iconButtonHtml, Logic.roleIconButtonHtml("guardian"));
   assert.ok(!JSON.stringify(view).includes("バカ"), "バカの文言が出ない");
 });
+
+test("normalizeSettings：有効な値はそのまま、不正・欠け・null は既定値に戻る", () => {
+  const valid = { fakeCount: "1", bomber: "on", sound: "off", difficulty: "hard", bgm: "on", mode: "pnp", humanCount: "5", discussTimer: "120" };
+  assert.deepEqual(Logic.normalizeSettings(valid), valid);
+  assert.deepEqual(Logic.normalizeSettings(null), Logic.DEFAULT_SETTINGS);
+  assert.deepEqual(Logic.normalizeSettings(undefined), Logic.DEFAULT_SETTINGS);
+  assert.deepEqual(Logic.normalizeSettings("not-an-object"), Logic.DEFAULT_SETTINGS);
+  assert.deepEqual(Logic.normalizeSettings(42), Logic.DEFAULT_SETTINGS);
+  // 許容外の値はそのキーだけ既定値に戻る（有効な値は残る）。
+  const bad = { fakeCount: "3", bomber: "maybe", sound: "off", difficulty: "extreme", bgm: "on", mode: "party", humanCount: "9", discussTimer: "90" };
+  assert.deepEqual(Logic.normalizeSettings(bad), { ...Logic.DEFAULT_SETTINGS, sound: "off", bgm: "on" });
+  // キーが欠けた古い設定はそのキーだけ既定値（後方互換）。
+  assert.deepEqual(Logic.normalizeSettings({ mode: "pnp" }), { ...Logic.DEFAULT_SETTINGS, mode: "pnp" });
+  assert.deepEqual(Logic.normalizeSettings({}), Logic.DEFAULT_SETTINGS);
+  // 余分なキーは無視される。
+  assert.deepEqual(Logic.normalizeSettings({ ...valid, extra: "x" }), valid);
+});
+
+test("normalizeSettings：入力を変更しない（純粋関数）", () => {
+  const parsed = { fakeCount: "3", mode: "pnp", humanCount: "9" };
+  const before = JSON.stringify(parsed);
+  Logic.normalizeSettings(parsed);
+  assert.equal(JSON.stringify(parsed), before);
+});
+
+test("buildSettingsView：ソロは2行とも隠れ、選択中のボタンだけ active", () => {
+  const settings = { ...Logic.DEFAULT_SETTINGS, difficulty: "hard", sound: "off" };
+  const segments = [
+    { key: "difficulty", values: ["easy", "normal", "hard"] },
+    { key: "sound", values: ["on", "off"] },
+    { key: "mode", values: ["solo", "pnp"] },
+  ];
+  const view = Logic.buildSettingsView(settings, segments);
+  assert.equal(view.humanCountHidden, true);
+  assert.equal(view.discussTimerHidden, true);
+  assert.deepEqual(view.segments[0].buttons, [
+    { value: "easy", active: false, ariaPressed: "false" },
+    { value: "normal", active: false, ariaPressed: "false" },
+    { value: "hard", active: true, ariaPressed: "true" },
+  ]);
+  assert.deepEqual(view.segments[1].buttons, [
+    { value: "on", active: false, ariaPressed: "false" },
+    { value: "off", active: true, ariaPressed: "true" },
+  ]);
+  assert.deepEqual(view.segments[2].buttons[0], { value: "solo", active: true, ariaPressed: "true" });
+});
+
+test("buildSettingsView：パス＆プレイは2行とも表示され、許容外の値はどれも active にならない", () => {
+  const settings = { ...Logic.DEFAULT_SETTINGS, mode: "pnp", humanCount: "5" };
+  const view = Logic.buildSettingsView(settings, [{ key: "humanCount", values: ["2", "3", "4", "5"] }]);
+  assert.equal(view.humanCountHidden, false);
+  assert.equal(view.discussTimerHidden, false);
+  assert.equal(view.segments[0].buttons[3].active, true);
+  // 許容外の mode は既定値 solo に直るので、pnp 側は active にならない。
+  const bad = Logic.buildSettingsView({ ...Logic.DEFAULT_SETTINGS, mode: "party" }, [{ key: "mode", values: ["solo", "pnp"] }]);
+  assert.equal(bad.humanCountHidden, true);
+  assert.deepEqual(bad.segments[0].buttons.map(b => b.active), [true, false]);
+});
+
+test("buildSettingsView：segments が空・null でも行の表示有無だけ返し、入力を変更しない", () => {
+  assert.deepEqual(Logic.buildSettingsView(Logic.DEFAULT_SETTINGS, []), { segments: [], humanCountHidden: true, discussTimerHidden: true });
+  assert.deepEqual(Logic.buildSettingsView({ ...Logic.DEFAULT_SETTINGS, mode: "pnp" }, null), { segments: [], humanCountHidden: false, discussTimerHidden: false });
+  const segments = [{ key: "difficulty", values: ["easy", "normal"] }];
+  const before = JSON.stringify(segments);
+  Logic.buildSettingsView(Logic.DEFAULT_SETTINGS, segments);
+  assert.equal(JSON.stringify(segments), before);
+});
+
+test("ブラウザ側の paintSettings は共有モジュールの buildSettingsView と同一に描く", () => {
+  const { FB, sandbox, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", difficulty: "hard", sound: "off" } });
+  // paintSettings が読む .seg をスタブで用意する（静的 HTML のボタン相当）。
+  const mkBtn = (value) => ({
+    dataset: { value },
+    _active: false,
+    classList: {
+      toggle(cls, on) { if (cls === "active") this._owner._active = !!on; },
+      add() {}, remove() {}, contains(cls) { return cls === "active" ? this._owner._active : false; },
+    },
+    _attrs: {},
+    setAttribute(k, v) { this._attrs[k] = String(v); },
+    getAttribute(k) { return this._attrs[k] ?? null; },
+  });
+  const defs = [
+    { key: "difficulty", values: ["easy", "normal", "hard"] },
+    { key: "sound", values: ["on", "off"] },
+    { key: "mode", values: ["solo", "pnp"] },
+  ];
+  const segs = defs.map(def => {
+    const seg = { dataset: { setting: def.key }, buttons: def.values.map(mkBtn) };
+    seg.buttons.forEach(b => { b.classList._owner = b; });
+    seg.querySelectorAll = () => seg.buttons;
+    return seg;
+  });
+  sandbox.document.querySelectorAll = (sel) => (sel === ".seg" ? segs : []);
+  FB.paintSettings();
+  const view = Logic.buildSettingsView(FB.gameSettings, defs);
+  assert.equal(JSON.stringify(FB.buildSettingsViewLogic(FB.gameSettings, defs)), JSON.stringify(view), "ハーネス経由の buildSettingsView とも同一");
+  view.segments.forEach((segView, i) => {
+    segView.buttons.forEach((btn, j) => {
+      assert.equal(segs[i].buttons[j].classList.contains("active"), btn.active, `${segView.key}=${btn.value} の active`);
+      assert.equal(segs[i].buttons[j].getAttribute("aria-pressed"), btn.ariaPressed, `${segView.key}=${btn.value} の aria-pressed`);
+    });
+  });
+  assert.equal(elements.get("humanCountRow").classList.contains("hidden"), view.humanCountHidden, "参加人数の行");
+  assert.equal(elements.get("discussTimerRow").classList.contains("hidden"), view.discussTimerHidden, "議論タイマーの行");
+});

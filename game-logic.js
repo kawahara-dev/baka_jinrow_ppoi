@@ -1427,6 +1427,52 @@
       pnpBanner: { hidden: !pnpInputPending },
     };
   }
+
+  // タイトル画面の設定（ブラウザの保存領域に残る gameSettings）。
+  // 許容値の一覧と既定値。ブラウザ側の読み込み時バリデーションと
+  // 同じ規則で、オンライン対戦の部屋設定でも使い回す。
+  const DEFAULT_SETTINGS = { fakeCount: "random", bomber: "random", sound: "on", difficulty: "normal", bgm: "off", mode: "solo", humanCount: "2", discussTimer: "0" };
+  const SETTINGS_ALLOWED = {
+    fakeCount: ["random", "1", "2"],
+    bomber: ["random", "on", "off"],
+    sound: ["on", "off"],
+    difficulty: ["easy", "normal", "hard"],
+    bgm: ["on", "off"],
+    mode: ["solo", "pnp"],
+    humanCount: ["2", "3", "4", "5", "6", "7", "8"],
+    discussTimer: ["0", "60", "120", "180"],
+  };
+  // 保存された設定を検証して返す純粋関数。parsed が null・非オブジェクト・
+  // キー欠け・許容外の値のときはそのキーだけ既定値に戻す（後方互換）。
+  // 余分なキーは無視する。入力は変更しない。
+  function normalizeSettings(parsed) {
+    const out = { ...DEFAULT_SETTINGS };
+    if (!parsed || typeof parsed !== "object") return out;
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (SETTINGS_ALLOWED[key].includes(parsed[key])) out[key] = parsed[key];
+    }
+    return out;
+  }
+  // paintSettings が画面に反映する表示データ。segments は各 .seg の
+  // { key, values }（ブラウザ側は DOM から集める）。各ボタンの選択状態
+  // と aria-pressed、参加人数・議論タイマーの行の表示有無を返す。
+  // DOM への代入はブラウザ側（paintSettings）が行う。settings が
+  // 許容外の値でも normalizeSettings で既定値に直してから判定する。
+  function buildSettingsView(settings, segments) {
+    const normalized = normalizeSettings(settings);
+    const list = Array.isArray(segments) ? segments : [];
+    return {
+      segments: list.map(seg => ({
+        key: seg.key,
+        buttons: (Array.isArray(seg.values) ? seg.values : []).map(value => {
+          const active = value === normalized[seg.key];
+          return { value, active, ariaPressed: String(active) };
+        }),
+      })),
+      humanCountHidden: normalized.mode !== "pnp",
+      discussTimerHidden: normalized.mode !== "pnp",
+    };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1469,5 +1515,9 @@
     buildCardsView,
     buildStageView,
     buildDrawView,
+    DEFAULT_SETTINGS,
+    SETTINGS_ALLOWED,
+    normalizeSettings,
+    buildSettingsView,
   };
 });
