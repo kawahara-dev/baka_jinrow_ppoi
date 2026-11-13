@@ -2319,3 +2319,79 @@ test("ブラウザ側の applyLogFold／setLogFolded は共有モジュールの
   assert.equal(localStorage.getItem(FB.LOG_FOLD_KEY), JSON.stringify({ dialogue: false, action: false }));
   assertMatchesView();
 });
+
+test("buildAchievementsView：0戦なら11個すべて未達成で 🔒", () => {
+  const view = Logic.buildAchievementsView({ games: 0, wins: 0, byRole: {}, factionWins: {}, steals: 0, streak: 0, bestStreak: 0 });
+  assert.equal(view.length, 11);
+  assert.deepEqual(view.map(v => v.id), Logic.ACHIEVEMENT_DEFS.map(d => d.id));
+  for (const v of view) {
+    assert.equal(v.unlocked, false, `${v.id} は未達成`);
+    assert.equal(v.icon, "🔒");
+  }
+});
+
+test("buildAchievementsView：勝利数・陣営勝利・横取り・連勝・試合数で解除される", () => {
+  const stats = {
+    games: 50, wins: 30,
+    byRole: {
+      guardian: { games: 5, wins: 2 }, apprenticeSeer: { games: 3, wins: 1 },
+      tracker: { games: 2, wins: 1 }, police: { games: 2, wins: 1 }, lookout: { games: 1, wins: 1 },
+    },
+    factionWins: { "イノセント": 20, "インポスター": 5, "ニュートラル": 2 },
+    steals: 1, streak: 3, bestStreak: 4,
+  };
+  const view = Logic.buildAchievementsView(stats);
+  const byId = Object.fromEntries(view.map(v => [v.id, v]));
+  for (const id of ["first-win", "wins10", "wins30", "pure-win", "fake-win", "bomber-win", "steal", "roles5", "streak3", "games50"]) {
+    assert.equal(byId[id].unlocked, true, `${id} は達成`);
+    assert.equal(byId[id].icon, "🏅");
+  }
+  assert.equal(byId["roles10"].unlocked, false, "5役勝利では十役の達人は未達成");
+});
+
+test("isAchievementUnlocked：しきい値の境界と欠けた戦績・未知の id", () => {
+  assert.equal(Logic.isAchievementUnlocked("wins10", { wins: 9 }), false);
+  assert.equal(Logic.isAchievementUnlocked("wins10", { wins: 10 }), true);
+  assert.equal(Logic.isAchievementUnlocked("roles5", {
+    byRole: { a: { wins: 1 }, b: { wins: 1 }, c: { wins: 1 }, d: { wins: 1 } },
+  }), false);
+  assert.equal(Logic.isAchievementUnlocked("pure-win", {}), false);
+  assert.equal(Logic.isAchievementUnlocked("pure-win", null), false);
+  assert.equal(Logic.isAchievementUnlocked("no-such-achievement", { wins: 99 }), false);
+  assert.equal(Logic.isAchievementUnlocked("first-win", undefined), false);
+});
+
+test("buildAchievementsView：入力の stats と ACHIEVEMENT_DEFS を変更しない（純粋関数）", () => {
+  const stats = {
+    games: 10, wins: 5, byRole: { guardian: { games: 5, wins: 2 } },
+    factionWins: { "イノセント": 5 }, steals: 0, streak: 2, bestStreak: 2,
+  };
+  const beforeStats = JSON.stringify(stats);
+  const beforeDefs = JSON.stringify(Logic.ACHIEVEMENT_DEFS);
+  Logic.buildAchievementsView(stats);
+  assert.equal(JSON.stringify(stats), beforeStats);
+  assert.equal(JSON.stringify(Logic.ACHIEVEMENT_DEFS), beforeDefs);
+});
+
+test("ブラウザ側の renderAchievements は共有モジュールの buildAchievementsView と同一に描く", () => {
+  const seeded = {
+    games: 12, wins: 10,
+    byRole: {
+      guardian: { games: 5, wins: 2 }, apprenticeSeer: { games: 3, wins: 1 },
+      tracker: { games: 2, wins: 1 }, police: { games: 1, wins: 1 }, lookout: { games: 1, wins: 1 },
+    },
+    factionWins: { "イノセント": 8, "インポスター": 2 }, steals: 1, streak: 3, bestStreak: 3,
+  };
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS, seedStorage: { fakeBloomStats: JSON.stringify(seeded) } });
+  const view = Logic.buildAchievementsView(seeded);
+  assert.equal(JSON.stringify(FB.buildAchievementsViewLogic(seeded)), JSON.stringify(view), "ハーネス経由の buildAchievementsView とも同一");
+  FB.renderAchievements();
+  const expected = view.map(a =>
+    `<span class="stats-chip ${a.unlocked ? "" : "locked"}" title="${a.hint}">${a.icon} ${a.name}</span>`).join("");
+  assert.equal(elements.get("achvList").innerHTML, expected);
+  // 0戦（未シード）の読み込みでは全チップが 🔒 になる。
+  const fresh = loadGame({ seedSettings: BASE_SETTINGS });
+  fresh.FB.renderAchievements();
+  assert.ok(fresh.elements.get("achvList").innerHTML.includes("🔒 初勝利"));
+  assert.ok(!fresh.elements.get("achvList").innerHTML.includes("🏅"));
+});

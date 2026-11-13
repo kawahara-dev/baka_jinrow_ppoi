@@ -1093,7 +1093,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2479,29 +2479,14 @@
     rolesBox.innerHTML = view.chips;
     renderAchievements();
   }
-  // Achievements derived from the match records. Older saves without the
-  // newer fields still unlock the record-based ones retroactively.
-  const ACHIEVEMENTS = [
-    { id: "first-win", name: "初勝利", hint: "初めて勝つ", test: s => s.wins >= 1 },
-    { id: "wins10", name: "10勝クラブ", hint: "通算10勝", test: s => s.wins >= 10 },
-    { id: "wins30", name: "30勝クラブ", hint: "通算30勝", test: s => s.wins >= 30 },
-    { id: "pure-win", name: "イノセントの勝利", hint: "イノセント陣営で勝つ", test: s => (s.factionWins["イノセント"] || 0) >= 1 },
-    { id: "fake-win", name: "インポスターの勝利", hint: "インポスター陣営で勝つ", test: s => (s.factionWins["インポスター"] || 0) >= 1 },
-    { id: "bomber-win", name: "ボマーの勝利", hint: "ボマーで勝つ", test: s => (s.factionWins["ニュートラル"] || 0) >= 1 },
-    { id: "steal", name: "横取り屋", hint: "ボマーの横取り勝利", test: s => s.steals >= 1 },
-    { id: "roles5", name: "五役の達人", hint: "5種類の役職で勝利", test: s => Object.values(s.byRole).filter(v => v.wins >= 1).length >= 5 },
-    { id: "roles10", name: "十役の達人", hint: "10種類の役職で勝利", test: s => Object.values(s.byRole).filter(v => v.wins >= 1).length >= 10 },
-    { id: "streak3", name: "3連勝", hint: "3連勝する", test: s => s.bestStreak >= 3 },
-    { id: "games50", name: "常連さん", hint: "通算50戦", test: s => s.games >= 50 }
-  ];
+  // 実績チップの定義と達成判定は共有モジュール（ACHIEVEMENT_DEFS／
+  // buildAchievementsView）に切り出し済み。ここでは表示への代入だけ行う。
   function renderAchievements() {
     const stats = loadStats();
     const box = el("achvList");
     if (!box) return;
-    box.innerHTML = ACHIEVEMENTS.map(a => {
-      const unlocked = a.test(stats);
-      return `<span class="stats-chip ${unlocked ? "" : "locked"}" title="${a.hint}">${unlocked ? "🏅" : "🔒"} ${a.name}</span>`;
-    }).join("");
+    box.innerHTML = buildAchievementsViewLogic(stats).map(a =>
+      `<span class="stats-chip ${a.unlocked ? "" : "locked"}" title="${a.hint}">${a.icon} ${a.name}</span>`).join("");
   }
 
   let statsResetArmed = false;
