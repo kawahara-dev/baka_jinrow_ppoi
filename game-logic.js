@@ -1068,6 +1068,24 @@
     return { nightActions, nightActionTypes, protectedTargets, loneFakeAbility };
   }
 
+  // 結果画面のハイライト生成：名場面を最大2行でまとめる。
+  // players は { roleKey, name, deathCause } を持つ配列、counters は
+  // { bombKills, revives, guardSaves, day }。DOM を使わない純粋関数で、
+  // 蘇生・護衛の回数は state にしか残らないため counters 経由で渡す。
+  function buildHighlights(players, counters) {
+    const lines = [];
+    const bomber = players.find(p => p.roleKey === "bomber");
+    const bombKills = counters.bombKills || 0;
+    const trapKills = players.filter(p => p.deathCause === "罠").length;
+    if (bomber && bombKills >= 2) lines.push(`💣 ${bomber.name}の爆弾で${bombKills}人が倒れた！`);
+    if (trapKills > 0) lines.push(`🪤 罠が${trapKills}回作動し、襲撃者を道連れにした`);
+    if ((counters.revives || 0) > 0) lines.push(`💉 ドクターの蘇生で${counters.revives}人が助かった`);
+    if ((counters.guardSaves || 0) > 0) lines.push(`🛡️ 護衛が${counters.guardSaves}回、襲撃を防いだ`);
+    if (bomber && bombKills === 1) lines.push(`💣 ${bomber.name}の爆弾で1人が倒れた`);
+    if (lines.length === 0) lines.push(`📅 ${counters.day}日目で決着`);
+    return lines.slice(0, 2);
+  }
+
   // 廃止済み役職の旧戦績データを表示するための名前（現行の ROLES にはない）。
   const LEGACY_ROLE_NAMES = { clumsySeer: "うっかり占い師" };
   // 2026-11-12 の陣営改名（ピュア→イノセント、フェイク→インポスター）より前に
@@ -1106,6 +1124,7 @@
     cpuNightActions,
     cpuVotePick,
     planNightActions,
+    buildHighlights,
     LEGACY_ROLE_NAMES,
     LEGACY_FACTION_NAMES,
     migrateFactionWins,

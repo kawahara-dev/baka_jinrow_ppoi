@@ -1060,3 +1060,84 @@ test("ブラウザ側の morningToDiscussion は共有モジュールと同一�
   assert.equal(JSON.stringify(lines), JSON.stringify(expectedLines), "ラッパーとモジュールで議論セリフが一致");
   void alive2;
 });
+
+// ---- フェーズ0第6歩：結果画面ハイライトの抽出 ----
+
+// ハイライトテスト用の最小プレイヤー列。roleKeys は8人分。
+function makeHighlightPlayers(roleKeys, extra = {}) {
+  const players = roleKeys.map((roleKey, i) => makeNightPlayer(i, roleKey));
+  for (const [id, patch] of Object.entries(extra)) Object.assign(players[id], patch);
+  return players;
+}
+const HIGHLIGHT_ROLES = ["villager", "bomber", "villager", "villager", "villager", "villager", "villager", "villager"];
+
+test("buildHighlights：何も起きていなければ日数のフォールバック1行", () => {
+  const players = makeHighlightPlayers(["villager", "villager", "villager", "villager", "villager", "villager", "villager", "villager"]);
+  assert.deepEqual(Logic.buildHighlights(players, { bombKills: 0, revives: 0, guardSaves: 0, day: 3 }), ["📅 3日目で決着"]);
+});
+
+test("buildHighlights：爆弾2キル・罠・蘇生・護衛が全部起きれば優先度の高い2行だけ", () => {
+  const players = makeHighlightPlayers(HIGHLIGHT_ROLES, { 2: { deathCause: "罠" } });
+  const bomber = players[1];
+  const lines = Logic.buildHighlights(players, { bombKills: 2, revives: 1, guardSaves: 3, day: 5 });
+  assert.equal(lines.length, 2);
+  assert.equal(lines[0], `💣 ${bomber.name}の爆弾で2人が倒れた！`);
+  assert.equal(lines[1], "🪤 罠が1回作動し、襲撃者を道連れにした");
+});
+
+test("buildHighlights：爆弾1キルだけなら1行、ボマーがいなければ爆弾の行は出ない", () => {
+  const withBomber = makeHighlightPlayers(HIGHLIGHT_ROLES);
+  const bomber = withBomber[1];
+  assert.deepEqual(
+    Logic.buildHighlights(withBomber, { bombKills: 1, revives: 0, guardSaves: 0, day: 2 }),
+    [`💣 ${bomber.name}の爆弾で1人が倒れた`]);
+  // ボマーがいない試合では bombKills が残っていても爆弾の行は出ない。
+  const noBomber = makeHighlightPlayers(["villager", "villager", "villager", "villager", "villager", "villager", "villager", "villager"]);
+  assert.deepEqual(
+    Logic.buildHighlights(noBomber, { bombKills: 2, revives: 0, guardSaves: 0, day: 2 }),
+    ["📅 2日目で決着"]);
+});
+
+test("buildHighlights：蘇生と護衛だけなら両方出る", () => {
+  const players = makeHighlightPlayers(HIGHLIGHT_ROLES);
+  assert.deepEqual(
+    Logic.buildHighlights(players, { bombKills: 0, revives: 2, guardSaves: 1, day: 4 }),
+    ["💉 ドクターの蘇生で2人が助かった", "🛡️ 護衛が1回、襲撃を防いだ"]);
+});
+
+test("buildHighlights：罠は deathCause「罠」の人数で数え、他の死因は数えない", () => {
+  const players = makeHighlightPlayers(HIGHLIGHT_ROLES, { 2: { deathCause: "罠" }, 3: { deathCause: "罠" }, 4: { deathCause: "襲撃" } });
+  const lines = Logic.buildHighlights(players, { bombKills: 0, revives: 0, guardSaves: 0, day: 6 });
+  assert.deepEqual(lines, ["🪤 罠が2回作動し、襲撃者を道連れにした"]);
+});
+
+test("ブラウザ側の buildHighlights は共有モジュールと同一のハイライトを返す", () => {
+  const { FB } = loadGame({ seedSettings: { ...BASE_SETTINGS, bomber: "on" } });
+  FB.setupGame();
+  const s = FB.state;
+  const bomber = s.players.find((p) => p.roleKey === "bomber");
+  assert.ok(bomber, "ボマーがいるはず");
+  // 名場面が全部起きた状態。
+  s.bombKills = 2;
+  s.players[0].deathCause = "罠";
+  s.revives = 1;
+  s.guardSaves = 3;
+  assert.equal(
+    JSON.stringify(FB.buildHighlights()),
+    JSON.stringify(Logic.buildHighlights(s.players, s)),
+    "ラッパーとモジュールでハイライトが一致");
+  assert.equal(
+    JSON.stringify(FB.buildHighlights()),
+    JSON.stringify(FB.buildHighlightsLogic(s.players, s)),
+    "ハーネス経由のモジュール関数とも一致");
+  // 何も起きていない状態：日数のフォールバック。
+  s.bombKills = 0;
+  s.players[0].deathCause = null;
+  s.revives = 0;
+  s.guardSaves = 0;
+  assert.equal(
+    JSON.stringify(FB.buildHighlights()),
+    JSON.stringify(Logic.buildHighlights(s.players, s)),
+    "フォールバック行も一致");
+  assert.equal(FB.buildHighlights().join("\n"), `📅 ${s.day}日目で決着`);
+});
