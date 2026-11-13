@@ -1141,3 +1141,135 @@ test("ブラウザ側の buildHighlights は共有モジュールと同一のハ
     "フォールバック行も一致");
   assert.equal(FB.buildHighlights().join("\n"), `📅 ${s.day}日目で決着`);
 });
+
+// ---- フェーズ0第7歩：戦績記録の抽出 ----
+
+const EMPTY_SOLO_STATS = { games: 0, wins: 0, byRole: {}, factionWins: {}, steals: 0, streak: 0, bestStreak: 0 };
+const EMPTY_PNP_STATS = { games: 0, factionWins: {}, byRole: {} };
+
+test("applySoloStats：勝利で試合数・勝利数・陣営勝利・役職戦績・連勝が加算される", () => {
+  const before = { games: 5, wins: 3, byRole: { guardian: { games: 2, wins: 1 } }, factionWins: { "イノセント": 3 }, steals: 1, streak: 2, bestStreak: 4 };
+  const after = Logic.applySoloStats(before, { myWin: true, roleKey: "guardian", faction: "イノセント", winText: "イノセント陣営の勝利" });
+  assert.equal(after.games, 6);
+  assert.equal(after.wins, 4);
+  assert.equal(after.factionWins["イノセント"], 4);
+  assert.equal(after.steals, 1);
+  assert.equal(after.streak, 3);
+  assert.equal(after.bestStreak, 4);
+  assert.deepEqual(after.byRole.guardian, { games: 3, wins: 2 });
+});
+
+test("applySoloStats：敗北で連勝が 0 に戻り、最高連勝は残る", () => {
+  const before = { games: 5, wins: 3, byRole: {}, factionWins: { "イノセント": 3 }, steals: 0, streak: 2, bestStreak: 4 };
+  const after = Logic.applySoloStats(before, { myWin: false, roleKey: "villager", faction: "イノセント", winText: "インポスター陣営の勝利" });
+  assert.equal(after.games, 6);
+  assert.equal(after.wins, 3);
+  assert.equal(after.streak, 0);
+  assert.equal(after.bestStreak, 4);
+  assert.deepEqual(after.byRole.villager, { games: 1, wins: 0 });
+});
+
+test("applySoloStats：横取り勝利だけ steals が増える", () => {
+  const steal = Logic.applySoloStats(EMPTY_SOLO_STATS, { myWin: true, roleKey: "bomber", faction: "ニュートラル", winText: "ボマーの勝利（横取り）" });
+  assert.equal(steal.steals, 1);
+  assert.equal(steal.factionWins["ニュートラル"], 1);
+  const normal = Logic.applySoloStats(EMPTY_SOLO_STATS, { myWin: true, roleKey: "bomber", faction: "ニュートラル", winText: "ボマーの勝利" });
+  assert.equal(normal.steals, 0);
+  // 敗北では横取り文言があっても増えない。
+  const lost = Logic.applySoloStats(EMPTY_SOLO_STATS, { myWin: false, roleKey: "villager", faction: "イノセント", winText: "ボマーの勝利（横取り）" });
+  assert.equal(lost.steals, 0);
+});
+
+test("applySoloStats：入力の stats を変更しない（純粋関数）", () => {
+  const before = { games: 2, wins: 1, byRole: { guardian: { games: 1, wins: 1 } }, factionWins: { "イノセント": 1 }, steals: 0, streak: 1, bestStreak: 1 };
+  const snapshot = JSON.stringify(before);
+  Logic.applySoloStats(before, { myWin: true, roleKey: "guardian", faction: "イノセント", winText: "イノセント陣営の勝利" });
+  assert.equal(JSON.stringify(before), snapshot);
+});
+
+test("applySoloStats：空・欠けた stats でもデフォルトで動く", () => {
+  const after = Logic.applySoloStats({}, { myWin: true, roleKey: "mouse", faction: "イノセント", winText: "イノセント陣営の勝利" });
+  assert.equal(after.games, 1);
+  assert.equal(after.wins, 1);
+  assert.equal(after.streak, 1);
+  assert.equal(after.bestStreak, 1);
+  assert.deepEqual(after.byRole.mouse, { games: 1, wins: 1 });
+  const nullAfter = Logic.applySoloStats(null, { myWin: false, roleKey: "villager", faction: "イノセント", winText: "インポスター陣営の勝利" });
+  assert.equal(nullAfter.games, 1);
+  assert.equal(nullAfter.wins, 0);
+});
+
+test("applyPnpStats：勝った陣営と各人間の役職戦績が加算される（勝ち役職だけ wins）", () => {
+  const humanRoles = [
+    { roleKey: "guardian", faction: "イノセント" },
+    { roleKey: "fakeGirl", faction: "インポスター" },
+    { roleKey: "villager", faction: "イノセント" },
+  ];
+  const after = Logic.applyPnpStats(EMPTY_PNP_STATS, { winnerFaction: "イノセント", humanRoles });
+  assert.equal(after.games, 1);
+  assert.equal(after.factionWins["イノセント"], 1);
+  assert.deepEqual(after.byRole.guardian, { games: 1, wins: 1 });
+  assert.deepEqual(after.byRole.fakeGirl, { games: 1, wins: 0 });
+  assert.deepEqual(after.byRole.villager, { games: 1, wins: 1 });
+});
+
+test("applyPnpStats：winnerFaction がなければ陣営勝利は加算されない", () => {
+  const after = Logic.applyPnpStats(EMPTY_PNP_STATS, { winnerFaction: null, humanRoles: [{ roleKey: "villager", faction: "イノセント" }] });
+  assert.equal(after.games, 1);
+  assert.deepEqual(after.factionWins, {});
+  assert.deepEqual(after.byRole.villager, { games: 1, wins: 0 });
+});
+
+test("applyPnpStats：入力の stats を変更しない（純粋関数）", () => {
+  const before = { games: 1, factionWins: { "イノセント": 1 }, byRole: { villager: { games: 1, wins: 1 } } };
+  const snapshot = JSON.stringify(before);
+  Logic.applyPnpStats(before, { winnerFaction: "インポスター", humanRoles: [{ roleKey: "villager", faction: "イノセント" }] });
+  assert.equal(JSON.stringify(before), snapshot);
+});
+
+test("ブラウザ側の recordStats は共有モジュールと同一の戦績を保存し、二重記録しない", () => {
+  const { FB, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const me = s.players[s.playerId];
+  s.myWin = true;
+  FB.recordStats("イノセント陣営の勝利");
+  const expected = Logic.applySoloStats(EMPTY_SOLO_STATS, {
+    myWin: true, roleKey: me.roleKey, faction: Logic.ROLES[me.roleKey].faction, winText: "イノセント陣営の勝利",
+  });
+  assert.equal(localStorage.getItem("fakeBloomStats"), JSON.stringify(expected), "ラッパーとモジュールで戦績が一致");
+  // 2回目の呼び出しは statsRecorded ガードで無視される。
+  FB.recordStats("イノセント陣営の勝利");
+  assert.equal(localStorage.getItem("fakeBloomStats"), JSON.stringify(expected), "二重記録されない");
+});
+
+test("ブラウザ側の recordStats：敗北では連勝がリセットされる（既存戦績からの加算）", () => {
+  const seeded = { games: 5, wins: 3, byRole: {}, factionWins: { "イノセント": 3 }, steals: 1, streak: 3, bestStreak: 3 };
+  const { FB, localStorage } = loadGame({ seedSettings: BASE_SETTINGS, seedStorage: { fakeBloomStats: JSON.stringify(seeded) } });
+  FB.setupGame();
+  const s = FB.state;
+  const me = s.players[s.playerId];
+  s.myWin = false;
+  FB.recordStats("インポスター陣営の勝利");
+  const saved = JSON.parse(localStorage.getItem("fakeBloomStats"));
+  assert.equal(saved.games, 6);
+  assert.equal(saved.wins, 3);
+  assert.equal(saved.streak, 0);
+  assert.equal(saved.bestStreak, 3);
+  assert.equal(saved.byRole[me.roleKey].games, 1);
+  assert.equal(saved.byRole[me.roleKey].wins, 0);
+});
+
+test("ブラウザ側の recordPnpStats は共有モジュールと同一の戦績を保存し、二重記録しない", () => {
+  const { FB, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  s.winnerFaction = "イノセント";
+  s.humanPlayerIds = [0, 1, 2];
+  FB.recordPnpStats("イノセント陣営の勝利");
+  const humanRoles = [0, 1, 2].map((id) => ({ roleKey: s.players[id].roleKey, faction: Logic.ROLES[s.players[id].roleKey].faction }));
+  const expected = Logic.applyPnpStats(EMPTY_PNP_STATS, { winnerFaction: "イノセント", humanRoles });
+  assert.equal(localStorage.getItem("fakeBloomPnpStats"), JSON.stringify(expected), "ラッパーとモジュールで戦績が一致");
+  FB.recordPnpStats("イノセント陣営の勝利");
+  assert.equal(localStorage.getItem("fakeBloomPnpStats"), JSON.stringify(expected), "二重記録されない");
+});

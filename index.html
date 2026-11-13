@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2308,26 +2308,17 @@
     } catch { /* storage unavailable; records are best-effort */ }
   }
   function recordStats(winText) {
+    // 戦績の加算そのものは共有モジュール（applySoloStats）に切り出し済み。
+    // 二重記録防止と保存・描画だけがブラウザ側に残る。
     if (state.statsRecorded) return;
     state.statsRecorded = true;
     const me = state.players[state.playerId];
-    const stats = loadStats();
-    stats.games += 1;
-    if (state.myWin) {
-      stats.wins += 1;
-      const faction = ROLES[me.roleKey].faction;
-      stats.factionWins[faction] = (stats.factionWins[faction] || 0) + 1;
-      if (winText && winText.includes("横取り")) stats.steals += 1;
-      stats.streak += 1;
-      stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
-    } else {
-      stats.streak = 0;
-    }
-    const entry = stats.byRole[me.roleKey] || { games: 0, wins: 0 };
-    entry.games += 1;
-    if (state.myWin) entry.wins += 1;
-    stats.byRole[me.roleKey] = entry;
-    saveStats(stats);
+    saveStats(applySoloStatsLogic(loadStats(), {
+      myWin: state.myWin,
+      roleKey: me.roleKey,
+      faction: ROLES[me.roleKey].faction,
+      winText,
+    }));
     renderStats();
   }
 
@@ -2352,21 +2343,19 @@
     } catch { /* storage unavailable; records are best-effort */ }
   }
   function recordPnpStats(winText) {
+    // 戦績の加算そのものは共有モジュール（applyPnpStats）に切り出し済み。
+    // 二重記録防止と保存・描画だけがブラウザ側に残る。
+    // winText は使わない（勝った陣営は state.winnerFaction から取る）。
+    void winText;
     if (state.statsRecorded) return;
     state.statsRecorded = true;
-    const winnerFaction = state.winnerFaction;
-    const stats = loadPnpStats();
-    stats.games += 1;
-    if (winnerFaction) stats.factionWins[winnerFaction] = (stats.factionWins[winnerFaction] || 0) + 1;
-    for (const id of state.humanPlayerIds) {
-      const p = state.players[id];
-      if (!p) continue;
-      const entry = stats.byRole[p.roleKey] || { games: 0, wins: 0 };
-      entry.games += 1;
-      if (ROLES[p.roleKey].faction === winnerFaction) entry.wins += 1;
-      stats.byRole[p.roleKey] = entry;
-    }
-    savePnpStats(stats);
+    savePnpStats(applyPnpStatsLogic(loadPnpStats(), {
+      winnerFaction: state.winnerFaction,
+      humanRoles: state.humanPlayerIds.map(id => {
+        const p = state.players[id];
+        return p ? { roleKey: p.roleKey, faction: ROLES[p.roleKey].faction } : null;
+      }).filter(Boolean),
+    }));
     renderPnpStats();
   }
   function renderPnpStats() {
