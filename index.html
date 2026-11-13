@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1103,21 +1103,10 @@
     actionLog("ゲーム開始！夜行動からスタートだよ。");
   }
 
-  // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
-  // 受け渡し画面で共通して使う。
+  // 1人のプレイヤー向けの役職表示 HTML は共有モジュールで生成する。
+  // ソロの役職画面とパス＆プレイの受け渡し画面で共通して使う。
   function roleHtmlFor(player) {
-    // バカには表示役職だけを本物として見せる。「バカ」「偽表示」の
-    // 文言は出さない。種明かしは結果画面のみ。
-    const r = ROLES[getEffectiveRoleKey(player)];
-    return `
-      <strong>${player.name} の役職：${r.icon} ${r.name}</strong><br>
-      陣営：${r.faction}<br>
-      説明：${r.desc}<br>
-      夜の推奨行動：${r.nightActionHint}<br>
-      結果の見方：${r.resultInterpretation}<br>
-      注意：${r.riskNote}<br>
-      ${getAlliesLineForRole(player)}
-    `;
+    return roleHtmlForLogic(player, state.players, { mode: state.mode, humanPlayerIds: state.humanPlayerIds });
   }
 
   function showRole() {
@@ -1423,24 +1412,15 @@
   }
 
 
+  // インポスター仲間の名前列は共有モジュールで生成する。
   function getFakeAlliesText(player) {
-    if (!player || ROLES[player.roleKey].faction !== "インポスター") return "";
-    const allies = state.players.filter(p => p.id !== player.id && ROLES[p.roleKey].faction === "インポスター");
-    if (!allies.length) return "なし";
-    // パス＆プレイでは仲間確認のため P 番号も付ける（誰と相談すればよいか分かるように）。
-    if (state.mode === "pnp") {
-      return allies.map(p => {
-        const idx = state.humanPlayerIds.indexOf(p.id);
-        return idx >= 0 ? `P${idx + 1}（${p.name}）` : p.name;
-      }).join("、");
-    }
-    return allies.map(p => p.name).join("、");
+    return getFakeAlliesTextLogic(state.players, player, { mode: state.mode, humanPlayerIds: state.humanPlayerIds });
   }
 
 
+  // インポスター仲間の表示行は共有モジュールで生成する。
   function getAlliesLineForRole(player) {
-    if (!player || ROLES[player.roleKey].faction !== "インポスター") return "";
-    return `インポスター仲間：${getFakeAlliesText(player)}`;
+    return getAlliesLineForRoleLogic(state.players, player, { mode: state.mode, humanPlayerIds: state.humanPlayerIds });
   }
   // フェーズヒントは共有モジュールで生成する。role 引数は従来の呼び出し
   // 互換のために残す（夜のヒントは state の現在プレイヤーから決まる）。
