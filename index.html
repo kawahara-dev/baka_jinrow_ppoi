@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1451,20 +1451,20 @@
     el("inGameRoleCard").classList.toggle("hidden", state.mode === "pnp");
 
     const cards = el("cards"); cards.innerHTML = "";
-    let cardIndex = 0;
-    for (const p of state.players) {
+    // カード1枚分の表示データは共有モジュールで作る（クラス・aria・
+    // メタ・中身の HTML）。DOM の生成とイベントの紐付けだけここで行う。
+    for (const view of buildCardsViewLogic(state.players, { selectedId: state.selectedId, iconImgs: ICON_IMGS })) {
+      const p = state.players[view.id];
       const div = document.createElement("div");
-      div.style.animationDelay = `${cardIndex++ * 45}ms`;
-      div.className = `card ${p.alive ? "" : "dead"} ${state.selectedId===p.id?"selected":""} ${p.voted?"voted":""}`;
+      div.style.animationDelay = view.animationDelay;
+      div.className = view.className;
       // Speech bubbles find their speaker's card by this id.
-      div.setAttribute("data-player", String(p.id));
-      div.onclick = () => selectTarget(p.id);
-      // 脱落者のカードも結果画面までバカの実役職は出さない。
-      const revealedRole = p.alive ? "？" : ROLES[getPublicRoleKey(p)].name;
+      div.setAttribute("data-player", String(view.id));
+      div.onclick = () => selectTarget(view.id);
       // カードは div だが選択操作の本体なので、キーボードからも選べるようにする。
       // :focus-visible の枠線は CSS 済み（button/.card/summary）。
       div.setAttribute("role", "button");
-      div.setAttribute("aria-label", `${p.name}、${revealedRole}、${p.alive ? "生存中" : "脱落済み"}`);
+      div.setAttribute("aria-label", view.ariaLabel);
       if (p.alive) {
         div.tabIndex = 0;
         div.addEventListener("keydown", (e) => {
@@ -1474,19 +1474,7 @@
         div.tabIndex = -1;
         div.setAttribute("aria-disabled", "true");
       }
-      // 脱落カードのメタは表示役職のアイコン1つ（getPublicRoleKey 経由なので
-      // バカの実役職は漏れない）。生存カードは「？」のみ。
-      // 「 ・ 生存中」は .meta-state に入れて、スマホでは CSS で隠す。
-      const metaHtml = p.alive
-        ? `？<span class="meta-state"> ・ 生存中</span>`
-        : `<span class="role-icon" aria-hidden="true">${ROLES[getPublicRoleKey(p)].icon}</span>`;
-      div.innerHTML = `
-        <div class="avatar"><span>${p.icon}</span>${ICON_IMGS[ICON_SLUGS[p.id]] ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[p.id]}" src="${ICON_IMGS[ICON_SLUGS[p.id]]}" alt="${p.name}" onerror="this.remove()">` : ""}</div>
-        <div class="card-main">
-          <div class="name">${p.name}</div>
-          <div class="meta">${metaHtml}</div>
-        </div>
-      `;
+      div.innerHTML = view.innerHtml;
       cards.appendChild(div);
     }
 

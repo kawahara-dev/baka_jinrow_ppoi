@@ -1728,3 +1728,126 @@ test("ブラウザ側の updateInGameRoleCard は共有モジュールの buildR
   assert.equal(elements.get("roleCardName").textContent, "🛡️ 守り手");
   assert.ok(!elements.get("roleCardName").textContent.includes("バカ"));
 });
+
+test("buildCardsView：生存カードは「？」と生存中、クラス・aria・tabIndex を返す", () => {
+  const players = [
+    { id: 0, name: "ルナ", icon: Logic.PLAYER_ICONS[0], roleKey: "apprenticeSeer", alive: true, voted: false },
+    { id: 1, name: "ミオ", icon: Logic.PLAYER_ICONS[1], roleKey: "fakeGirl", alive: true, voted: true },
+  ];
+  const views = Logic.buildCardsView(players, { selectedId: 1 });
+  assert.equal(views.length, 2);
+  const first = views[0];
+  assert.equal(first.id, 0);
+  assert.equal(first.animationDelay, "0ms");
+  assert.equal(first.className, "card   ");
+  assert.equal(first.revealedRole, "？");
+  assert.equal(first.ariaLabel, "ルナ、？、生存中");
+  assert.equal(first.tabIndex, 0);
+  assert.equal(first.ariaDisabled, false);
+  assert.equal(first.metaHtml, `？<span class="meta-state"> ・ 生存中</span>`);
+  assert.ok(first.avatarHtml.includes(`<span>${Logic.PLAYER_ICONS[0]}</span>`));
+  assert.ok(!first.avatarHtml.includes("<img"), "顔画像がなければ絵文字だけ");
+  assert.ok(first.innerHtml.includes(`<div class="name">ルナ</div>`));
+  assert.ok(first.innerHtml.includes("？"));
+  // 2枚目は45ms遅れ、選択中・投票済みのクラスが付く。
+  const second = views[1];
+  assert.equal(second.animationDelay, "45ms");
+  assert.ok(second.className.includes("selected"), second.className);
+  assert.ok(second.className.includes("voted"), second.className);
+  assert.ok(!second.className.includes("dead"), second.className);
+});
+
+test("buildCardsView：脱落カードは表示役職のアイコンと脱落済みを返す", () => {
+  const players = [
+    { id: 2, name: "ユイ", icon: Logic.PLAYER_ICONS[2], roleKey: "mimic", alive: false, voted: false },
+  ];
+  const [view] = Logic.buildCardsView(players, {});
+  assert.ok(view.className.includes("dead"), view.className);
+  assert.equal(view.revealedRole, "なりすまし");
+  assert.equal(view.ariaLabel, "ユイ、なりすまし、脱落済み");
+  assert.equal(view.tabIndex, -1);
+  assert.equal(view.ariaDisabled, true);
+  assert.equal(view.metaHtml, `<span class="role-icon" aria-hidden="true">${Logic.ROLES.mimic.icon}</span>`);
+  assert.ok(view.innerHtml.includes(Logic.ROLES.mimic.icon));
+  assert.ok(!view.innerHtml.includes("？"), "脱落カードに「？」は出ない");
+});
+
+test("buildCardsView：バカの脱落カードは表示役職だけを出す", () => {
+  const players = [
+    { id: 0, name: "ルナ", icon: Logic.PLAYER_ICONS[0], roleKey: "baka", fakeDisplayRoleKey: "guardian", alive: false, voted: false },
+  ];
+  const [view] = Logic.buildCardsView(players, {});
+  assert.equal(view.revealedRole, "守り手");
+  assert.ok(view.metaHtml.includes(Logic.ROLES.guardian.icon));
+  assert.ok(!JSON.stringify(view).includes("バカ"), `バカの文言が出ない: ${JSON.stringify(view)}`);
+});
+
+test("buildCardsView：iconImgs があると顔画像が入り、ないと絵文字だけ", () => {
+  const players = [
+    { id: 0, name: "ルナ", icon: Logic.PLAYER_ICONS[0], roleKey: "apprenticeSeer", alive: true, voted: false },
+  ];
+  const withImg = Logic.buildCardsView(players, { iconImgs: { luna: "data:image/webp;base64,xxxx" } })[0];
+  assert.ok(withImg.avatarHtml.includes(`<img class="avatar-img" data-icon-slug="luna" src="data:image/webp;base64,xxxx" alt="ルナ"`), withImg.avatarHtml);
+  assert.ok(withImg.innerHtml.includes("<img"), "中身の HTML にも画像が入る");
+  const withoutImg = Logic.buildCardsView(players, {})[0];
+  assert.ok(!withoutImg.avatarHtml.includes("<img"));
+  assert.ok(!withoutImg.innerHtml.includes("<img"));
+});
+
+test("buildCardsView：空・null は空配列、入力の players を変更しない（純粋関数）", () => {
+  assert.deepEqual(Logic.buildCardsView([], {}), []);
+  assert.deepEqual(Logic.buildCardsView(null, {}), []);
+  const players = [
+    { id: 0, name: "ルナ", icon: Logic.PLAYER_ICONS[0], roleKey: "baka", fakeDisplayRoleKey: "guardian", alive: false, voted: true },
+    { id: 1, name: "ミオ", icon: Logic.PLAYER_ICONS[1], roleKey: "mimic", alive: true, voted: false },
+  ];
+  const before = JSON.stringify(players);
+  Logic.buildCardsView(players, { selectedId: 1, iconImgs: { luna: "data:image/webp;base64,xxxx" } });
+  assert.equal(JSON.stringify(players), before);
+});
+
+test("ブラウザ側の draw は共有モジュールの buildCardsView と同一のカードを描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const checkCards = (label) => {
+    FB.draw();
+    // ハーネスでは ICON_IMGS が空（fetch が失敗扱い）のため、モジュール
+    // 側にも iconImgs: {} を渡して比べる。
+    const views = Logic.buildCardsView(s.players, { selectedId: s.selectedId, iconImgs: {} });
+    const cards = elements.get("cards").children;
+    assert.equal(cards.length, s.players.length, `${label}：カードの枚数`);
+    for (let i = 0; i < views.length; i++) {
+      const view = views[i];
+      const card = cards[i];
+      assert.equal(card.className, view.className, `${label}：${view.id} のクラス`);
+      assert.equal(card.style.animationDelay, view.animationDelay, `${label}：${view.id} の遅延`);
+      assert.equal(card.getAttribute("data-player"), String(view.id), `${label}：${view.id} の data-player`);
+      assert.equal(card.getAttribute("role"), "button", `${label}：${view.id} の role`);
+      assert.equal(card.getAttribute("aria-label"), view.ariaLabel, `${label}：${view.id} の aria-label`);
+      assert.equal(card.tabIndex, view.tabIndex, `${label}：${view.id} の tabIndex`);
+      assert.equal(card.getAttribute("aria-disabled"), view.ariaDisabled ? "true" : null, `${label}：${view.id} の aria-disabled`);
+      assert.equal(card.innerHTML, view.innerHtml, `${label}：${view.id} の中身 HTML`);
+    }
+    // 別レルムのオブジェクトは deepStrictEqual がプロトタイプ差で
+    // 失敗するため JSON で比べる（PR #80 の教訓と同じ）。
+    assert.equal(
+      JSON.stringify(FB.buildCardsViewLogic(s.players, { selectedId: s.selectedId, iconImgs: {} })),
+      JSON.stringify(views),
+      `${label}：ハーネス経由のモジュール関数とも同一`
+    );
+  };
+  checkCards("初期状態");
+  // 脱落・選択中・投票済みのカードも同一になる。
+  s.players[1].alive = false;
+  s.players[1].voted = true;
+  s.selectedId = s.players[2].id;
+  checkCards("脱落・選択・投票済みあり");
+  // バカ表示の脱落カードも表示役職だけになる。
+  s.players[1].roleKey = "baka";
+  s.players[1].fakeDisplayRoleKey = "guardian";
+  FB.draw();
+  const bakaCard = elements.get("cards").children[1];
+  assert.ok(!bakaCard.innerHTML.includes("バカ"), "バカの実役職がカードに出ない");
+  assert.ok(bakaCard.innerHTML.includes(Logic.ROLES.guardian.icon), "表示役職のアイコンが出る");
+});
