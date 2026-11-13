@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2091,17 +2091,10 @@
   // panel. Trap kills are derived from deathCause; revives and guard saves
   // are counted in state because a revived / protected player leaves no trace.
   function buildHighlights() {
-    const lines = [];
-    const bomber = state.players.find(p => p.roleKey === "bomber");
-    const bombKills = state.bombKills || 0;
-    const trapKills = state.players.filter(p => p.deathCause === "罠").length;
-    if (bomber && bombKills >= 2) lines.push(`💣 ${bomber.name}の爆弾で${bombKills}人が倒れた！`);
-    if (trapKills > 0) lines.push(`🪤 罠が${trapKills}回作動し、襲撃者を道連れにした`);
-    if ((state.revives || 0) > 0) lines.push(`💉 ドクターの蘇生で${state.revives}人が助かった`);
-    if ((state.guardSaves || 0) > 0) lines.push(`🛡️ 護衛が${state.guardSaves}回、襲撃を防いだ`);
-    if (bomber && bombKills === 1) lines.push(`💣 ${bomber.name}の爆弾で1人が倒れた`);
-    if (lines.length === 0) lines.push(`📅 ${state.day}日目で決着`);
-    return lines.slice(0, 2);
+    // ハイライト生成そのものは共有モジュール（buildHighlights）に
+    // 切り出し済み。state がカウンタ（bombKills / revives / guardSaves /
+    // day）を持っているのでそのまま渡す。
+    return buildHighlightsLogic(state.players, state);
   }
 
   // End-of-game results: winner, your outcome, and the full roster with
