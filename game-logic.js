@@ -749,6 +749,192 @@
     return candidates[0];
   }
 
+  // 夜の対象選択（runNight の対象決め部分を切り出したもの）。state は
+  // 試合の状態オブジェクト（players・mode・playerId・selectedId・
+  // pnpNightInputs・humanPlayerIds・fakeIntel・bombs）で、alive は
+  // 夜開始時の生存者。opts: { difficulty, random }
+  // - difficulty: CPU の対象選択のヒューリスティクスに使う
+  //   （"easy" / "normal" / "hard"）。
+  // - random: 注入可能な乱数（既定は Math.random）。テストは seed 付きを使う。
+  // 戻り値は { nightActions, nightActionTypes, protectedTargets, loneFakeAbility }。
+  // nightActions は { actorId: targetId }、nightActionTypes は
+  // { actorId: "block" | "plant" | "spy" }（ポリス・ボマー・なりすましの
+  // 能力種別だけ。resolveNightActions が優先度で使う）。
+  // protectedTargets は守り手が守った先（バカの護衛は入らない）。
+  // loneFakeAbility は単独インポスターの追加能力
+  // （{ actorId, type: "spy" | "block", targetId }）。
+  // 人間の入力（ソロでは自分の選択対象、パス＆プレイでは
+  // pnpNightInputs）はそのまま使い、未入力なら CPU 扱いになる。
+  // 呼び出し側は戻り値を state.nightActions / state.nightActionTypes /
+  // state.protectedTargets / state.loneFakeAbility へ代入する。
+  // alive 全員の lastTarget を null にリセットするのもここで行う
+  // （追跡・見張りの前夜の結果を消すため）。
+  function planNightActions(state, alive, opts = {}) {
+    const rnd = typeof opts.random === "function" ? opts.random : Math.random;
+    const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+    const difficulty = opts.difficulty || "normal";
+    const meId = state.mode === "pnp" ? -1 : state.playerId;
+    const me = state.players[meId] || { id: -1 };
+    const target = state.players[state.selectedId];
+    const nightActions = {};
+    const nightActionTypes = {};
+    const protectedTargets = new Set();
+    let loneFakeAbility = null;
+    for (const p of alive) p.lastTarget = null;
+    const registerAction = (actorId, targetId, type = null) => {
+      if (targetId === null || targetId === undefined) return;
+      nightActions[actorId] = targetId;
+      if (type) nightActionTypes[actorId] = type;
+    };
+    // 人間が入力した対象（未入力なら undefined → CPU 扱い）。
+    // ソロでは従来通り `me` の選択対象を使う。
+    const inputTargetOf = (p) => state.mode === "pnp" ? state.pnpNightInputs?.[p.id] : undefined;
+    const targetOr = (p, cpuTarget) => {
+      const t = inputTargetOf(p);
+      return t !== undefined ? t : cpuTarget;
+    };
+
+    for (const p of alive) {
+      const effectiveRoleKey = getEffectiveRoleKey(p);
+      if (!ROLES[effectiveRoleKey].nightAction) continue;
+      if (effectiveRoleKey === "guardian") {
+        const guardTarget = targetOr(p, p.id === me.id ? target?.id
+          : difficulty === "hard"
+            ? alive.filter(x => x.id !== p.id).sort((a, b) => a.suspicion - b.suspicion)[0]?.id
+            : pick(alive.filter(x => x.id !== p.id))?.id);
+        if (guardTarget !== undefined) {
+          registerAction(p.id, guardTarget);
+          if (p.roleKey !== "baka") protectedTargets.add(guardTarget);
+        }
+      } else if (effectiveRoleKey === "apprenticeSeer") {
+        const inspectTarget = targetOr(p, p.id === me.id ? target?.id
+          : difficulty === "hard"
+            ? alive.filter(x => x.id !== p.id).sort((a, b) => b.suspicion - a.suspicion)[0]?.id
+            : pick(alive.filter(x => x.id !== p.id))?.id);
+        registerAction(p.id, inspectTarget);
+      } else if (effectiveRoleKey === "tracker") {
+        const trackTarget = targetOr(p, p.id === me.id ? target?.id : pick(alive.filter(x => x.id !== p.id))?.id);
+        registerAction(p.id, trackTarget);
+      } else if (effectiveRoleKey === "police") {
+        let policeTarget = inputTargetOf(p);
+        if (policeTarget === undefined) {
+          if (p.id === me.id) {
+            policeTarget = target?.id;
+          } else {
+            const actors = alive.filter(x => x.id !== p.id && ROLES[getEffectiveRoleKey(x)].nightAction);
+            policeTarget = pick(actors.length ? actors : alive.filter(x => x.id !== p.id))?.id;
+          }
+        }
+        registerAction(p.id, policeTarget, "block");
+      } else if (effectiveRoleKey === "trapper") {
+        const trapTarget = targetOr(p, p.id === me.id ? target?.id : pick(alive)?.id);
+        if (trapTarget !== undefined) registerAction(p.id, trapTarget);
+      } else if (effectiveRoleKey === "doctor") {
+        const docTarget = targetOr(p, p.id === me.id ? target?.id : pick(alive)?.id);
+        if (docTarget !== undefined) registerAction(p.id, docTarget);
+      } else if (effectiveRoleKey === "lookout") {
+        const lookoutTarget = targetOr(p, p.id === me.id ? target?.id : pick(alive.filter(x => x.id !== p.id))?.id);
+        registerAction(p.id, lookoutTarget);
+      } else if (effectiveRoleKey === "bomber") {
+        let plantTarget = inputTargetOf(p);
+        if (plantTarget === undefined) {
+          if (p.id === me.id) {
+            plantTarget = target?.id;
+          } else {
+            const unbombed = alive.filter(x => x.id !== p.id && !state.bombs.some(b => b.targetId === x.id));
+            plantTarget = pick(unbombed.length ? unbombed : alive.filter(x => x.id !== p.id))?.id;
+          }
+        }
+        registerAction(p.id, plantTarget, "plant");
+      }
+    }
+
+    const fakeSide = alive.filter(x => ["fakeGirl", "mimic"].includes(x.roleKey));
+    if (fakeSide.length) {
+      const victims = alive.filter(x => !fakeSide.includes(x));
+      // Block targeting shared by the partner ability and the lone-fake
+      // bonus action: on hard, a known seer is blocked first.
+      const pickBlockTarget = () => {
+        const actors = victims.filter(x => ROLES[getEffectiveRoleKey(x)].nightAction);
+        if (difficulty === "hard") {
+          const knownSeer = actors.filter(x => state.fakeIntel?.[x.id] === "apprenticeSeer");
+          if (knownSeer.length) return pick(knownSeer)?.id;
+        }
+        return pick(actors.length ? actors : victims)?.id;
+      };
+      let fakeActor;
+      let attackTarget;
+      // パス＆プレイのインポスター人間の代表者（いなければ null）。
+      const humanFakeRep = (() => {
+        if (state.mode !== "pnp") return null;
+        for (const id of state.humanPlayerIds) {
+          const p = state.players[id];
+          if (p?.alive && ["fakeGirl", "mimic"].includes(p.roleKey)) return p;
+        }
+        return null;
+      })();
+      if (humanFakeRep) {
+        // パス＆プレイ：インポスター人間の代表者が入力した襲撃先を使う。
+        // 仲間のインポスターを選んでいたらランダムな被害者に振り替える（ソロと同じ）。
+        fakeActor = humanFakeRep;
+        const input = state.pnpNightInputs?.[humanFakeRep.id];
+        attackTarget = input !== undefined && victims.some(x => x.id === input)
+          ? input
+          : pick(victims)?.id;
+      } else if (fakeSide.includes(me)) {
+        // The human player leads the faction attack: use their selected target
+        // (fall back to a random victim if they picked a fellow fake member).
+        fakeActor = me;
+        attackTarget = victims.some(x => x.id === target?.id)
+          ? target.id
+          : pick(victims)?.id;
+      } else {
+        fakeActor = pick(fakeSide);
+        const fallbackVictims = alive.filter(x => x.id !== fakeActor.id);
+        // The faction prefers victims the mimic has identified as power roles.
+        const intelTargets = difficulty === "easy" ? [] : victims.filter(x => ["apprenticeSeer", "guardian", "tracker", "police", "lookout", "doctor", "trapper"].includes(state.fakeIntel?.[x.id]));
+        const pool = intelTargets.length ? intelTargets : victims;
+        attackTarget = pick(pool.length ? pool : fallbackVictims)?.id;
+      }
+      registerAction(fakeActor.id, attackTarget);
+
+      // Feign-style: fake members who are not leading tonight's attack use
+      // their role ability instead. The mimic spies on a player's real role
+      // (feeding the faction's target choice), the fake girl blocks a
+      // pure-side night action. In pass-and-play, a human non-representative
+      // fake enters the ability target on their night turn (phase 3);
+      // an invalid target (e.g. a fellow fake) falls back to the CPU choice.
+      for (const f of fakeSide) {
+        if (f.id === fakeActor.id || f.id === me.id) continue;
+        const abilityInput = inputTargetOf(f);
+        const abilityTargetIsVictim = abilityInput !== undefined && victims.some(x => x.id === abilityInput);
+        if (f.roleKey === "mimic") {
+          registerAction(f.id, abilityTargetIsVictim ? abilityInput : pick(victims)?.id, "spy");
+        } else if (f.roleKey === "fakeGirl") {
+          registerAction(f.id, abilityTargetIsVictim ? abilityInput : pickBlockTarget(), "block");
+        }
+      }
+
+      // Balance: a lone fake member is heavily outnumbered, so alongside
+      // the faction attack they also use their role ability, auto-targeted
+      // with the same heuristics a CPU partner would use. The ability is
+      // applied during resolution via state.loneFakeAbility.
+      if (fakeSide.length === 1) {
+        const lone = fakeSide[0];
+        if (lone.roleKey === "mimic") {
+          const spyPool = victims.filter(x => x.id !== attackTarget);
+          const spyTarget = pick(spyPool.length ? spyPool : victims)?.id;
+          if (spyTarget !== undefined) loneFakeAbility = { actorId: lone.id, type: "spy", targetId: spyTarget };
+        } else if (lone.roleKey === "fakeGirl") {
+          const blockTarget = pickBlockTarget();
+          if (blockTarget !== undefined) loneFakeAbility = { actorId: lone.id, type: "block", targetId: blockTarget };
+        }
+      }
+    }
+
+    return { nightActions, nightActionTypes, protectedTargets, loneFakeAbility };
+  }
+
   // 廃止済み役職の旧戦績データを表示するための名前（現行の ROLES にはない）。
   const LEGACY_ROLE_NAMES = { clumsySeer: "うっかり占い師" };
   // 2026-11-12 の陣営改名（ピュア→イノセント、フェイク→インポスター）より前に
@@ -784,6 +970,7 @@
     resolveNightActions,
     cpuNightActions,
     cpuVotePick,
+    planNightActions,
     LEGACY_ROLE_NAMES,
     LEGACY_FACTION_NAMES,
     migrateFactionWins,

@@ -234,7 +234,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   get speechQueue() { return speechQueue; },
   recordPnpStats, loadPnpStats, renderPnpStats, focusEl,
   get state() { return state; },
-  resolveNightActionsLogic, cpuVotePickLogic, formatActionLog,
+  resolveNightActionsLogic, cpuVotePickLogic, planNightActionsLogic, formatActionLog,
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
   nightCutins, stageGhostWalker, stageEventMotion, stageFlashRed, stageOwnActionMotion,
   showCutin, clearCutins,

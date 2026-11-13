@@ -612,3 +612,222 @@ test("ブラウザ側の夜解決は共有モジュールと同一結果（ラ�
   // 別レルムの配列は deepStrictEqual がプロトタイプ差で失敗するため JSON 比較。
   assert.equal(JSON.stringify(logs2), JSON.stringify(logs1), "ラッパー経由とモジュール直接でログが一致");
 });
+
+// ---- フェーズ0第4歩：夜の対象選択の抽出 ----
+
+// 対象選択テスト用の最小状態。roleKeys は8人分。
+function makePlanState(roleKeys, extra = {}) {
+  const players = roleKeys.map((roleKey, i) => makeNightPlayer(i, roleKey));
+  return {
+    day: 1, mode: "solo", humanPlayerIds: [0], playerId: 0,
+    players, selectedId: 1,
+    pnpNightInputs: {},
+    fakeIntel: {}, bombs: [],
+    ...extra,
+  };
+}
+function planAlive(state) { return state.players.filter(p => p.alive); }
+
+test("planNightActions：hard では守り手は疑念が最も低い相手、占い師は最も高い相手を選ぶ", () => {
+  const state = makePlanState(
+    ["guardian", "apprenticeSeer", "villager", "villager", "villager", "villager", "villager", "villager"],
+    { playerId: 7, selectedId: 0 }
+  );
+  // 守り手(0)は CPU。疑念は 1:3、2:5、3:1、4〜7:2。
+  state.players[1].suspicion = 3;
+  state.players[2].suspicion = 5;
+  state.players[3].suspicion = 1;
+  for (let i = 4; i <= 7; i++) state.players[i].suspicion = 2;
+  const r = Logic.planNightActions(state, planAlive(state), { difficulty: "hard", random: seededRandom(1) });
+  assert.equal(r.nightActions[0], 3, "守り手は疑念が最も低い 3（疑念1）を守る");
+  assert.ok(r.protectedTargets.has(3), "守り先は protectedTargets に入る");
+  assert.equal(r.nightActions[1], 2, "占い師は疑念が最も高い 2（疑念5）を調べる");
+});
+
+test("planNightActions：追跡・見張りは自分以外を選び、同じ seed なら同じ対象", () => {
+  const roles = ["tracker", "lookout", "villager", "villager", "villager", "villager", "villager", "villager"];
+  const a = makePlanState(roles, { playerId: 7, selectedId: 0 });
+  const b = makePlanState(roles, { playerId: 7, selectedId: 0 });
+  a.players[0].lastTarget = 3;
+  const ra = Logic.planNightActions(a, planAlive(a), { difficulty: "normal", random: seededRandom(5) });
+  const rb = Logic.planNightActions(b, planAlive(b), { difficulty: "normal", random: seededRandom(5) });
+  assert.equal(JSON.stringify(ra.nightActions), JSON.stringify(rb.nightActions), "同じ seed は同じ対象選択");
+  for (const [actor, target] of Object.entries(ra.nightActions)) {
+    assert.notEqual(Number(target), Number(actor), "自分は選ばない");
+    assert.ok(a.players[target].alive, "対象は生存者");
+  }
+  assert.equal(a.players[0].lastTarget, null, "前夜の lastTarget がリセットされる");
+});
+
+test("planNightActions：ポリスは能力者を妨害し、ボマーは爆弾未設置の相手を狙う", () => {
+  const police = makePlanState(
+    ["police", "guardian", "villager", "villager", "villager", "villager", "villager", "villager"],
+    { playerId: 7, selectedId: 0 }
+  );
+  // 能力者は守り手(1)だけ → ポリスは 1 を妨害する。
+  const r = Logic.planNightActions(police, planAlive(police), { difficulty: "normal", random: seededRandom(3) });
+  assert.equal(r.nightActions[0], 1);
+  assert.equal(r.nightActionTypes[0], "block");
+  // ボマー：爆弾設置済み(1, 2)以外を狙う。設置済みが 1〜6 なら残りは 7 だけ。
+  const bomber = makePlanState(
+    ["bomber", "villager", "villager", "villager", "villager", "villager", "villager", "villager"],
+    { playerId: 7, selectedId: 0, bombs: [1, 2, 3, 4, 5, 6].map(targetId => ({ targetId, explodeDay: 2 })) }
+  );
+  const rb = Logic.planNightActions(bomber, planAlive(bomber), { difficulty: "normal", random: seededRandom(3) });
+  assert.equal(rb.nightActions[0], 7, "未設置の相手が1人ならそこに設置する");
+  assert.equal(rb.nightActionTypes[0], "plant");
+  // 全員に爆弾があれば生存者から選ぶ（自分は除く）。
+  const allBombed = makePlanState(
+    ["bomber", "villager", "villager", "villager", "villager", "villager", "villager", "villager"],
+    { playerId: 7, selectedId: 0, bombs: [1, 2, 3, 4, 5, 6, 7].map(targetId => ({ targetId, explodeDay: 2 })) }
+  );
+  for (let i = 0; i < 20; i++) {
+    const rr = Logic.planNightActions(allBombed, planAlive(allBombed), { difficulty: "normal", random: seededRandom(i) });
+    assert.ok(rr.nightActions[0] >= 1 && rr.nightActions[0] <= 7, "全員設置済みでも誰かを選ぶ");
+  }
+});
+
+test("planNightActions：インポスター陣営は盗み見の情報を優先し、easy では無視する", () => {
+  const roles = ["fakeGirl", "mimic", "apprenticeSeer", "villager", "villager", "villager", "villager", "villager"];
+  for (let s = 0; s < 20; s++) {
+    const state = makePlanState(roles, { playerId: 7, selectedId: 0, fakeIntel: { 2: "apprenticeSeer" } });
+    const r = Logic.planNightActions(state, planAlive(state), { difficulty: "normal", random: seededRandom(s) });
+    // 襲撃担当（種別なし）の対象は情報のある占い師(2)。
+    const attacker = [0, 1].find(id => r.nightActions[id] !== undefined && !(id in r.nightActionTypes));
+    assert.equal(r.nightActions[attacker], 2, `seed ${s}：情報のある占い師を襲う`);
+    assert.equal(r.loneFakeAbility, null, "2人いれば追加能力はない");
+  }
+  // easy では情報を使わず、被害者からランダムに選ぶ（20回で 2 以外も出る）。
+  const easyTargets = new Set();
+  for (let s = 0; s < 20; s++) {
+    const state = makePlanState(roles, { playerId: 7, selectedId: 0, fakeIntel: { 2: "apprenticeSeer" } });
+    const r = Logic.planNightActions(state, planAlive(state), { difficulty: "easy", random: seededRandom(s) });
+    const attacker = [0, 1].find(id => r.nightActions[id] !== undefined && !(id in r.nightActionTypes));
+    easyTargets.add(r.nightActions[attacker]);
+  }
+  assert.ok(easyTargets.size > 1, "easy では情報に縛られず複数の襲撃先が出る");
+  for (const t of easyTargets) assert.ok(t >= 2 && t <= 7, "襲撃先は被害者の中");
+});
+
+test("planNightActions：仲間の能力（盗み見・妨害）と単独インポスターの追加能力", () => {
+  const roles = ["fakeGirl", "mimic", "guardian", "apprenticeSeer", "villager", "villager", "villager", "villager"];
+  for (let s = 0; s < 20; s++) {
+    const state = makePlanState(roles, { playerId: 7, selectedId: 0 });
+    const r = Logic.planNightActions(state, planAlive(state), { difficulty: "normal", random: seededRandom(s) });
+    const attacker = [0, 1].find(id => r.nightActions[id] !== undefined && !(id in r.nightActionTypes));
+    const partner = attacker === 0 ? 1 : 0;
+    assert.ok(attacker === 0 || attacker === 1, "襲撃担当はインポスターのどちらか");
+    if (partner === 1) {
+      assert.equal(r.nightActionTypes[1], "spy", "なりすましの仲間能力は盗み見");
+      assert.ok(r.nightActions[1] >= 2 && r.nightActions[1] <= 7, "盗み見先は被害者");
+    } else {
+      assert.equal(r.nightActionTypes[0], "block", "フェイクガールの仲間能力は妨害");
+      assert.ok([2, 3].includes(r.nightActions[0]) || (r.nightActions[0] >= 2 && r.nightActions[0] <= 7), "妨害先は能力者か被害者");
+    }
+  }
+  // 単独フェイクガール：襲撃に加えて追加の妨害能力が付く。
+  const loneGirl = makePlanState(
+    ["fakeGirl", "guardian", "apprenticeSeer", "villager", "villager", "villager", "villager", "villager"],
+    { playerId: 7, selectedId: 0 }
+  );
+  const rg = Logic.planNightActions(loneGirl, planAlive(loneGirl), { difficulty: "normal", random: seededRandom(4) });
+  assert.equal(rg.nightActions[0], 1, "単独でも襲撃する");
+  assert.equal(rg.loneFakeAbility?.type, "block", "単独フェイクガールの追加能力は妨害");
+  assert.equal(rg.loneFakeAbility?.actorId, 0);
+  assert.ok([1, 2].includes(rg.loneFakeAbility?.targetId), "妨害先は能力者");
+  // 単独なりすまし：襲撃に加えて追加の盗み見能力が付く（襲撃先以外）。
+  const loneMimic = makePlanState(
+    ["mimic", "guardian", "apprenticeSeer", "villager", "villager", "villager", "villager", "villager"],
+    { playerId: 7, selectedId: 0 }
+  );
+  const rm = Logic.planNightActions(loneMimic, planAlive(loneMimic), { difficulty: "normal", random: seededRandom(4) });
+  assert.equal(rm.loneFakeAbility?.type, "spy", "単独なりすましの追加能力は盗み見");
+  assert.equal(rm.loneFakeAbility?.actorId, 0);
+  assert.ok(rm.loneFakeAbility?.targetId >= 1 && rm.loneFakeAbility?.targetId <= 7, "盗み見先は被害者");
+  assert.notEqual(rm.loneFakeAbility?.targetId, rm.nightActions[0], "盗み見は襲撃先以外を狙う");
+});
+
+test("planNightActions：人間の入力（ソロの選択・パス＆プレイの順番入力）がそのまま使われる", () => {
+  // ソロ：人間の守り手は selectedId の対象を守る。
+  const solo = makePlanState(
+    ["guardian", "apprenticeSeer", "villager", "villager", "villager", "villager", "villager", "villager"],
+    { playerId: 0, selectedId: 3 }
+  );
+  const r = Logic.planNightActions(solo, planAlive(solo), { difficulty: "normal", random: seededRandom(1) });
+  assert.equal(r.nightActions[0], 3, "人間の守り手は選んだ対象を守る");
+  assert.ok(r.protectedTargets.has(3));
+  // パス＆プレイ：人間の入力が使われ、CPU はヒューリスティクスで選ぶ。
+  const pnp = makePlanState(
+    ["guardian", "apprenticeSeer", "tracker", "villager", "villager", "villager", "villager", "villager"],
+    { mode: "pnp", humanPlayerIds: [0, 1], playerId: 0, selectedId: 4, pnpNightInputs: { 0: 5, 1: 6 } }
+  );
+  const rp = Logic.planNightActions(pnp, planAlive(pnp), { difficulty: "normal", random: seededRandom(2) });
+  assert.equal(rp.nightActions[0], 5, "人間の守り手は入力通りの対象を守る");
+  assert.equal(rp.nightActions[1], 6, "人間の占い師は入力通りの対象を調べる");
+  assert.notEqual(rp.nightActions[2], 2, "CPU の追跡係は自分を選ばない");
+  // パス＆プレイ：人間インポスター代表の襲撃入力が使われる。
+  const rep = makePlanState(
+    ["fakeGirl", "mimic", "villager", "villager", "villager", "villager", "villager", "villager"],
+    { mode: "pnp", humanPlayerIds: [0, 1], playerId: 0, selectedId: 4, pnpNightInputs: { 0: 3 } }
+  );
+  const rr = Logic.planNightActions(rep, planAlive(rep), { difficulty: "normal", random: seededRandom(4) });
+  assert.equal(rr.nightActions[0], 3, "代表者の襲撃入力が使われる");
+  // 代表者が仲間を選んでいたらランダムな被害者に振り替える。
+  const badRep = makePlanState(
+    ["fakeGirl", "mimic", "villager", "villager", "villager", "villager", "villager", "villager"],
+    { mode: "pnp", humanPlayerIds: [0, 1], playerId: 0, selectedId: 4, pnpNightInputs: { 0: 1 } }
+  );
+  const rb = Logic.planNightActions(badRep, planAlive(badRep), { difficulty: "normal", random: seededRandom(4) });
+  assert.ok(rb.nightActions[0] >= 2 && rb.nightActions[0] <= 7, "仲間への襲撃入力は被害者に振り替える");
+});
+
+test("planNightActions：バカの護衛は登録されるが実際には守らない", () => {
+  const state = makePlanState(
+    ["baka", "apprenticeSeer", "villager", "villager", "villager", "villager", "villager", "villager"],
+    { playerId: 0, selectedId: 2 }
+  );
+  state.players[0].fakeDisplayRoleKey = "guardian";
+  const r = Logic.planNightActions(state, planAlive(state), { difficulty: "normal", random: seededRandom(1) });
+  assert.equal(r.nightActions[0], 2, "バカも表示役職（守り手）で対象を選ぶ");
+  assert.equal(r.protectedTargets.size, 0, "バカの護衛は守りにならない");
+});
+
+test("ブラウザ側の runNight は共有モジュールと同一の対象選択をする", () => {
+  const script = (FB) => {
+    FB.setupGame();
+    const roles = ["guardian", "apprenticeSeer", "police", "tracker", "fakeGirl", "mimic", "bomber", "doctor"];
+    FB.state.players.forEach((p, i) => {
+      p.roleKey = roles[i];
+      p.fakeDisplayRoleKey = null;
+      p.clumsy = false;
+      p.suspicion = [0, 4, 1, 2, 0, 0, 3, 0][i];
+    });
+    FB.state.playerId = 0;
+    FB.state.humanPlayerIds = [0];
+    FB.state.mode = "solo";
+    FB.state.day = 1;
+    FB.state.selectedId = 1;
+    FB.state.fakeIntel = { 1: "apprenticeSeer" };
+    FB.state.bombs = [{ targetId: 4, explodeDay: 2 }];
+    return FB.state.players.filter(p => p.alive);
+  };
+  const hard = { ...BASE_SETTINGS, difficulty: "hard" };
+  // モジュール直接（seed 固定）。
+  const { FB: FB1 } = loadGame({ seedSettings: hard });
+  const alive1 = script(FB1);
+  const planned = FB1.planNightActionsLogic(FB1.state, alive1, { difficulty: "hard", random: seededRandom(7) });
+  // ブラウザの runNight：同じ seed の乱数で回す。
+  const { FB: FB2, sandbox } = loadGame({ seedSettings: hard });
+  const alive2 = script(FB2);
+  // Math のスタブ：{...Math} では列挙不可の floor 等が拾えないため、
+  // 実 Math をプロトタイプにして random だけ差し替える。
+  sandbox.Math = Object.create(Math);
+  sandbox.Math.random = seededRandom(7);
+  FB2.runNight();
+  const snapSet = (s) => JSON.stringify([...s].sort());
+  assert.equal(JSON.stringify(FB2.state.nightActions), JSON.stringify(planned.nightActions), "runNight とモジュールで nightActions が一致");
+  assert.equal(JSON.stringify(FB2.state.nightActionTypes), JSON.stringify(planned.nightActionTypes), "runNight とモジュールで nightActionTypes が一致");
+  assert.equal(JSON.stringify(FB2.state.loneFakeAbility), JSON.stringify(planned.loneFakeAbility), "runNight とモジュールで loneFakeAbility が一致");
+  assert.equal(snapSet(FB2.state.protectedTargets), snapSet(planned.protectedTargets), "runNight とモジュールで protectedTargets が一致");
+  void alive2;
+});
