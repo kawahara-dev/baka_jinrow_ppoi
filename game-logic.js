@@ -1289,6 +1289,50 @@
       alliesText: getFakeAlliesText(players, me, opts),
     };
   }
+
+  // ゲーム画面のプレイヤーカード1枚分の表示データ。クラス・aria・
+  // メタ・中身の HTML を players の順に配列で返す。DOM の生成や
+  // イベントの紐付けはブラウザ側（draw）が行う。脱落カードのメタは
+  // 表示役職のアイコン1つ、生存カードは「？」のみで、バカの実役職は
+  // 出さない（getPublicRoleKey 経由）。顔画像は opts.iconImgs
+  // （スラッグ→ data URI）から差し込み、なければ絵文字だけになる。
+  // players が空のときは空配列を返す。
+  function buildCardsView(players, opts) {
+    if (!players || !players.length) return [];
+    const selectedId = opts && opts.selectedId;
+    const iconImgs = (opts && opts.iconImgs) || {};
+    return players.map((p, cardIndex) => {
+      // 脱落者のカードも結果画面までバカの実役職は出さない。
+      const revealedRole = p.alive ? "？" : ROLES[getPublicRoleKey(p)].name;
+      // 脱落カードのメタは表示役職のアイコン1つ（getPublicRoleKey 経由
+      // なのでバカの実役職は漏れない）。生存カードは「？」のみ。
+      // 「 ・ 生存中」は .meta-state に入れて、スマホでは CSS で隠す。
+      const metaHtml = p.alive
+        ? `？<span class="meta-state"> ・ 生存中</span>`
+        : `<span class="role-icon" aria-hidden="true">${ROLES[getPublicRoleKey(p)].icon}</span>`;
+      const img = iconImgs[ICON_SLUGS[p.id]];
+      const avatarHtml = `<span>${p.icon}</span>${img ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[p.id]}" src="${img}" alt="${p.name}" onerror="this.remove()">` : ""}`;
+      const innerHtml = `
+        <div class="avatar">${avatarHtml}</div>
+        <div class="card-main">
+          <div class="name">${p.name}</div>
+          <div class="meta">${metaHtml}</div>
+        </div>
+      `;
+      return {
+        id: p.id,
+        animationDelay: `${cardIndex * 45}ms`,
+        className: `card ${p.alive ? "" : "dead"} ${selectedId === p.id ? "selected" : ""} ${p.voted ? "voted" : ""}`,
+        revealedRole,
+        ariaLabel: `${p.name}、${revealedRole}、${p.alive ? "生存中" : "脱落済み"}`,
+        tabIndex: p.alive ? 0 : -1,
+        ariaDisabled: !p.alive,
+        metaHtml,
+        avatarHtml,
+        innerHtml,
+      };
+    });
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1327,5 +1371,6 @@
     getAlliesLineForRole,
     roleHtmlFor,
     buildRoleCardView,
+    buildCardsView,
   };
 });
