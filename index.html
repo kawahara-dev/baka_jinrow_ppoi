@@ -993,7 +993,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1967,92 +1967,15 @@
     // 前の議論の吹き出しが残っていれば消す。
     clearSpeechBubbles();
     draw();
-    const target = state.players[state.nightReport?.targetId];
-    const templates = {
-      defense: {
-        low: ["{target} は怪しくないと思うけどな","{target} は普通にしてたよ","{target} を疑う理由、まだ薄くない？","{target} は昨夜も静かだったよ"],
-        mid: ["{target} は少し気になる","{target} の動き、目立たなかったのが逆に気になる","{target} は話題に上がりやすいね","{target} は様子見かな"],
-        high: ["{target} はかなり怪しい","{target} が黒っぽい","{target} を今日落とすべきかも","{target} の票の動きが不自然だよ"]
-      },
-      pressure: {
-        low: ["{target} は大丈夫そう","{target} に圧をかけるのは早いよ","{target} は様子見したい","{target} は今日じゃなくていいと思う"],
-        mid: ["{target} に説明してほしい","{target} は何か知ってそう","{target} は情報出して","{target} の昨夜の動き、聞きたいな"],
-        high: ["{target}、昨夜何してた？正直に言って","{target} は白じゃない気がする","{target} を信じきれない","{target}、言い訳が弱いと思う"]
-      },
-      tracker: {
-        low: ["私、昨夜は動いてないよ。誰も見なかった","追跡では何も掴めなかった","昨夜は静かだったな"],
-        mid: ["何も見なかったけど、空気は怪しい","足跡は薄かったけど気になる","手がかりは少ないまま"],
-        high: ["昨夜の動きは怪しさ満点。誰か絶対動いてる","痕跡が残ってた。これは普通じゃない","昨夜、誰か確実に動いてる"]
-      },
-      observe: {
-        low: ["まだ情報が少ないね","誰がインポスターか全然わからない","今日は様子見でいいかも","初手は慎重にいきたいね","まずは話を聞こう"],
-        mid: ["そろそろ絞っていきたい","このままだとインポスターに有利だよ","票を合わせるのが大事だね","昨夜の結果がヒントになるはず"],
-        high: ["もう決めないと危ない","インポスターはこの中にいる。絶対","外したら終わりが見えるよ","情報は出揃ってきた。あとは決断だけ"]
-      },
-      claimFake: ["占いの結果なんだけど…{target} がインポスターだったよ","私の占いでは {target} は黒。信じてほしいな","言いにくいけど、{target} がインポスター判定だった","{target}、昨夜調べたらインポスターだったんだ"],
-      claimWhite: ["{target} は私の占いではイノセントだったよ","{target} は白判定。疑うなら他を見て","占いでは {target} はイノセント。ひとまず安心かな"],
-      claimNeutral: ["{target}、どっちの陣営でもなさそう。ニュートラル判定だった","占いの反応が変だった。{target} は第三勢力かも","{target} はボマーの可能性。近づかないで"],
-      bomb: ["爆弾とか怖すぎる…ボマーがいるってことだよね","昨夜の爆発、ボマーの仕業だ…","爆弾は次の夜に爆発するらしい。今日仕掛けられたら明日…","ボマーを早く見つけないと全員危ない"],
-      guardian: ["（守れてよかった…！）","昨夜の襲撃が防げたのは大きいね","誰かが守り切ったんだね、ナイスガード"],
-      endgame: ["もう人数が少ない…外したら終わりだよ","ここからは一票が重い。慎重にいこ","残り少ないし、情報は全部出して考えよ"]
-    };
-    const suspicionTier = (value) => {
-      if (value >= 2.5) return "high";
-      if (value >= 1) return "mid";
-      return "low";
-    };
-    const alivePlayers = state.players.filter(p => p.alive);
-    // パス＆プレイでは人間の発言は口頭で行う。自動セリフは CPU のみ
-    // （人間の調査結果などが自動セリフで漏れるのを防ぐ）。
-    // フェーズ4：人間が多いほど CPU の発言を減らし、ログが CPU の
-    // セリフで埋め尽くされないようにする。ソロは従来通り全員が発言する。
-    let cpuSpeakers = alivePlayers.filter(p => state.mode === "pnp" ? !state.humanPlayerIds.includes(p.id) : p.id !== state.playerId);
-    if (state.mode === "pnp") {
-      cpuSpeakers = cpuSpeakers.sort(() => Math.random() - 0.5).slice(0, pnpCpuTalkCap());
-    }
-    for (const p of cpuSpeakers) {
-      if (getEffectiveRoleKey(p) === "mouse" && !p.mouseUsed && Math.random() < 0.45) {
-        const others = alivePlayers.filter(q => q.id !== p.id);
-        const tgt = others.slice().sort((a, b) => b.suspicion - a.suspicion)[0];
-        if (tgt) {
-          revealMouse(p, tgt);
-          continue;
-        }
-      }
-      const inv = state.lastInvestigation?.[p.id];
-      const invTarget = inv ? state.players[inv.targetId] : null;
-      let category, lineTarget;
-      if (inv && inv.result === "インポスター" && invTarget?.alive) {
-        category = "claimFake"; lineTarget = invTarget;
-      } else if (state.bombReport?.explodedVictims?.length && Math.random() < 0.5) {
-        category = "bomb";
-      } else if (inv && inv.result === "ニュートラル" && invTarget?.alive && Math.random() < 0.5) {
-        category = "claimNeutral"; lineTarget = invTarget;
-      } else if (inv && inv.result === "イノセント" && invTarget?.alive && Math.random() < 0.35) {
-        category = "claimWhite"; lineTarget = invTarget;
-      } else if (p.roleKey === "guardian" && state.nightReport?.type === "blocked" && Math.random() < 0.45) {
-        category = "guardian";
-      } else if (p.lastTarget != null) {
-        category = "tracker"; lineTarget = state.players[p.lastTarget];
-      } else if (alivePlayers.length <= 4 && Math.random() < 0.4) {
-        category = "endgame";
+    // 議論の CPU セリフ選択は共有モジュールへ（オンライン対戦フェーズ0）。
+    // ここではイベントを順に実行するだけ：マウス公開かセリフ表示か。
+    for (const e of planDiscussionTalksLogic(state, state.players.filter(p => p.alive))) {
+      const speaker = state.players[e.speakerId];
+      if (e.type === "mouse") {
+        revealMouse(speaker, state.players[e.targetId]);
       } else {
-        const others = alivePlayers.filter(q => q.id !== p.id);
-        lineTarget = others[Math.floor(Math.random() * others.length)];
-        category = Math.random() < 0.5 ? "defense" : "pressure";
-        if (!lineTarget) { category = "observe"; lineTarget = target; }
-        if (Math.random() < 0.2) category = "observe";
+        sayDialogue(speaker.id, `${speaker.name}：${e.text}`, e.text);
       }
-      let line;
-      if (Array.isArray(templates[category])) {
-        line = pickTalkLine(p, category, null, templates[category]);
-      } else {
-        const tier = suspicionTier((lineTarget || target)?.suspicion || 0);
-        line = pickTalkLine(p, category, tier, templates[category][tier]);
-      }
-      const nameForLine = lineTarget?.name || target?.name || "みんな";
-      const spoken = line.replaceAll("{target}", nameForLine);
-      sayDialogue(p.id, `${p.name}：${spoken}`, spoken);
     }
     // パス＆プレイ（フェーズ4）：設定されていれば議論タイマーを開始する。
     startDiscussTimer();

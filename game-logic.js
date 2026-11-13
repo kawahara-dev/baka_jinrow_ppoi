@@ -346,10 +346,13 @@
 
   // Pick a discussion line: prefer the speaker's own voice (~60%) and fall
   // back to the shared template pool otherwise.
-  function pickTalkLine(player, category, tier, genericPool) {
+  // `random` is an injectable () => [0,1) source (default Math.random);
+  // planDiscussionTalks passes its own so tests can seed the whole draw.
+  function pickTalkLine(player, category, tier, genericPool, random) {
+    const rnd = typeof random === "function" ? random : Math.random;
     const charPool = charTalkPool(player.name, category, tier);
-    if (charPool && charPool.length && Math.random() < 0.6) return rand(charPool);
-    return rand(genericPool);
+    if (charPool && charPool.length && rnd() < 0.6) return rand(charPool, rnd);
+    return rand(genericPool, rnd);
   }
   const INNOCENT_ROLE_KEYS = ["apprenticeSeer", "guardian", "tracker", "villager", "police", "lookout", "trapper", "doctor", "mouse", "politician"];
   // うっかり占い師は独立役職ではなく、見習い占い師の隠し個体。
@@ -358,7 +361,137 @@
   // シミュレーションで勝率を見ながら調整する（目安 30〜40%）。
   const CLUMSY_SEER_RATE = 0.35;
 
-  function rand(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
+  function rand(arr, random) {
+    const rnd = typeof random === "function" ? random : Math.random;
+    return arr[Math.floor(rnd()*arr.length)];
+  }
+
+  // Discussion templates: the generic pools morningToDiscussion falls back
+  // to when a speaker has no character-specific line. {target} is filled
+  // with the talked-about player's name by planDiscussionTalks.
+  // defense / pressure / tracker / observe are tiered by the talked-about
+  // player's suspicion (low / mid / high); the rest are flat lists.
+  const DISCUSSION_TEMPLATES = {
+    defense: {
+      low: ["{target} は怪しくないと思うけどな","{target} は普通にしてたよ","{target} を疑う理由、まだ薄くない？","{target} は昨夜も静かだったよ"],
+      mid: ["{target} は少し気になる","{target} の動き、目立たなかったのが逆に気になる","{target} は話題に上がりやすいね","{target} は様子見かな"],
+      high: ["{target} はかなり怪しい","{target} が黒っぽい","{target} を今日落とすべきかも","{target} の票の動きが不自然だよ"]
+    },
+    pressure: {
+      low: ["{target} は大丈夫そう","{target} に圧をかけるのは早いよ","{target} は様子見したい","{target} は今日じゃなくていいと思う"],
+      mid: ["{target} に説明してほしい","{target} は何か知ってそう","{target} は情報出して","{target} の昨夜の動き、聞きたいな"],
+      high: ["{target}、昨夜何してた？正直に言って","{target} は白じゃない気がする","{target} を信じきれない","{target}、言い訳が弱いと思う"]
+    },
+    tracker: {
+      low: ["私、昨夜は動いてないよ。誰も見なかった","追跡では何も掴めなかった","昨夜は静かだったな"],
+      mid: ["何も見なかったけど、空気は怪しい","足跡は薄かったけど気になる","手がかりは少ないまま"],
+      high: ["昨夜の動きは怪しさ満点。誰か絶対動いてる","痕跡が残ってた。これは普通じゃない","昨夜、誰か確実に動いてる"]
+    },
+    observe: {
+      low: ["まだ情報が少ないね","誰がインポスターか全然わからない","今日は様子見でいいかも","初手は慎重にいきたいね","まずは話を聞こう"],
+      mid: ["そろそろ絞っていきたい","このままだとインポスターに有利だよ","票を合わせるのが大事だね","昨夜の結果がヒントになるはず"],
+      high: ["もう決めないと危ない","インポスターはこの中にいる。絶対","外したら終わりが見えるよ","情報は出揃ってきた。あとは決断だけ"]
+    },
+    claimFake: ["占いの結果なんだけど…{target} がインポスターだったよ","私の占いでは {target} は黒。信じてほしいな","言いにくいけど、{target} がインポスター判定だった","{target}、昨夜調べたらインポスターだったんだ"],
+    claimWhite: ["{target} は私の占いではイノセントだったよ","{target} は白判定。疑うなら他を見て","占いでは {target} はイノセント。ひとまず安心かな"],
+    claimNeutral: ["{target}、どっちの陣営でもなさそう。ニュートラル判定だった","占いの反応が変だった。{target} は第三勢力かも","{target} はボマーの可能性。近づかないで"],
+    bomb: ["爆弾とか怖すぎる…ボマーがいるってことだよね","昨夜の爆発、ボマーの仕業だ…","爆弾は次の夜に爆発するらしい。今日仕掛けられたら明日…","ボマーを早く見つけないと全員危ない"],
+    guardian: ["（守れてよかった…！）","昨夜の襲撃が防げたのは大きいね","誰かが守り切ったんだね、ナイスガード"],
+    endgame: ["もう人数が少ない…外したら終わりだよ","ここからは一票が重い。慎重にいこ","残り少ないし、情報は全部出して考えよ"]
+  };
+
+  // Discussion CPU talk selection (the pure part of morningToDiscussion):
+  // decides which CPU players speak in the discussion and what they say.
+  // Returns an ordered list of events for the browser to perform:
+  //   { type: "mouse", speakerId, targetId } — reveal the target's role
+  //     (the browser calls revealMouse for it)
+  //   { type: "talk", speakerId, text } — a spoken line with {target}
+  //     already replaced by the talked-about player's name.
+  // No DOM, no logging here; the browser performs revealMouse /
+  // sayDialogue per event, in order.
+  // The mouse branch mirrors revealMouse's suspicion update on the target
+  // (innocent shown: -5, otherwise 8) so later lines in the same
+  // discussion plan against the revealed value, as the original inline
+  // revealMouse call did; the browser re-applies the same update when it
+  // performs the event. A baka mouse shows a random other role, as in
+  // revealMouse (drawn here from the injected random).
+  // state: players, mode, humanPlayerIds, playerId, nightReport,
+  // lastInvestigation, bombReport. alive: the living players.
+  // opts: { random } — injectable () => [0,1) (default Math.random).
+  function planDiscussionTalks(state, alive, opts = {}) {
+    const rnd = typeof opts.random === "function" ? opts.random : Math.random;
+    const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+    // nightReport carries no targetId in practice (only type/victimId),
+    // so this is undefined and the fallbacks below apply; read it the
+    // same way as the original code so a future targetId is honoured.
+    const target = state.players[state.nightReport?.targetId];
+    const suspicionTier = (value) => {
+      if (value >= 2.5) return "high";
+      if (value >= 1) return "mid";
+      return "low";
+    };
+    // In pass-and-play humans talk out loud; only CPU speak automatically.
+    // The more humans, the fewer CPU lines (phase 4), so the log is not
+    // flooded with CPU lines. Solo: every CPU speaks, as before.
+    let cpuSpeakers = alive.filter(p => state.mode === "pnp"
+      ? !(state.humanPlayerIds || []).includes(p.id)
+      : p.id !== state.playerId);
+    if (state.mode === "pnp") {
+      const cap = Math.max(1, 6 - (state.humanPlayerIds || []).length);
+      cpuSpeakers = cpuSpeakers.sort(() => rnd() - 0.5).slice(0, cap);
+    }
+    const events = [];
+    for (const p of cpuSpeakers) {
+      if (getEffectiveRoleKey(p) === "mouse" && !p.mouseUsed && rnd() < 0.45) {
+        const others = alive.filter(q => q.id !== p.id);
+        const tgt = others.slice().sort((a, b) => b.suspicion - a.suspicion)[0];
+        if (tgt) {
+          p.mouseUsed = true;
+          let shownRoleKey = getPublicRoleKey(tgt);
+          if (p.roleKey === "baka") {
+            shownRoleKey = pick(Object.keys(ROLES).filter(k => k !== "baka"));
+          }
+          tgt.suspicion = ROLES[shownRoleKey].faction === "イノセント" ? -5 : 8;
+          events.push({ type: "mouse", speakerId: p.id, targetId: tgt.id });
+          continue;
+        }
+      }
+      const inv = state.lastInvestigation?.[p.id];
+      const invTarget = inv ? state.players[inv.targetId] : null;
+      let category, lineTarget;
+      if (inv && inv.result === "インポスター" && invTarget?.alive) {
+        category = "claimFake"; lineTarget = invTarget;
+      } else if (state.bombReport?.explodedVictims?.length && rnd() < 0.5) {
+        category = "bomb";
+      } else if (inv && inv.result === "ニュートラル" && invTarget?.alive && rnd() < 0.5) {
+        category = "claimNeutral"; lineTarget = invTarget;
+      } else if (inv && inv.result === "イノセント" && invTarget?.alive && rnd() < 0.35) {
+        category = "claimWhite"; lineTarget = invTarget;
+      } else if (p.roleKey === "guardian" && state.nightReport?.type === "blocked" && rnd() < 0.45) {
+        category = "guardian";
+      } else if (p.lastTarget != null) {
+        category = "tracker"; lineTarget = state.players[p.lastTarget];
+      } else if (alive.length <= 4 && rnd() < 0.4) {
+        category = "endgame";
+      } else {
+        const others = alive.filter(q => q.id !== p.id);
+        lineTarget = others[Math.floor(rnd() * others.length)];
+        category = rnd() < 0.5 ? "defense" : "pressure";
+        if (!lineTarget) { category = "observe"; lineTarget = target; }
+        if (rnd() < 0.2) category = "observe";
+      }
+      let line;
+      if (Array.isArray(DISCUSSION_TEMPLATES[category])) {
+        line = pickTalkLine(p, category, null, DISCUSSION_TEMPLATES[category], rnd);
+      } else {
+        const tier = suspicionTier((lineTarget || target)?.suspicion || 0);
+        line = pickTalkLine(p, category, tier, DISCUSSION_TEMPLATES[category][tier], rnd);
+      }
+      const nameForLine = lineTarget?.name || target?.name || "みんな";
+      events.push({ type: "talk", speakerId: p.id, text: line.replaceAll("{target}", nameForLine) });
+    }
+    return events;
+  }
 
   // Fisher-Yates shuffle with an injectable random source (default
   // Math.random). The browser passes nothing; tests pass a seeded
@@ -957,6 +1090,8 @@
     CHAR_TALK,
     charTalkPool,
     pickTalkLine,
+    DISCUSSION_TEMPLATES,
+    planDiscussionTalks,
     INNOCENT_ROLE_KEYS,
     CLUMSY_SEER_RATE,
     rand,
