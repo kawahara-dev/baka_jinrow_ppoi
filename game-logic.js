@@ -1490,6 +1490,52 @@
       discussTimerHidden: normalized.mode !== "pnp",
     };
   }
+
+  // セリフ／行動ログの折りたたみ。状態は独立キー fakeBloomLogFold に
+  // 保存され、保存がなければ両方とも折りたたんだ状態で始める。
+  // 定義（キー・要素 id・見出し文言）と既定値はオンライン対戦の
+  // 部屋画面でも使い回すため、ここに置く。
+  const LOG_FOLD_DEFAULT = { dialogue: true, action: true };
+  const LOG_FOLD_DEFS = [
+    { key: "dialogue", logId: "dialogueLog", toggleId: "dialogueLogToggle", label: "セリフ" },
+    { key: "action", logId: "actionLog", toggleId: "actionLogToggle", label: "行動ログ" },
+  ];
+  // 保存された折りたたみ状態を検証して返す純粋関数。parsed が null・
+  // 非オブジェクト・キー欠け・非真偽値のときはそのキーだけ既定値
+  // （たたむ）に戻す（後方互換）。余分なキーは無視する。入力は変更しない。
+  function normalizeLogFold(parsed) {
+    const out = { ...LOG_FOLD_DEFAULT };
+    if (!parsed || typeof parsed !== "object") return out;
+    for (const key of Object.keys(LOG_FOLD_DEFAULT)) {
+      if (typeof parsed[key] === "boolean") out[key] = parsed[key];
+    }
+    return out;
+  }
+  // applyLogFold が画面に反映する表示データ。折りたたみ中かどうか・
+  // aria-expanded・トグルボタンの文言を、定義の順に返す。
+  // DOM への代入はブラウザ側（applyLogFold）が行う。許容外の値は
+  // normalizeLogFold で既定値に直してから判定する。
+  function buildLogFoldView(logFold) {
+    const normalized = normalizeLogFold(logFold);
+    return LOG_FOLD_DEFS.map(def => {
+      const folded = !!normalized[def.key];
+      return {
+        key: def.key,
+        logId: def.logId,
+        toggleId: def.toggleId,
+        hidden: folded,
+        ariaExpanded: String(!folded),
+        text: `${folded ? "▸" : "▾"} ${def.label}`,
+      };
+    });
+  }
+  // 折りたたみ状態の遷移を返す純粋関数。指定したキーだけ新しい値に
+  // した新しいオブジェクトを返す。未知のキー・非オブジェクトのときは
+  // null（ブラウザ側はそのまま何もしない）。入力は変更しない。
+  function withLogFolded(logFold, key, folded) {
+    if (!logFold || typeof logFold !== "object" || !(key in LOG_FOLD_DEFAULT)) return null;
+    return { ...normalizeLogFold(logFold), [key]: !!folded };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1537,5 +1583,10 @@
     SETTINGS_ALLOWED,
     normalizeSettings,
     buildSettingsView,
+    LOG_FOLD_DEFAULT,
+    LOG_FOLD_DEFS,
+    normalizeLogFold,
+    buildLogFoldView,
+    withLogFolded,
   };
 });

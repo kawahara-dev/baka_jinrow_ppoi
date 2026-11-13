@@ -2230,3 +2230,92 @@ test("ブラウザ側の showRoleInfo は共有モジュールの buildRoleInfoV
   assert.equal(elements.get("roleInfoName").textContent, "守り手");
   FB.closeRoleInfo();
 });
+
+test("normalizeLogFold：有効な値はそのまま、不正・欠け・null は既定値に戻る", () => {
+  const valid = { dialogue: false, action: true };
+  assert.deepEqual(Logic.normalizeLogFold(valid), valid);
+  assert.deepEqual(Logic.normalizeLogFold(null), Logic.LOG_FOLD_DEFAULT);
+  assert.deepEqual(Logic.normalizeLogFold(undefined), Logic.LOG_FOLD_DEFAULT);
+  assert.deepEqual(Logic.normalizeLogFold("not-an-object"), Logic.LOG_FOLD_DEFAULT);
+  assert.deepEqual(Logic.normalizeLogFold(42), Logic.LOG_FOLD_DEFAULT);
+  // 片方だけ不正な値は、その片方だけ既定（たたむ）に戻る。
+  assert.deepEqual(Logic.normalizeLogFold({ dialogue: false, action: "yes" }),
+    { dialogue: false, action: true });
+  assert.deepEqual(Logic.normalizeLogFold({ dialogue: "no" }),
+    { dialogue: true, action: true });
+  assert.deepEqual(Logic.normalizeLogFold({}), Logic.LOG_FOLD_DEFAULT);
+  assert.deepEqual(Logic.normalizeLogFold({ ...valid, extra: true }), valid);
+});
+
+test("normalizeLogFold：入力を変更しない（純粋関数）", () => {
+  const parsed = { dialogue: false, action: "yes" };
+  const before = JSON.stringify(parsed);
+  Logic.normalizeLogFold(parsed);
+  assert.equal(JSON.stringify(parsed), before);
+});
+
+test("buildLogFoldView：既定は両方たたみ、開いた方は文言と aria が変わる", () => {
+  const view = Logic.buildLogFoldView(Logic.LOG_FOLD_DEFAULT);
+  assert.deepEqual(view, [
+    { key: "dialogue", logId: "dialogueLog", toggleId: "dialogueLogToggle", hidden: true, ariaExpanded: "false", text: "▸ セリフ" },
+    { key: "action", logId: "actionLog", toggleId: "actionLogToggle", hidden: true, ariaExpanded: "false", text: "▸ 行動ログ" },
+  ]);
+  const opened = Logic.buildLogFoldView({ dialogue: false, action: true });
+  assert.equal(opened[0].hidden, false);
+  assert.equal(opened[0].ariaExpanded, "true");
+  assert.equal(opened[0].text, "▾ セリフ");
+  assert.equal(opened[1].hidden, true);
+  assert.equal(opened[1].text, "▸ 行動ログ");
+});
+
+test("buildLogFoldView：不正な値・null でも既定で表示し、入力を変更しない", () => {
+  const view = Logic.buildLogFoldView({ dialogue: false, action: "yes" });
+  assert.equal(view[0].hidden, false);
+  assert.equal(view[1].hidden, true);
+  assert.deepEqual(Logic.buildLogFoldView(null), Logic.buildLogFoldView(Logic.LOG_FOLD_DEFAULT));
+  const input = { dialogue: false, action: true };
+  const before = JSON.stringify(input);
+  Logic.buildLogFoldView(input);
+  assert.equal(JSON.stringify(input), before);
+});
+
+test("withLogFolded：指定したキーだけ変え、未知のキー・非オブジェクトは null", () => {
+  const base = { dialogue: true, action: true };
+  assert.deepEqual(Logic.withLogFolded(base, "dialogue", false), { dialogue: false, action: true });
+  assert.deepEqual(Logic.withLogFolded(base, "action", 1), { dialogue: true, action: true });
+  assert.deepEqual(Logic.withLogFolded({ dialogue: false, action: "yes" }, "action", false),
+    { dialogue: false, action: false });
+  assert.equal(Logic.withLogFolded(base, "no-such-key", false), null);
+  assert.equal(Logic.withLogFolded(null, "dialogue", false), null);
+  assert.equal(Logic.withLogFolded("not-an-object", "dialogue", false), null);
+  const before = JSON.stringify(base);
+  Logic.withLogFolded(base, "dialogue", false);
+  assert.equal(JSON.stringify(base), before, "入力は変更しない");
+});
+
+test("ブラウザ側の applyLogFold／setLogFolded は共有モジュールの buildLogFoldView／withLogFolded と同一に描く", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  const assertMatchesView = () => {
+    const view = Logic.buildLogFoldView(FB.logFold);
+    assert.equal(JSON.stringify(FB.buildLogFoldViewLogic(FB.logFold)), JSON.stringify(view), "ハーネス経由の buildLogFoldView とも同一");
+    for (const item of view) {
+      assert.equal(elements.get(item.logId).classList.contains("hidden"), item.hidden, `${item.key} の表示`);
+      assert.equal(elements.get(item.toggleId).getAttribute("aria-expanded"), item.ariaExpanded, `${item.key} の aria-expanded`);
+      assert.equal(elements.get(item.toggleId).textContent, item.text, `${item.key} のボタン文言`);
+    }
+  };
+  // 既定（両方たたみ）→ セリフだけ開く → 未知のキーは何もしない。
+  assertMatchesView();
+  FB.setLogFolded("dialogue", false);
+  assert.equal(JSON.stringify(FB.logFold), JSON.stringify(Logic.withLogFolded(Logic.LOG_FOLD_DEFAULT, "dialogue", false)));
+  assert.equal(localStorage.getItem(FB.LOG_FOLD_KEY), JSON.stringify({ dialogue: false, action: true }));
+  assertMatchesView();
+  FB.toggleLogFold("action");
+  assert.equal(JSON.stringify(FB.logFold), JSON.stringify({ dialogue: false, action: false }));
+  assertMatchesView();
+  const before = JSON.stringify(FB.logFold);
+  FB.setLogFolded("no-such-key", false);
+  assert.equal(JSON.stringify(FB.logFold), before, "未知のキーでは状態も保存も変わらない");
+  assert.equal(localStorage.getItem(FB.LOG_FOLD_KEY), JSON.stringify({ dialogue: false, action: false }));
+  assertMatchesView();
+});

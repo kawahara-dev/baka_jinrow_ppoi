@@ -1093,7 +1093,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2777,19 +2777,12 @@
   // （endo の選択）。ログへの追記では自動で開き直さない。
   const LOG_FOLD_KEY = "fakeBloomLogFold";
   const LOG_FOLD_DEFAULT = { dialogue: true, action: true };
-  const LOG_FOLD_DEFS = [
-    { key: "dialogue", logId: "dialogueLog", toggleId: "dialogueLogToggle", label: "セリフ" },
-    { key: "action", logId: "actionLog", toggleId: "actionLogToggle", label: "行動ログ" },
-  ];
   function loadLogFold() {
     try {
       const raw = typeof localStorage !== "undefined" ? localStorage.getItem(LOG_FOLD_KEY) : null;
       if (!raw) return { ...LOG_FOLD_DEFAULT };
-      const parsed = JSON.parse(raw);
-      return {
-        dialogue: typeof parsed.dialogue === "boolean" ? parsed.dialogue : LOG_FOLD_DEFAULT.dialogue,
-        action: typeof parsed.action === "boolean" ? parsed.action : LOG_FOLD_DEFAULT.action,
-      };
+      // 検証と既定値への戻しは共有モジュール（normalizeLogFoldLogic）。
+      return normalizeLogFoldLogic(JSON.parse(raw));
     } catch {
       return { ...LOG_FOLD_DEFAULT };
     }
@@ -2801,23 +2794,27 @@
     } catch { /* storage unavailable: fold state just won't persist */ }
   }
   function applyLogFold() {
-    for (const def of LOG_FOLD_DEFS) {
-      const folded = !!logFold[def.key];
-      el(def.logId).classList.toggle("hidden", folded);
-      const btn = el(def.toggleId);
-      btn.setAttribute("aria-expanded", String(!folded));
-      btn.textContent = `${folded ? "▸" : "▾"} ${def.label}`;
+    // 表示データは共有モジュール（buildLogFoldViewLogic）が作り、
+    // ここでは DOM への代入だけを行う。
+    for (const item of buildLogFoldViewLogic(logFold)) {
+      el(item.logId).classList.toggle("hidden", item.hidden);
+      const btn = el(item.toggleId);
+      btn.setAttribute("aria-expanded", item.ariaExpanded);
+      btn.textContent = item.text;
     }
   }
   function setLogFolded(key, folded) {
-    if (!(key in logFold)) return;
-    logFold[key] = !!folded;
+    // 状態の遷移は共有モジュール（withLogFoldedLogic）。未知のキーは null
+    // を返すので、そのまま何もしない。
+    const next = withLogFoldedLogic(logFold, key, folded);
+    if (!next) return;
+    logFold = next;
     saveLogFold();
     applyLogFold();
   }
   function toggleLogFold(key) { setLogFolded(key, !logFold[key]); }
-  for (const def of LOG_FOLD_DEFS) {
-    el(def.toggleId).onclick = () => toggleLogFold(def.key);
+  for (const item of buildLogFoldViewLogic(logFold)) {
+    el(item.toggleId).onclick = () => toggleLogFold(item.key);
   }
   applyLogFold();
 
