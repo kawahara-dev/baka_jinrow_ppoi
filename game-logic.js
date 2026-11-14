@@ -1368,6 +1368,37 @@
     });
   }
 
+  // 議論タイマーの警告しきい値。残りこの秒数以下で警告色になる。
+  const DISCUSS_TIMER_LOW_SECONDS = 30;
+
+  // 議論タイマーの残り秒数を「分:秒」表示にする。60 → "1:00"、90 → "1:30"。
+  function formatDiscussTime(sec) {
+    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  }
+
+  // 議論タイマーの表示データ。パス＆プレイの議論中で、タイマー設定が
+  // あるときだけ表示する。残り30秒以下は警告色、時間切れは投票ボタンも
+  // 目立たせる。時間切れでも自動では投票へ進まない（合図だけ）。
+  // 返すのは表示データだけで、DOM には触らない純粋関数。secondsLeft は
+  // 数値に読み替え、読めない値（null・未定義・文字列以外）は 0 秒扱い。
+  function buildDiscussTimerView({ mode, phase, discussTimerSetting, secondsLeft }) {
+    if (mode !== "pnp" || phase !== "discussion" || !(Number(discussTimerSetting) > 0)) {
+      return { hidden: true, low: false, expired: false, voteReady: false, text: "" };
+    }
+    const seconds = Number(secondsLeft);
+    const expired = !(seconds > 0);
+    const low = !expired && seconds <= DISCUSS_TIMER_LOW_SECONDS;
+    return {
+      hidden: false,
+      low,
+      expired,
+      voteReady: expired,
+      text: expired
+        ? "⏰ 時間切れ！「議論を終えて投票へ」を押してね"
+        : `🗣️ 議論タイマー 残り ${formatDiscussTime(seconds)}`,
+    };
+  }
+
   // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
   // 受け渡し画面で共通して使う。バカには表示役職だけを本物として見せる。
   function roleHtmlFor(player, players, opts) {
@@ -1746,6 +1777,9 @@
     buildRoleGuideView,
     PARADE_BD,
     buildParadeView,
+    DISCUSS_TIMER_LOW_SECONDS,
+    formatDiscussTime,
+    buildDiscussTimerView,
     buildRoleCardView,
     buildCardsView,
     buildStageView,

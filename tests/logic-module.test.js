@@ -2716,3 +2716,98 @@ test("ブラウザ側の renderParade は共有モジュールの buildParadeVie
   FB.renderParade();
   assert.equal(elements.get("parade").innerHTML, expected, "再描画でも同一");
 });
+
+test("formatDiscussTime：残り秒数を「分:秒」表示にする", () => {
+  assert.equal(Logic.formatDiscussTime(0), "0:00");
+  assert.equal(Logic.formatDiscussTime(5), "0:05");
+  assert.equal(Logic.formatDiscussTime(59), "0:59");
+  assert.equal(Logic.formatDiscussTime(60), "1:00");
+  assert.equal(Logic.formatDiscussTime(90), "1:30");
+  assert.equal(Logic.formatDiscussTime(125), "2:05");
+  assert.equal(Logic.formatDiscussTime(600), "10:00");
+});
+
+test("buildDiscussTimerView：表示しない条件では隠す（ソロ・議論以外・タイマーなし）", () => {
+  const base = { mode: "pnp", phase: "discussion", discussTimerSetting: "60", secondsLeft: 60 };
+  assert.deepEqual(Logic.buildDiscussTimerView(base),
+    { hidden: false, low: false, expired: false, voteReady: false, text: "🗣️ 議論タイマー 残り 1:00" });
+  for (const patch of [
+    { mode: "solo" },
+    { phase: "morning" },
+    { phase: "vote" },
+    { discussTimerSetting: "0" },
+    { discussTimerSetting: 0 },
+    { discussTimerSetting: null },
+    { discussTimerSetting: "なし" },
+  ]) {
+    assert.deepEqual(Logic.buildDiscussTimerView({ ...base, ...patch }),
+      { hidden: true, low: false, expired: false, voteReady: false, text: "" },
+      `隠す条件: ${JSON.stringify(patch)}`);
+  }
+});
+
+test("buildDiscussTimerView：残り30秒以下で警告色、時間切れで投票ボタンを目立たせる", () => {
+  const base = { mode: "pnp", phase: "discussion", discussTimerSetting: "60" };
+  assert.equal(Logic.buildDiscussTimerView({ ...base, secondsLeft: 31 }).low, false);
+  assert.deepEqual(Logic.buildDiscussTimerView({ ...base, secondsLeft: 30 }),
+    { hidden: false, low: true, expired: false, voteReady: false, text: "🗣️ 議論タイマー 残り 0:30" });
+  assert.equal(Logic.buildDiscussTimerView({ ...base, secondsLeft: 1 }).text, "🗣️ 議論タイマー 残り 0:01");
+  assert.deepEqual(Logic.buildDiscussTimerView({ ...base, secondsLeft: 0 }),
+    { hidden: false, low: false, expired: true, voteReady: true, text: "⏰ 時間切れ！「議論を終えて投票へ」を押してね" });
+  // マイナスでも時間切れ扱い
+  assert.equal(Logic.buildDiscussTimerView({ ...base, secondsLeft: -5 }).expired, true);
+  // 設定が数値でも文字列でも同じ表示になる
+  assert.equal(Logic.buildDiscussTimerView({ ...base, discussTimerSetting: 60, secondsLeft: 60 }).text,
+    Logic.buildDiscussTimerView({ ...base, discussTimerSetting: "60", secondsLeft: 60 }).text);
+});
+
+test("buildDiscussTimerView：入力を変更しない（純粋関数）", () => {
+  const input = { mode: "pnp", phase: "discussion", discussTimerSetting: "60", secondsLeft: 45 };
+  const before = JSON.stringify(input);
+  const a = Logic.buildDiscussTimerView(input);
+  const b = Logic.buildDiscussTimerView(input);
+  assert.equal(JSON.stringify(input), before);
+  assert.equal(JSON.stringify(a), JSON.stringify(b));
+  assert.equal(Logic.DISCUSS_TIMER_LOW_SECONDS, 30);
+});
+
+test("ブラウザ側の renderDiscussTimer は共有モジュールの buildDiscussTimerView と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", discussTimer: "60" } });
+  FB.setupGame();
+  FB.state.phase = "morning";
+  FB.morningToDiscussion();
+  const box = elements.get("discussTimer");
+  const nextBtn = elements.get("nextBtn");
+  const viewOf = () => FB.buildDiscussTimerViewLogic({
+    mode: FB.state.mode,
+    phase: FB.state.phase,
+    discussTimerSetting: FB.gameSettings.discussTimer,
+    secondsLeft: FB.discussSecondsLeft,
+  });
+  const checkBox = () => {
+    const view = viewOf();
+    assert.equal(box.classList.contains("hidden"), view.hidden, "hidden");
+    assert.equal(box.classList.contains("timer-low"), view.low, "timer-low");
+    assert.equal(box.classList.contains("timer-expired"), view.expired, "timer-expired");
+    assert.equal(nextBtn.classList.contains("vote-ready"), view.voteReady, "vote-ready");
+    assert.equal(box.textContent, view.text, "文言");
+  };
+  // 開始直後（残り60秒）
+  assert.equal(FB.discussSecondsLeft, 60);
+  FB.renderDiscussTimer();
+  checkBox();
+  // 30秒進めて残り30秒（警告色）
+  for (let i = 0; i < 30; i++) FB.discussTimerTick();
+  assert.equal(FB.discussSecondsLeft, 30);
+  FB.renderDiscussTimer();
+  checkBox();
+  // 時間切れまで進める
+  for (let i = 0; i < 30; i++) FB.discussTimerTick();
+  assert.equal(FB.discussSecondsLeft, 0);
+  FB.renderDiscussTimer();
+  checkBox();
+  // 投票へ進むと隠れる
+  FB.discussionToVote();
+  FB.renderDiscussTimer();
+  checkBox();
+});
