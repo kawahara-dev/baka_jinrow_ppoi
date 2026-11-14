@@ -2811,3 +2811,262 @@ test("ブラウザ側の renderDiscussTimer は共有モジュールの buildDis
   FB.renderDiscussTimer();
   checkBox();
 });
+
+test("buildPnpCoverView：3場面の文言とボタン（役職確認・夜・投票）", () => {
+  const player = { id: 0, name: "ルナ", roleKey: "villager", alive: true };
+  assert.deepEqual(Logic.buildPnpCoverView(player, { index: 0, kind: "handoff" }), {
+    coverText: "次は <strong>P1（ルナ）</strong>さんの番です。<br>周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。",
+    revealBtnText: "タップして役職を見る",
+  });
+  assert.deepEqual(Logic.buildPnpCoverView(player, { index: 1, kind: "night" }), {
+    coverText: "次は <strong>P2（ルナ）</strong>さんの番です。<br>夜行動の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。",
+    revealBtnText: "タップして夜の番を始める",
+  });
+  assert.deepEqual(Logic.buildPnpCoverView(player, { index: 2, kind: "vote" }), {
+    coverText: "次は <strong>P3（ルナ）</strong>さんの番です。<br>投票の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。",
+    revealBtnText: "タップして投票の番を始める",
+  });
+  // 未知の kind は役職確認として扱う
+  assert.equal(Logic.buildPnpCoverView(player, { index: 0, kind: "unknown" }).revealBtnText, "タップして役職を見る");
+  assert.equal(Logic.buildPnpCoverView(player, { index: 0 }).revealBtnText, "タップして役職を見る");
+  // カバー画面に役職名は出ない
+  assert.ok(!Logic.buildPnpCoverView(player, { index: 0, kind: "handoff" }).coverText.includes("村ガール"));
+});
+
+test("buildPnpRoleView：確認ボタンの文言は最後の人だけ「ゲーム開始」、役職 HTML は roleHtmlFor と同一", () => {
+  const player = { id: 0, name: "ルナ", roleKey: "villager", alive: true };
+  const players = [player, { id: 1, name: "ミオ", roleKey: "guardian", alive: true }];
+  const opts = { mode: "pnp", humanPlayerIds: [0, 1] };
+  const first = Logic.buildPnpRoleView(player, players, { index: 0, humanCount: 2, ...opts });
+  assert.equal(first.title, "あなたの役職");
+  assert.equal(first.confirmBtnText, "確認した（次の人へ）");
+  assert.equal(first.roleHtml, Logic.roleHtmlFor(player, players, opts));
+  assert.ok(first.roleHtml.includes("村ガール"), "役職画面は本人の役職を示す");
+  const last = Logic.buildPnpRoleView(player, players, { index: 1, humanCount: 2, ...opts });
+  assert.equal(last.confirmBtnText, "確認した（ゲーム開始）");
+  assert.equal(Logic.buildPnpRoleView(null, players, { index: 0, humanCount: 2, ...opts }), null);
+});
+
+test("buildPnpNightResultView：前夜の結果を div 並びにし、空なら null", () => {
+  assert.deepEqual(Logic.buildPnpNightResultView(["占い結果：白", "追跡：なし"]), {
+    title: "前夜の結果",
+    html: "<div>占い結果：白</div><div>追跡：なし</div>",
+    confirmBtnText: "夜行動へ進む",
+  });
+  assert.equal(Logic.buildPnpNightResultView([]), null);
+  assert.equal(Logic.buildPnpNightResultView(null), null);
+  assert.equal(Logic.buildPnpNightResultView("結果"), null);
+});
+
+test("buildPnpNightActionView：合意・相談・能力なしの3通りと能力ありの null", () => {
+  const rep = { id: 2, name: "ユイ", roleKey: "fakeGirl", alive: true };
+  const target = { id: 3, name: "カノン", roleKey: "villager", alive: true };
+  const mimic = { id: 1, name: "ミオ", roleKey: "mimic", alive: true };
+  // 代表者の入力あり：合意確認
+  assert.deepEqual(Logic.buildPnpNightActionView(mimic, { rep, repTarget: target, isLast: true }), {
+    step: "nightFakeAgree",
+    title: "夜行動",
+    html: "<strong>ミオ（なりすまし）</strong><br>インポスターの仲間（ユイ）が今夜の襲撃先に <strong>カノン</strong> を選びました。<br>この襲撃先で合意しますか？",
+    confirmBtnText: "合意する（能力入力へ）",
+  });
+  // 代表者の入力なし：相談画面
+  const consult = Logic.buildPnpNightActionView(mimic, { rep, repTarget: null, isLast: false });
+  assert.equal(consult.step, "nightFakeConsult");
+  assert.equal(consult.confirmBtnText, "相談した（能力入力へ）");
+  assert.ok(consult.html.includes("ユイ）と相談してください"));
+  // 能力なし（村ガール）：最後の人だけ文言が変わる
+  const villager = { id: 0, name: "ルナ", roleKey: "villager", alive: true };
+  const noAction = Logic.buildPnpNightActionView(villager, { rep: null, repTarget: null, isLast: false });
+  assert.equal(noAction.step, "nightNoAction");
+  assert.equal(noAction.confirmBtnText, "確認した（次の人へ）");
+  assert.ok(noAction.html.includes("今夜は能力がありません"));
+  assert.equal(Logic.buildPnpNightActionView(villager, { rep: null, repTarget: null, isLast: true }).confirmBtnText,
+    "確認した（夜行動を終える）");
+  // 能力あり（占い師）は null：呼び出し側はゲーム画面で対象を選ぶ
+  const seer = { id: 4, name: "スズ", roleKey: "apprenticeSeer", alive: true };
+  assert.equal(Logic.buildPnpNightActionView(seer, { rep: null, repTarget: null, isLast: false }), null);
+  // 代表者本人は合意・相談にならず、能力ありなので null
+  const fakeGirl = { id: 2, name: "ユイ", roleKey: "fakeGirl", alive: true };
+  assert.equal(Logic.buildPnpNightActionView(fakeGirl, { rep, repTarget: target, isLast: false }), null);
+  // バカは表示役職がインポスターでも実役職の陣営で判定するため、合意・相談
+  // にはならない。表示役職なりすましは能力ありなのでゲーム画面へ（null）。
+  const baka = { id: 5, name: "リリ", roleKey: "baka", fakeDisplayRoleKey: "mimic", alive: true };
+  assert.equal(Logic.buildPnpNightActionView(baka, { rep, repTarget: target, isLast: false }), null);
+  // 表示役職が村ガールのバカは能力なし扱いになる。
+  const bakaVillager = { id: 6, name: "ノア", roleKey: "baka", fakeDisplayRoleKey: "villager", alive: true };
+  const bakaView = Logic.buildPnpNightActionView(bakaVillager, { rep, repTarget: target, isLast: false });
+  assert.equal(bakaView.step, "nightNoAction", "バカは表示役職で夜行動を判定する");
+  assert.ok(bakaView.html.includes("村ガール"));
+  assert.equal(Logic.buildPnpNightActionView(null, { rep, repTarget: target, isLast: false }), null);
+});
+
+test("buildPnpTurnBannerText：夜は役職名＋ヒント、投票は「投票：ヒント」、head は共通", () => {
+  const player = { id: 0, name: "ルナ", roleKey: "villager", alive: true };
+  assert.deepEqual(Logic.buildPnpTurnBannerText(player, { index: 0, kind: "night", roleName: "村ガール", hint: "夜は情報整理に集中" }), {
+    head: "P1（ルナ）の番",
+    text: "P1（ルナ）の番 — 村ガール：夜は情報整理に集中",
+  });
+  assert.deepEqual(Logic.buildPnpTurnBannerText(player, { index: 1, kind: "vote", hint: "投票しよう" }), {
+    head: "P2（ルナ）の番",
+    text: "P2（ルナ）の番 — 投票：投票しよう",
+  });
+});
+
+test("パス＆プレイの表示生成：入力を変更しない（純粋関数）", () => {
+  const player = { id: 1, name: "ミオ", roleKey: "mimic", alive: true };
+  const rep = { id: 2, name: "ユイ", roleKey: "fakeGirl", alive: true };
+  const target = { id: 3, name: "カノン", roleKey: "villager", alive: true };
+  const inputs = [
+    () => Logic.buildPnpCoverView(player, { index: 0, kind: "handoff" }),
+    () => Logic.buildPnpRoleView(player, [player], { index: 0, humanCount: 1, mode: "pnp", humanPlayerIds: [1] }),
+    () => Logic.buildPnpNightResultView(["結果A"]),
+    () => Logic.buildPnpNightActionView(player, { rep, repTarget: target, isLast: false }),
+    () => Logic.buildPnpTurnBannerText(player, { index: 0, kind: "night", roleName: "なりすまし", hint: "ヒント" }),
+  ];
+  for (const fn of inputs) {
+    const before = JSON.stringify([player, rep, target]);
+    const a = fn();
+    const b = fn();
+    assert.equal(JSON.stringify([player, rep, target]), before, "入力が変わっていない");
+    assert.equal(JSON.stringify(a), JSON.stringify(b), "同じ入力で同じ結果");
+  }
+});
+
+test("ブラウザ側のパス＆プレイ受け渡し画面は共有モジュールの表示生成と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
+  FB.setupGame();
+  const s = FB.state;
+  // 1人目のカバー画面
+  let player = s.players[s.humanPlayerIds[0]];
+  let view = FB.buildPnpCoverViewLogic(player, { index: s.pnpIndex, kind: "handoff" });
+  assert.equal(elements.get("pnpCoverText").innerHTML, view.coverText);
+  assert.equal(elements.get("pnpRevealBtn").textContent, view.revealBtnText);
+  // 1人目の役職画面
+  elements.get("pnpRevealBtn").onclick();
+  view = FB.buildPnpRoleViewLogic(player, s.players, { index: s.pnpIndex, humanCount: s.humanPlayerIds.length, mode: s.mode, humanPlayerIds: s.humanPlayerIds });
+  assert.equal(elements.get("pnpRoleTitle").textContent, view.title);
+  assert.equal(elements.get("pnpPlayerRole").innerHTML, view.roleHtml);
+  assert.equal(elements.get("pnpConfirmBtn").textContent, view.confirmBtnText);
+  // 2人目（最後の人）のカバー→役職画面
+  elements.get("pnpConfirmBtn").onclick();
+  player = s.players[s.humanPlayerIds[1]];
+  view = FB.buildPnpCoverViewLogic(player, { index: s.pnpIndex, kind: "handoff" });
+  assert.equal(elements.get("pnpCoverText").innerHTML, view.coverText);
+  elements.get("pnpRevealBtn").onclick();
+  view = FB.buildPnpRoleViewLogic(player, s.players, { index: s.pnpIndex, humanCount: s.humanPlayerIds.length, mode: s.mode, humanPlayerIds: s.humanPlayerIds });
+  assert.equal(elements.get("pnpConfirmBtn").textContent, "確認した（ゲーム開始）");
+  assert.equal(elements.get("pnpPlayerRole").innerHTML, view.roleHtml);
+  // 受け渡し完了後は夜のカバー画面
+  elements.get("pnpConfirmBtn").onclick();
+  assert.equal(s.pnpStep, "nightCover");
+  player = s.players[s.pnpNightQueue[s.pnpNightIndex]];
+  view = FB.buildPnpCoverViewLogic(player, { index: s.pnpNightIndex, kind: "night" });
+  assert.equal(elements.get("pnpCoverText").innerHTML, view.coverText);
+  assert.equal(elements.get("pnpRevealBtn").textContent, view.revealBtnText);
+});
+
+test("ブラウザ側のパス＆プレイ夜・投票の表示は共有モジュールの表示生成と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
+  FB.setupGame();
+  const s = FB.state;
+  const [h0, h1] = s.humanPlayerIds;
+  // 夜の順番を固定する：代表者（フェイクガール）→ 非代表者（なりすまし）。
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  s.players[h0].roleKey = "fakeGirl";
+  s.players[h1].roleKey = "mimic";
+  // 受け渡しを済ませて夜へ進む（役職は変えた後でもカバー画面は同じ）。
+  for (let i = 0; i < 2; i++) {
+    elements.get("pnpRevealBtn").onclick();
+    elements.get("pnpConfirmBtn").onclick();
+  }
+  assert.equal(s.pnpStep, "nightCover");
+  // 別レルムの配列は deepStrictEqual がプロトタイプ差で失敗するため JSON 比較にする。
+  assert.equal(JSON.stringify(s.pnpNightQueue), JSON.stringify([h0, h1]));
+  // 代表者の番：能力ありなのでゲーム画面へ。バナーはモジュールと同一。
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightAction");
+  let view = FB.buildPnpTurnBannerTextLogic(s.players[h0], { index: 0, kind: "night", roleName: "フェイクガール", hint: FB.getPhaseHint(FB.ROLES.fakeGirl) });
+  assert.equal(elements.get("factionText").textContent, view.head);
+  assert.equal(elements.get("pnpTurnBanner").textContent, view.text);
+  // 代表者が襲撃先を選ぶ（村ガールの誰か）。対象の確定は actionBtn。
+  const targetId = s.players.find((p) => p.roleKey === "villager" && p.alive).id;
+  FB.selectTarget(targetId);
+  elements.get("actionBtn").onclick();
+  assert.equal(s.pnpNightInputs[h0], targetId);
+  // 非代表者の番：合意確認画面がモジュールと同一。
+  assert.equal(s.pnpStep, "nightCover");
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightFakeAgree");
+  view = FB.buildPnpNightActionViewLogic(s.players[h1], { rep: s.players[h0], repTarget: s.players[targetId], isLast: true });
+  assert.equal(elements.get("pnpRoleTitle").textContent, view.title);
+  assert.equal(elements.get("pnpPlayerRole").innerHTML, view.html);
+  assert.equal(elements.get("pnpConfirmBtn").textContent, view.confirmBtnText);
+  // 合意して能力入力へ：なりすましの盗み見バナーもモジュールと同一。
+  elements.get("pnpConfirmBtn").onclick();
+  assert.equal(s.pnpStep, "nightFakeAbility");
+  view = FB.buildPnpTurnBannerTextLogic(s.players[h1], { index: 1, kind: "night", roleName: "なりすまし", hint: "盗み見：相手の本当の役職を調べる（インポスターの仲間は選べないよ）" });
+  assert.equal(elements.get("factionText").textContent, view.head);
+  assert.equal(elements.get("pnpTurnBanner").textContent, view.text);
+  // 盗み見の対象を選んで夜を終える。
+  const lookTarget = s.players.find((p) => p.id !== h1 && p.alive && !["fakeGirl", "mimic"].includes(p.roleKey)).id;
+  FB.selectTarget(lookTarget);
+  elements.get("actionBtn").onclick();
+  assert.equal(s.phase, "morning");
+});
+
+test("ブラウザ側のパス＆プレイ前夜の結果・能力なし・投票バナーは共有モジュールと同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2" } });
+  FB.setupGame();
+  const s = FB.state;
+  const [h0, h1] = s.humanPlayerIds;
+  s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; });
+  // 人間は全員村ガールだが、CPU にインポスターを1人残す（全員イノセント
+  // だと夜の解決直後にイノセント勝利で終わってしまうため）。
+  s.players.find((p) => !s.humanPlayerIds.includes(p.id)).roleKey = "fakeGirl";
+  // 受け渡しを済ませて夜へ。
+  for (let i = 0; i < 2; i++) {
+    elements.get("pnpRevealBtn").onclick();
+    elements.get("pnpConfirmBtn").onclick();
+  }
+  assert.equal(s.pnpStep, "nightCover");
+  // 前夜の結果がある人の番：結果画面がモジュールと同一で、表示後に消える。
+  s.pnpNightResults[h0] = ["占い結果：白", "追跡：なし"];
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightResult");
+  let view = FB.buildPnpNightResultViewLogic(["占い結果：白", "追跡：なし"]);
+  assert.equal(elements.get("pnpRoleTitle").textContent, view.title);
+  assert.equal(elements.get("pnpPlayerRole").innerHTML, view.html);
+  assert.equal(elements.get("pnpConfirmBtn").textContent, view.confirmBtnText);
+  // 別レルムの配列は deepStrictEqual がプロトタイプ差で失敗するため JSON 比較にする。
+  assert.equal(JSON.stringify(s.pnpNightResults[h0]), "[]");
+  // 結果確認後は能力なしの夜行動画面（村ガール）。
+  elements.get("pnpConfirmBtn").onclick();
+  assert.equal(s.pnpStep, "nightNoAction");
+  view = FB.buildPnpNightActionViewLogic(s.players[h0], { rep: null, repTarget: null, isLast: false });
+  assert.equal(elements.get("pnpRoleTitle").textContent, view.title);
+  assert.equal(elements.get("pnpPlayerRole").innerHTML, view.html);
+  assert.equal(elements.get("pnpConfirmBtn").textContent, view.confirmBtnText);
+  // 2人目も能力なしで夜を終える。
+  elements.get("pnpConfirmBtn").onclick();
+  assert.equal(s.pnpStep, "nightCover");
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "nightNoAction");
+  view = FB.buildPnpNightActionViewLogic(s.players[h1], { rep: null, repTarget: null, isLast: true });
+  assert.equal(elements.get("pnpConfirmBtn").textContent, "確認した（夜行動を終える）");
+  assert.equal(elements.get("pnpPlayerRole").innerHTML, view.html);
+  elements.get("pnpConfirmBtn").onclick();
+  assert.equal(s.phase, "morning");
+  // 投票のカバーとバナーもモジュールと同一。
+  s.phase = "vote";
+  FB.startPnpVote();
+  assert.equal(s.pnpStep, "voteCover");
+  let player = s.players[s.pnpVoteQueue[s.pnpVoteIndex]];
+  view = FB.buildPnpCoverViewLogic(player, { index: s.pnpVoteIndex, kind: "vote" });
+  assert.equal(elements.get("pnpCoverText").innerHTML, view.coverText);
+  assert.equal(elements.get("pnpRevealBtn").textContent, view.revealBtnText);
+  elements.get("pnpRevealBtn").onclick();
+  assert.equal(s.pnpStep, "voteAction");
+  view = FB.buildPnpTurnBannerTextLogic(player, { index: s.pnpVoteIndex, kind: "vote", hint: FB.getPhaseHint(FB.ROLES[player.roleKey]) });
+  assert.equal(elements.get("factionText").textContent, view.head);
+  assert.equal(elements.get("pnpTurnBanner").textContent, view.text);
+});

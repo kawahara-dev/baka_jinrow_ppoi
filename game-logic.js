@@ -1399,6 +1399,102 @@
     };
   }
 
+  // パス＆プレイの受け渡しカバーの表示データ。kind は "handoff"（役職確認）／
+  // "night"（夜行動）／"vote"（投票）。見出しは「次は P{n}（名前）さんの番です。」
+  // で共通し、後半の案内文とボタンの文言だけが場面で変わる。未知の kind は
+  // 役職確認として扱う。返すのは文言だけで、DOM には触らない純粋関数。
+  function buildPnpCoverView(player, { index, kind } = {}) {
+    const n = Number(index);
+    const num = Number.isFinite(n) ? n + 1 : 1;
+    const head = `次は <strong>P${num}（${player?.name ?? ""}）</strong>さんの番です。<br>`;
+    const caution = "周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。";
+    if (kind === "night") {
+      return { coverText: `${head}夜行動の時間です。${caution}`, revealBtnText: "タップして夜の番を始める" };
+    }
+    if (kind === "vote") {
+      return { coverText: `${head}投票の時間です。${caution}`, revealBtnText: "タップして投票の番を始める" };
+    }
+    return { coverText: `${head}${caution}`, revealBtnText: "タップして役職を見る" };
+  }
+
+  // パス＆プレイの役職確認画面の表示データ。役職の HTML は roleHtmlFor で
+  // 生成する（バカには表示役職だけ）。確認ボタンは最後の人だけ「ゲーム開始」。
+  // player がないときは null。返すのは表示データだけで、DOM には触らない
+  // 純粋関数。
+  function buildPnpRoleView(player, players, { index, humanCount, mode, humanPlayerIds } = {}) {
+    if (!player) return null;
+    return {
+      title: "あなたの役職",
+      roleHtml: roleHtmlFor(player, players, { mode, humanPlayerIds }),
+      confirmBtnText: Number(index) + 1 < Number(humanCount)
+        ? "確認した（次の人へ）"
+        : "確認した（ゲーム開始）",
+    };
+  }
+
+  // パス＆プレイの前夜の結果画面の表示データ。結果は本人だけに表示し、
+  // 公開ログには出さない。結果が空・配列でないときは null（呼び出し側は
+  // そのまま夜行動へ進む）。返すのは表示データだけで、DOM には触らない
+  // 純粋関数。
+  function buildPnpNightResultView(results) {
+    if (!Array.isArray(results) || !results.length) return null;
+    return {
+      title: "前夜の結果",
+      html: results.map(r => `<div>${r}</div>`).join(""),
+      confirmBtnText: "夜行動へ進む",
+    };
+  }
+
+  // パス＆プレイの夜行動画面の表示データ。インポスター非代表者の合意・相談、
+  // 能力なしの3通りを返す。能力ありの場合は null（呼び出し側はゲーム画面で
+  // 対象を選ぶ）。repTarget がない合意分岐は従来通り「相談」側になる。
+  // バカは実役職の陣営で判定するため、表示役職がインポスターでも合意・相談
+  // にはならない。返すのは表示データだけで、DOM には触らない純粋関数。
+  function buildPnpNightActionView(player, { rep, repTarget, isLast } = {}) {
+    if (!player) return null;
+    const effectiveKey = getEffectiveRoleKey(player);
+    const role = ROLES[effectiveKey];
+    const confirmLabel = isLast ? "確認した（夜行動を終える）" : "確認した（次の人へ）";
+    if (ROLES[player.roleKey].faction === "インポスター" && rep && rep.id !== player.id) {
+      if (repTarget) {
+        return {
+          step: "nightFakeAgree",
+          title: "夜行動",
+          html: `<strong>${player.name}（${role.name}）</strong><br>インポスターの仲間（${rep.name}）が今夜の襲撃先に <strong>${repTarget.name}</strong> を選びました。<br>この襲撃先で合意しますか？`,
+          confirmBtnText: "合意する（能力入力へ）",
+        };
+      }
+      return {
+        step: "nightFakeConsult",
+        title: "夜行動",
+        html: `<strong>${player.name}（${role.name}）</strong><br>インポスターの仲間（${rep.name}）と相談してください。<br>今夜の襲撃先は ${rep.name} が決めます。`,
+        confirmBtnText: "相談した（能力入力へ）",
+      };
+    }
+    if (!role.nightAction) {
+      return {
+        step: "nightNoAction",
+        title: "夜行動",
+        html: `<strong>${player.name}（${role.name}）</strong><br>今夜は能力がありません。朝まで静かに過ごしましょう。`,
+        confirmBtnText: confirmLabel,
+      };
+    }
+    return null;
+  }
+
+  // パス＆プレイの手番バナーの文言。head はゲーム画面の factionText と
+  // 同じ「P{n}（名前）の番」。kind "vote" は「投票：ヒント」、それ以外は
+  // 「役職名：ヒント」。返すのは文言だけで、DOM には触らない純粋関数。
+  function buildPnpTurnBannerText(player, { index, kind, roleName, hint } = {}) {
+    const n = Number(index);
+    const num = Number.isFinite(n) ? n + 1 : 1;
+    const head = `P${num}（${player?.name ?? ""}）の番`;
+    return {
+      head,
+      text: kind === "vote" ? `${head} — 投票：${hint}` : `${head} — ${roleName}：${hint}`,
+    };
+  }
+
   // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
   // 受け渡し画面で共通して使う。バカには表示役職だけを本物として見せる。
   function roleHtmlFor(player, players, opts) {
@@ -1780,6 +1876,11 @@
     DISCUSS_TIMER_LOW_SECONDS,
     formatDiscussTime,
     buildDiscussTimerView,
+    buildPnpCoverView,
+    buildPnpRoleView,
+    buildPnpNightResultView,
+    buildPnpNightActionView,
+    buildPnpTurnBannerText,
     buildRoleCardView,
     buildCardsView,
     buildStageView,
