@@ -660,6 +660,32 @@
     }
     #gameScreen .right-panel .screen { border: 2px solid rgba(255, 255, 255, 0.35); }
 
+    /* Feign風UI第2弾（その1）：結果画面も町のボード風ダークテーマに。
+       見出しはゴールド、行は半透明の白。基本ルール（.result-panel 等）は
+       そのまま残し、#gameScreen 内だけ上書きする（脱落行の基本色を
+       assert する既存テストを壊さないため）。 */
+    #gameScreen .result-panel {
+      background: linear-gradient(180deg, #2a2145 0%, #1d1733 100%);
+      border: 2px solid var(--town-deep);
+      color: #fff;
+      box-shadow: 0 12px 28px rgba(10, 6, 28, 0.45);
+    }
+    #gameScreen .result-title {
+      background: linear-gradient(90deg, var(--gold), var(--pink));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #gameScreen .result-sub { color: #cfc2ee; }
+    #gameScreen .result-highlight {
+      background: rgba(255, 201, 77, 0.14); border-color: rgba(255, 201, 77, 0.55); color: var(--gold);
+    }
+    #gameScreen .result-row {
+      background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.22); color: #fff;
+    }
+    #gameScreen .result-row .result-role { color: #cfc2ee; }
+    #gameScreen .result-row.dead { background: rgba(255, 255, 255, 0.05); }
+    #gameScreen .result-row.dead .result-name { color: #b0a6cc; }
+    #gameScreen .result-row.dead .result-role { color: #8f86ad; }
+
     .right-panel {
       display: grid;
       grid-template-columns: 1fr 1fr;

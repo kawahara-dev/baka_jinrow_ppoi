@@ -2065,6 +2065,43 @@ test("脱落アイコンのバッテン：脱落カードと結果行のアバ�
   assert.ok(!revivedCard.className.includes("dead"), "蘇生したカードから dead クラスが外れる");
 });
 
+test("Feign風UI第2弾：結果画面は町のボード風ダークテーマ", () => {
+  // 結果画面は #gameScreen の中にあるので、基本ルール（白いパネル）を
+  // そのまま残し、#gameScreen 内だけダークテーマで上書きする。
+  // （基本ルールの色を assert する既存テストを壊さないため。）
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  // 基本ルールは白いパネルのまま（上書き方式の前提）。
+  const basePanel = style.match(/\.result-panel \{[^}]*\}/)[0];
+  assert.match(basePanel, /background: linear-gradient\(180deg, #fff 0%, #fdf4ff 100%\)/);
+  // ゲーム画面内は濃紺グラデ＋白文字。
+  const panel = style.match(/#gameScreen \.result-panel \{[^}]*\}/)[0];
+  assert.match(panel, /background: linear-gradient\(180deg, #2a2145 0%, #1d1733 100%\)/);
+  assert.match(panel, /border: 2px solid var\(--town-deep\)/);
+  assert.match(panel, /color: #fff/);
+  // 見出しはフェーズ名と同じゴールド→ピンクのグラデ文字。
+  const title = style.match(/#gameScreen \.result-title \{[^}]*\}/)[0];
+  assert.match(title, /background: linear-gradient\(90deg, var\(--gold\), var\(--pink\)\)/);
+  assert.match(title, /background-clip: text/);
+  assert.match(title, /color: transparent/);
+  // サブ文言と役職名は薄紫、ハイライトはゴールド。
+  assert.match(style, /#gameScreen \.result-sub \{ color: #cfc2ee; \}/);
+  const highlight = style.match(/#gameScreen \.result-highlight \{[^}]*\}/)[0];
+  assert.match(highlight, /background: rgba\(255, 201, 77, 0\.14\)/);
+  assert.match(highlight, /border-color: rgba\(255, 201, 77, 0\.55\)/);
+  assert.match(highlight, /color: var\(--gold\)/);
+  // 行は半透明の白、脱落行はさらに薄く・名前と役職は淡いグレー紫。
+  const row = style.match(/#gameScreen \.result-row \{[^}]*\}/)[0];
+  assert.match(row, /background: rgba\(255, 255, 255, 0\.08\)/);
+  assert.match(row, /border-color: rgba\(255, 255, 255, 0\.22\)/);
+  assert.match(row, /color: #fff/);
+  assert.match(style, /#gameScreen \.result-row \.result-role \{ color: #cfc2ee; \}/);
+  const deadRow = style.match(/#gameScreen \.result-row\.dead \{[^}]*\}/)[0];
+  assert.match(deadRow, /background: rgba\(255, 255, 255, 0\.05\)/);
+  assert.match(style, /#gameScreen \.result-row\.dead \.result-name \{ color: #b0a6cc; \}/);
+  assert.match(style, /#gameScreen \.result-row\.dead \.result-role \{ color: #8f86ad; \}/);
+});
+
 test("役職アイコン: ROLES 全役職に仕様通りのアイコンがあり、重複・キャラ絵文字との衝突がない", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   const expected = {
