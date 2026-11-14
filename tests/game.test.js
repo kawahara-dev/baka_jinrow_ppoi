@@ -2183,6 +2183,44 @@ test("Feign風UI第2弾：ステージの町並みは家・街灯・夜の窓明
   assert.match(style, /\.stage \.wbody img \{ height: 74px; \}/);
 });
 
+test("Feign風UI第2弾：ログパネルはチャット／ノート風の見出しと配置", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  // 基本ルールはそのまま（白いパネル・.log の高さ）。上書き方式の前提。
+  const basePanel = style.match(/^\s*\.screen \{[^}]*\}/m)[0];
+  assert.match(basePanel, /background: var\(--panel\)/);
+  const baseLog = style.match(/^\s*\.log \{[^}]*\}/m)[0];
+  assert.match(baseLog, /background: #fcf9ff/);
+  assert.match(baseLog, /height: clamp\(220px, 34vh, 360px\)/);
+  // ゲーム画面内のログセクションは町のボード風ダークテーマ。
+  const section = style.match(/#gameScreen \.right-panel \.log-section \{[^}]*\}/)[0];
+  assert.match(section, /background: linear-gradient\(180deg, #2a2145 0%, #1d1733 100%\)/);
+  assert.match(section, /border: 2px solid var\(--town-deep\)/);
+  assert.match(section, /color: #fff/);
+  // 見出しはゴールド文字のヘッダー風（濃紺の帯）で、アイコン付き。
+  const toggle = style.match(/#gameScreen \.log-toggle \{[^}]*\}/)[0];
+  assert.match(toggle, /background: rgba\(20, 14, 38, 0\.55\)/);
+  assert.match(toggle, /border: 1px solid rgba\(255, 255, 255, 0\.25\)/);
+  assert.match(toggle, /color: var\(--gold\)/);
+  assert.match(style, /#gameScreen #dialogueLogToggle::before \{ content: "💬 "; \}/);
+  assert.match(style, /#gameScreen #actionLogToggle::before \{ content: "📝 "; \}/);
+  // ログ本体は濃紺の半透明＋白文字。
+  const log = style.match(/#gameScreen \.log \{[^}]*\}/)[0];
+  assert.match(log, /background: rgba\(20, 14, 38, 0\.55\)/);
+  assert.match(log, /border-color: rgba\(255, 255, 255, 0\.25\)/);
+  assert.match(log, /color: #fff/);
+  // セリフの各行は吹き出し風、行動ログの各行はノート風（左に紫の罫）。
+  const bubble = style.match(/#gameScreen #dialogueLog p \{[^}]*\}/)[0];
+  assert.match(bubble, /background: rgba\(255, 255, 255, 0\.08\)/);
+  assert.match(bubble, /border-radius: 12px/);
+  const note = style.match(/#gameScreen #actionLog p \{[^}]*\}/)[0];
+  assert.match(note, /border-left: 3px solid #cfc2ee/);
+  // .log の高さ・折りたたみの既存ルールは変わらない。
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?\.log \{ height: min\(24vh, 220px\);/);
+  assert.match(html, /<button type="button" class="log-toggle" id="dialogueLogToggle" aria-expanded="false" aria-controls="dialogueLog">▸ セリフ<\/button>/);
+  assert.match(html, /<button type="button" class="log-toggle" id="actionLogToggle" aria-expanded="false" aria-controls="actionLog">▸ 行動ログ<\/button>/);
+});
+
 test("役職アイコン: ROLES 全役職に仕様通りのアイコンがあり、重複・キャラ絵文字との衝突がない", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   const expected = {

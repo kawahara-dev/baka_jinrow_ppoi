@@ -741,6 +741,37 @@
       .lobby-roster { order: -1; }
     }
 
+    /* Feign風UI第2弾（その4）：ログパネルをチャット／ノート風に。
+       見出しはチャットのヘッダー風（濃紺の帯＋ゴールド文字＋アイコン）、
+       セリフの各行は吹き出し風、行動ログの各行はノート風（左に紫の罫）。
+       基本ルール（白いパネル・.log の高さ）はそのまま残し、
+       #gameScreen 内だけ上書きする。レイアウト寸法は従来のまま。 */
+    #gameScreen .right-panel .log-section {
+      background: linear-gradient(180deg, #2a2145 0%, #1d1733 100%);
+      border: 2px solid var(--town-deep);
+      color: #fff;
+    }
+    #gameScreen .log-toggle {
+      background: rgba(20, 14, 38, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
+      padding: 6px 10px;
+      color: var(--gold);
+    }
+    #gameScreen #dialogueLogToggle::before { content: "💬 "; }
+    #gameScreen #actionLogToggle::before { content: "📝 "; }
+    #gameScreen .log {
+      background: rgba(20, 14, 38, 0.55);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: #fff;
+    }
+    #gameScreen #dialogueLog p {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 6px 10px;
+    }
+    #gameScreen #actionLog p { border-left: 3px solid #cfc2ee; padding-left: 8px; }
+
     .right-panel {
       display: grid;
       grid-template-columns: 1fr 1fr;
