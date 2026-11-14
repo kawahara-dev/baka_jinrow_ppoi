@@ -1827,6 +1827,36 @@
     if (!player) return "";
     return `<span class="cutin-face${small ? " small" : ""}"><span>${player.icon}</span>${iconImg ? `<img class="avatar-img" data-icon-slug="${slug}" src="${iconImg}" alt="${player.name}" onerror="this.remove()">` : ""}</span>`;
   }
+  // カットイン1件分の表示データを返す純粋関数。タイトル・サブ・種類の
+  // ほか、顔の HTML（自分の顔＋相手の顔（小））、系統モーション、
+  // 画面振動の有無、効果音の名前をまとめる。顔の HTML は
+  // buildCutinFaceHtml 経由で、キャラの顔だけを出す（役職は出さない）。
+  // item なしは null。charId があっても players にいないキャラの顔は
+  // 空文字になる（ブラウザ側と同じく顔あり扱いで箱だけ出す）。
+  // 画面振動は bomb／attack のときだけ。DOM への代入・タイマー・
+  // クリックはブラウザ側（pumpCutin）が行う。
+  function buildCutinView(item, players, iconImgs, iconSlugs) {
+    if (!item) return null;
+    const faceHtml = (id, small) => buildCutinFaceHtml(
+      players ? players[id] : undefined,
+      iconImgs && iconSlugs ? iconImgs[iconSlugs[id]] : undefined,
+      iconSlugs ? iconSlugs[id] : undefined, small);
+    const hasChar = item.charId !== null && item.charId !== undefined;
+    const charHtml = hasChar
+      ? faceHtml(item.charId, false)
+        + (item.targetCharId !== null && item.targetCharId !== undefined ? faceHtml(item.targetCharId, true) : "")
+      : "";
+    return {
+      title: item.title,
+      sub: item.sub,
+      kind: item.kind,
+      hasChar,
+      charHtml,
+      motion: item.motion || "",
+      shake: item.kind === "bomb" || item.kind === "attack",
+      sfx: cutinSfxFor(item.kind),
+    };
+  }
   // 吹き出しの表示時間（ミリ秒）。議論の CPU セリフとマウス公開が
   // 1件ずつ発言者のカードの上にこの時間だけ出る。DOM を使わない定数。
   const SPEECH_BUBBLE_MS = 2200;
@@ -1923,6 +1953,7 @@
     cutinSfxFor,
     buildCutinItem,
     buildCutinFaceHtml,
+    buildCutinView,
     SPEECH_BUBBLE_MS,
     buildSpeechBubbleItem,
     buildSpeechBubbleView,
