@@ -1093,7 +1093,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2260,11 +2260,9 @@
   }
   // カットインに載せる顔。カードと同じ顔画像（ICON_IMGS）＋絵文字
   // フォールバックで、キャラの顔だけを出す（役職は出さない）。
+  // 顔 HTML の生成は共有モジュール（buildCutinFaceHtml）に切り出し済み。
   function cutinFaceHtml(playerId, small) {
-    const p = state.players[playerId];
-    if (!p) return "";
-    const img = ICON_IMGS[ICON_SLUGS[playerId]];
-    return `<span class="cutin-face${small ? " small" : ""}"><span>${p.icon}</span>${img ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[playerId]}" src="${img}" alt="${p.name}" onerror="this.remove()">` : ""}</span>`;
+    return buildCutinFaceHtmlLogic(state.players[playerId], ICON_IMGS[ICON_SLUGS[playerId]], ICON_SLUGS[playerId], small);
   }
   // opts: { charId, targetCharId, motion }。charId はそのカットイン自体が
   // 公開しているキャラだけ（被害者・助かった人・マウス公開の本人・追放
@@ -2290,12 +2288,10 @@
     }
   }
   function showCutin(title, sub, kind, onShow, opts) {
-    const o = opts || {};
-    cutinQueue.push({ title, sub: sub || "", kind: kind || "phase",
-      onShow: typeof onShow === "function" ? onShow : null,
-      charId: typeof o.charId === "number" ? o.charId : null,
-      targetCharId: typeof o.targetCharId === "number" ? o.targetCharId : null,
-      motion: typeof o.motion === "string" ? o.motion : null });
+    // キュー項目の生成は共有モジュール（buildCutinItem）に切り出し済み。
+    // onShow は関数なのでブラウザ側で付け足す。
+    cutinQueue.push({ ...buildCutinItemLogic(title, sub, kind, opts),
+      onShow: typeof onShow === "function" ? onShow : null });
     pumpCutin();
   }
   function pumpCutin() {
@@ -2338,7 +2334,8 @@
       band.style.animation = "";
     }
     if (item.kind === "bomb" || item.kind === "attack") shakeScreen();
-    sfx({ attack: "attack", bomb: "bomb", protect: "protect", info: "pop", phase: "phase" }[item.kind] || "pop");
+    // 効果音の種類は共有モジュール（cutinSfxFor）に切り出し済み。
+    sfx(cutinSfxForLogic(item.kind));
     const done = () => {
       box.classList.add("hidden");
       const charBox = el("cutinChar");
