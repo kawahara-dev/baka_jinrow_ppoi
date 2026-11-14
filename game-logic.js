@@ -1114,6 +1114,14 @@
     return lines.slice(0, 2);
   }
 
+  // 結果画面のハイライト欄の HTML。ハイライト文言の配列を
+  // `<div class="result-highlight">…</div>` で包んでつなげるだけ。
+  // index.html の showResults に残っていた最後のテンプレート組み立て。
+  function buildResultHighlightsView(highlights) {
+    if (!Array.isArray(highlights)) return "";
+    return highlights.map(h => `<div class="result-highlight">${h}</div>`).join("");
+  }
+
   // 廃止済み役職の旧戦績データを表示するための名前（現行の ROLES にはない）。
   const LEGACY_ROLE_NAMES = { clumsySeer: "うっかり占い師" };
   // 2026-11-12 の陣営改名（ピュア→イノセント、フェイク→インポスター）より前に
@@ -1808,6 +1816,15 @@
       return { id: def.id, name: def.name, hint: def.hint, unlocked, icon: unlocked ? "🏅" : "🔒" };
     });
   }
+
+  // 実績チップ一覧の HTML。buildAchievementsView の表示データを
+  // チップの span にしてつなげる。未達成は locked クラス。
+  // index.html の renderAchievements に残っていた最後のテンプレート組み立て。
+  function buildAchievementsChipsView(achievements) {
+    if (!Array.isArray(achievements)) return "";
+    return achievements.map(a =>
+      `<span class="stats-chip ${a.unlocked ? "" : "locked"}" title="${a.hint}">${a.icon} ${a.name}</span>`).join("");
+  }
   // カットインの効果音：種類ごとの対応表。phase は専用の音、info は
   // 汎用の pop。表にない種類（win など）も pop。DOM を使わない純粋関数。
   const CUTIN_SFX = { attack: "attack", bomb: "bomb", protect: "protect", info: "pop", phase: "phase" };
@@ -2102,6 +2119,7 @@
     cpuVotePick,
     planNightActions,
     buildHighlights,
+    buildResultHighlightsView,
     LEGACY_ROLE_NAMES,
     LEGACY_FACTION_NAMES,
     migrateFactionWins,
@@ -2145,6 +2163,7 @@
     ACHIEVEMENT_DEFS,
     isAchievementUnlocked,
     buildAchievementsView,
+    buildAchievementsChipsView,
     CUTIN_SFX,
     cutinSfxFor,
     buildCutinItem,

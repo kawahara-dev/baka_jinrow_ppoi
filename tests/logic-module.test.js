@@ -2434,8 +2434,7 @@ test("ブラウザ側の renderAchievements は共有モジュールの buildAch
   const view = Logic.buildAchievementsView(seeded);
   assert.equal(JSON.stringify(FB.buildAchievementsViewLogic(seeded)), JSON.stringify(view), "ハーネス経由の buildAchievementsView とも同一");
   FB.renderAchievements();
-  const expected = view.map(a =>
-    `<span class="stats-chip ${a.unlocked ? "" : "locked"}" title="${a.hint}">${a.icon} ${a.name}</span>`).join("");
+  const expected = Logic.buildAchievementsChipsView(view);
   assert.equal(elements.get("achvList").innerHTML, expected);
   // 0戦（未シード）の読み込みでは全チップが 🔒 になる。
   const fresh = loadGame({ seedSettings: BASE_SETTINGS });
@@ -3752,4 +3751,74 @@ test("ブラウザ側の revealMouse は共有モジュールの buildRevealMous
   assert.ok(actionLines.includes(view.logText), `行動ログに公開行がある: ${actionLines.join(" / ")}`);
   assert.equal(elements.get("cutinTitle").textContent, view.cutin.title);
   assert.equal(elements.get("cutinSub").textContent, view.cutin.sub);
+});
+
+test("buildResultHighlightsView：ハイライト文言を div で包んでつなげる", () => {
+  const html = Logic.buildResultHighlightsView(["💣 Aの爆弾で2人が倒れた！", "🛡️ 護衛が1回、襲撃を防いだ"]);
+  assert.equal(html,
+    `<div class="result-highlight">💣 Aの爆弾で2人が倒れた！</div>` +
+    `<div class="result-highlight">🛡️ 護衛が1回、襲撃を防いだ</div>`);
+  assert.equal(Logic.buildResultHighlightsView(["📅 3日目で決着"]),
+    `<div class="result-highlight">📅 3日目で決着</div>`);
+});
+
+test("buildResultHighlightsView：空・非配列は空文字・純粋性", () => {
+  assert.equal(Logic.buildResultHighlightsView([]), "");
+  assert.equal(Logic.buildResultHighlightsView(null), "");
+  assert.equal(Logic.buildResultHighlightsView(undefined), "");
+  assert.equal(Logic.buildResultHighlightsView("文字列"), "");
+  const input = ["a", "b"];
+  const before = JSON.stringify(input);
+  const a = Logic.buildResultHighlightsView(input);
+  const b = Logic.buildResultHighlightsView(input);
+  assert.equal(a, b, "同じ入力で同じ結果");
+  assert.equal(JSON.stringify(input), before, "入力を変更しない");
+});
+
+test("buildAchievementsChipsView：達成・未達成のチップ HTML", () => {
+  const view = [
+    { id: "first-win", name: "初勝利", hint: "初めて勝つ", unlocked: true, icon: "🏅" },
+    { id: "wins10", name: "10勝", hint: "10回勝つ", unlocked: false, icon: "🔒" },
+  ];
+  assert.equal(Logic.buildAchievementsChipsView(view),
+    `<span class="stats-chip " title="初めて勝つ">🏅 初勝利</span>` +
+    `<span class="stats-chip locked" title="10回勝つ">🔒 10勝</span>`);
+});
+
+test("buildAchievementsChipsView：空・非配列は空文字・純粋性", () => {
+  assert.equal(Logic.buildAchievementsChipsView([]), "");
+  assert.equal(Logic.buildAchievementsChipsView(null), "");
+  assert.equal(Logic.buildAchievementsChipsView(undefined), "");
+  const view = Logic.buildAchievementsView({ games: 1, wins: 1, byRole: {}, factionWins: {}, steals: 0, streak: 1, bestStreak: 1 });
+  const before = JSON.stringify(view);
+  const a = Logic.buildAchievementsChipsView(view);
+  const b = Logic.buildAchievementsChipsView(view);
+  assert.equal(a, b, "同じ入力で同じ結果");
+  assert.equal(JSON.stringify(view), before, "入力を変更しない");
+});
+
+test("ブラウザ側の showResults は共有モジュールの buildResultHighlightsView と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  FB.showResults("🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
+  const expected = Logic.buildResultHighlightsView(FB.buildHighlights());
+  assert.equal(elements.get("resultHighlights").innerHTML, expected);
+  assert.ok(expected.length > 0, "ハイライト欄が空でない");
+});
+
+test("ブラウザ側の renderAchievements は共有モジュールの buildAchievementsChipsView と同一に描く", () => {
+  const seeded = {
+    games: 12, wins: 10,
+    byRole: {
+      guardian: { games: 5, wins: 2 }, apprenticeSeer: { games: 3, wins: 1 },
+      tracker: { games: 2, wins: 1 }, police: { games: 1, wins: 1 }, lookout: { games: 1, wins: 1 },
+    },
+    factionWins: { "イノセント": 8, "インポスター": 2 }, steals: 1, streak: 3, bestStreak: 3,
+  };
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS, seedStorage: { fakeBloomStats: JSON.stringify(seeded) } });
+  const view = Logic.buildAchievementsView(seeded);
+  assert.equal(JSON.stringify(FB.buildAchievementsViewLogic(seeded)), JSON.stringify(view), "ハーネス経由の buildAchievementsView とも同一");
+  assert.equal(JSON.stringify(FB.buildAchievementsChipsViewLogic(view)), JSON.stringify(Logic.buildAchievementsChipsView(view)), "ハーネス経由の buildAchievementsChipsView とも同一");
+  FB.renderAchievements();
+  assert.equal(elements.get("achvList").innerHTML, Logic.buildAchievementsChipsView(view));
 });
