@@ -3070,3 +3070,70 @@ test("ブラウザ側のパス＆プレイ前夜の結果・能力なし・投�
   assert.equal(elements.get("factionText").textContent, view.head);
   assert.equal(elements.get("pnpTurnBanner").textContent, view.text);
 });
+
+// ---- フェーズ0第25歩：結果画面の行 HTML の抽出 ----
+
+test("buildResultRowsView：行 HTML は旧版 showResults のテンプレートとバイト同一", () => {
+  const summary = Logic.buildResultSummary(RESULT_PLAYERS, { winText: INNOCENT_WIN, mode: "solo", playerId: 0, humanCount: 1 });
+  const iconImgs = { [Logic.ICON_SLUGS[0]]: "data:image/webp;base64,AAA", [Logic.ICON_SLUGS[2]]: "data:image/webp;base64,BBB" };
+  // 旧版 showResults の行 map をそのまま再現した期待値。
+  const expected = summary.rows.map((r) => {
+    const img = iconImgs[Logic.ICON_SLUGS[r.id]];
+    return `<div class="result-row ${r.alive ? "" : "dead"} ${r.isWinner ? "winner" : "loser"}">
+        <div class="avatar"><span>${r.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${r.name}">` : ""}</div>
+        <div><div class="result-name">${r.name}${r.isMe ? "（あなた）" : ""}<span class="faction-chip ${r.chipClass}">${r.faction}</span></div>
+        <div class="result-role">${Logic.roleIconButtonHtml(r.roleKey)} ${r.roleName}${r.displayNote}${r.clumsyNote}</div></div>
+        <div class="result-status">${r.status}</div>
+      </div>`;
+  }).join("");
+  assert.equal(Logic.buildResultRowsView(summary.rows, iconImgs), expected);
+});
+
+test("buildResultRowsView：勝敗クラス・（あなた）・注記・顔画像の有無", () => {
+  const summary = Logic.buildResultSummary(RESULT_PLAYERS, { winText: INNOCENT_WIN, mode: "solo", playerId: 0, humanCount: 1 });
+  const html = Logic.buildResultRowsView(summary.rows, { [Logic.ICON_SLUGS[0]]: "data:image/webp;base64,AAA" });
+  // 生存の勝者は winner、脱落の敗者は dead loser。
+  assert.ok(html.includes('class="result-row  winner"'), `勝者の行: ${html}`);
+  assert.ok(html.includes('class="result-row dead loser"'), `脱落した敗者の行: ${html}`);
+  assert.ok(html.includes("ルナ（あなた）"), "自分の行に（あなた）が付く");
+  assert.equal(html.split("（あなた）").length - 1, 1, "（あなた）は1行だけ");
+  assert.ok(html.includes("（表示：ドクター）"), "バカの表示注記がある");
+  assert.ok(html.includes("（実はうっかり個体でした）"), "うっかり個体の注記がある");
+  assert.ok(html.includes('<img class="avatar-img" src="data:image/webp;base64,AAA" alt="ルナ">'), "顔画像がある行には img が出る");
+  assert.ok(!html.includes("<span>🐱</span><img"), "顔画像がない行には img が出ない");
+  assert.ok(html.includes('data-role-info="guardian"'), "役職アイコンボタンがある");
+  assert.ok(html.includes("2日目に脱落（追放）"), "脱落の生死が出る");
+});
+
+test("buildResultRowsView：行が空・null は空文字", () => {
+  assert.equal(Logic.buildResultRowsView([], {}), "");
+  assert.equal(Logic.buildResultRowsView(null), "");
+  assert.equal(Logic.buildResultRowsView(undefined), "");
+});
+
+test("buildResultRowsView：入力を変更しない（純粋関数）", () => {
+  const summary = Logic.buildResultSummary(RESULT_PLAYERS, { winText: INNOCENT_WIN, mode: "solo", playerId: 0, humanCount: 1 });
+  const iconImgs = { [Logic.ICON_SLUGS[0]]: "data:image/webp;base64,AAA" };
+  const before = JSON.stringify([summary.rows, iconImgs]);
+  const a = Logic.buildResultRowsView(summary.rows, iconImgs);
+  const b = Logic.buildResultRowsView(summary.rows, iconImgs);
+  assert.equal(JSON.stringify([summary.rows, iconImgs]), before, "入力が変わっていない");
+  assert.equal(a, b, "同じ入力で同じ結果");
+});
+
+test("ブラウザ側の showResults の行 HTML は共有モジュールと同一になる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const baka = s.players.find((p) => p.roleKey === "baka");
+  baka.fakeDisplayRoleKey = "guardian";
+  const seer = s.players.find((p) => p.roleKey === "apprenticeSeer");
+  seer.clumsy = true;
+  s.playerId = seer.id;
+  const input = { winText: INNOCENT_WIN, mode: s.mode, playerId: s.playerId, humanCount: s.humanPlayerIds.length };
+  const expected = Logic.buildResultSummary(s.players, input);
+  FB.showResults(INNOCENT_WIN);
+  // ハーネスでは顔画像が読み込まれない（ICON_IMGS は空）ため空の map で一致する。
+  assert.equal(elements.get("resultRows").innerHTML, FB.buildResultRowsViewLogic(expected.rows, {}));
+  assert.equal(elements.get("resultRows").innerHTML, Logic.buildResultRowsView(expected.rows, {}));
+});
