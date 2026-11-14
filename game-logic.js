@@ -1880,6 +1880,37 @@
     if (phase !== "discussion") return { action: "drop" };
     return { action: "show", item: queue[0] };
   }
+  // 画面振動（カットインの bomb／attack 時と共通の演出）。クラス名と
+  // 振動時間だけを返す純粋関数。クラスの付け外しとタイマーはブラウザ側
+  // （shakeScreen）が行う。
+  const SHAKE_CLASS = "shake";
+  const SHAKE_MS = 500;
+  function buildShakeView() {
+    return { className: SHAKE_CLASS, ms: SHAKE_MS };
+  }
+  // 紙吹雪（勝利時の celebrate）の表示データ。色・枚数・消えるまでの
+  // 時間は固定。1枚ごとの横位置・落下の遅れ・落下時間は乱数で決まる
+  // ため、random を引数で受け取る（既定は Math.random）。要素の生成・
+  // 追加・削除はブラウザ側（celebrate）が行う。
+  const CONFETTI_COLORS = ["#ff6fb3", "#b79bff", "#ffd7ec", "#8be0b0", "#ffe08a"];
+  const CONFETTI_COUNT = 26;
+  const CONFETTI_PIECE_CLASS = "confetti-piece";
+  const CONFETTI_REMOVE_MS = 4600;
+  function buildConfettiPiece(index, random) {
+    const rnd = typeof random === "function" ? random : Math.random;
+    return {
+      className: CONFETTI_PIECE_CLASS,
+      left: `${rnd() * 100}%`,
+      background: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
+      delay: `${rnd() * 0.5}s`,
+      duration: `${2.2 + rnd() * 1.6}s`,
+    };
+  }
+  function buildConfettiView(random) {
+    const pieces = [];
+    for (let i = 0; i < CONFETTI_COUNT; i++) pieces.push(buildConfettiPiece(i, random));
+    return pieces;
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1958,5 +1989,14 @@
     buildSpeechBubbleItem,
     buildSpeechBubbleView,
     pickNextSpeechBubble,
+    SHAKE_CLASS,
+    SHAKE_MS,
+    buildShakeView,
+    CONFETTI_COLORS,
+    CONFETTI_COUNT,
+    CONFETTI_PIECE_CLASS,
+    CONFETTI_REMOVE_MS,
+    buildConfettiPiece,
+    buildConfettiView,
   };
 });
