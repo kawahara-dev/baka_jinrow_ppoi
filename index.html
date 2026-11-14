@@ -1086,7 +1086,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1707,61 +1707,28 @@
 
   // Dramatise the night as a short cut-in recap. Only outcomes the game
   // already announces publicly are shown; who acted stays secret.
+  // 出すカットインの組み立ては共有モジュール（buildNightCutinsView）
+  // に切り出し済み。表示時モーションは記述子を見てブラウザ側で呼ぶ。
   function nightCutins(me, target, winAfterNight) {
-    // パス＆プレイでは個人の夜行動カットインは出さない（誰が何をしたか
-    // が全員に見えてしまうため）。公開済みの結果だけを出す。
-    if (state.mode !== "pnp") {
-      const myType = state.nightActionTypes?.[me.id] || ROLES[getEffectiveRoleKey(me)].nightAction?.type;
-      if (state.humanBlocked) {
-        showCutin("✋ 妨害された！", "今夜は行動できなかった…", "attack");
-      } else if (myType) {
-        const meta = {
-          investigate: ["🔍 調査", "info"], protect: ["🛡️ 護衛", "protect"],
-          track: ["👣 追跡", "info"], attack: ["🗡️ 襲撃", "attack"],
-          block: ["✋ 妨害", "info"], spy: ["👀 盗み見", "info"],
-          plant: ["💣 爆弾設置", "bomb"], lookout: ["🔭 見張り", "info"],
-          trap: ["🪤 罠設置", "info"], revive: ["💉 診察", "protect"]
-        }[myType];
-        if (meta) showCutin(meta[0], `→ ${target.name}`, meta[1],
-          () => stageOwnActionMotion(me.id, target.id, myType),
-          { charId: me.id, targetCharId: target.id, motion: OWN_ACTION_FAMILIES[myType] });
-      } else {
-        showCutin("🌙 夜行動", "あなたは静かに夜を過ごした", "phase");
-      }
+    const view = buildNightCutinsViewLogic(state, me, target, winAfterNight);
+    for (const item of view.items) {
+      const desc = item.onShow;
+      showCutin(item.title, item.sub, item.kind,
+        desc ? () => runNightCutinMotion(desc) : null,
+        { charId: item.charId, targetCharId: item.targetCharId, motion: item.motion });
     }
-    if (state.nightReport?.type === "eliminated") {
-      const vid = state.nightReport.victimId;
-      showCutin("🌙 夜の襲撃", `${state.players[vid].name} が倒れた…`, "attack", () => {
-        stageGhostWalker(vid, "motion-flinch");
-        stageFlashRed();
-      }, { charId: vid });
-    } else if (state.nightReport?.type === "blocked") {
-      showCutin("🛡️ 襲撃は防がれた！", "誰かが守り切った", "protect");
-    }
-    for (const vid of state.bombReport?.explodedVictims || []) {
-      showCutin("💣 爆弾が爆発！", `${state.players[vid].name} が巻き込まれた…`, "bomb",
-        () => stageGhostWalker(vid, "motion-blast"), { charId: vid });
-    }
-    if (state.bombReport?.fizzled) showCutin("💣 爆弾は不発だった", "護衛が爆発を防いだ", "protect");
-    if (state.trapReport) {
-      // 表示時コールバックはキューに残って遅れて発火するため、対象 id は
-      // ここで値として固定する（次の夜・次の試合で state が置き換わっても
-      // 古い報告を読まない）。
-      const trapAttackerId = state.trapReport.attackerId;
-      showCutin("🪤 罠が作動！", "襲撃者が道連れになった", "attack",
-        () => stageGhostWalker(trapAttackerId, "motion-trap"),
-        { charId: trapAttackerId });
-    }
-    if (state.doctorReport) {
-      const revivedId = state.doctorReport.victimId;
-      showCutin("💉 蘇生した！", `${state.players[revivedId].name} が助かった`, "protect",
-        () => stageEventMotion(revivedId, "motion-revive"),
-        { charId: revivedId });
-    }
-    if (winAfterNight) {
-      showCutin(winAfterNight, "", "win");
-      celebrate();
-    }
+    if (view.celebrate) celebrate();
+  }
+  // 夜カットインの表示時モーションを実行する。記述子の対象 id は
+  // 組み立て時に値として固定済みのため、キューに残って遅れて発火
+  // しても次の夜・次の試合の報告を読まない。
+  function runNightCutinMotion(desc) {
+    if (!desc) return;
+    if (desc.kind === "ownAction") stageOwnActionMotion(desc.meId, desc.targetId, desc.type);
+    else if (desc.kind === "ghost") {
+      stageGhostWalker(desc.victimId, desc.motion);
+      if (desc.flash) stageFlashRed();
+    } else if (desc.kind === "revive") stageEventMotion(desc.victimId, desc.motion);
   }
 
   // 夜の解決そのものは共有モジュール（resolveNightActions）に切り出し済み。
