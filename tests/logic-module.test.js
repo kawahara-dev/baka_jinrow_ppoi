@@ -1811,6 +1811,34 @@ test("buildCardsView：空・null は空配列、入力の players を変更し�
   assert.equal(JSON.stringify(players), before);
 });
 
+test("buildCardsView：playerId を渡すと自分のカードだけ「あなた」バッジと me クラスが付く", () => {
+  const players = [
+    { id: 0, name: "ルナ", icon: Logic.PLAYER_ICONS[0], roleKey: "apprenticeSeer", alive: true, voted: false },
+    { id: 1, name: "ミオ", icon: Logic.PLAYER_ICONS[1], roleKey: "fakeGirl", alive: true, voted: false },
+    { id: 2, name: "ユイ", icon: Logic.PLAYER_ICONS[2], roleKey: "mimic", alive: false, voted: false },
+  ];
+  const views = Logic.buildCardsView(players, { playerId: 1 });
+  assert.equal(views[0].isMe, false);
+  assert.ok(!views[0].className.includes("me"), views[0].className);
+  assert.ok(!views[0].innerHtml.includes("あなた"), "他人のカードにバッジは出ない");
+  assert.equal(views[1].isMe, true);
+  assert.ok(views[1].className.includes("me"), views[1].className);
+  assert.ok(views[1].innerHtml.includes(`<span class="me-badge">あなた</span>`), views[1].innerHtml);
+  assert.equal(views[1].ariaLabel, "ミオ（あなた）、？、生存中");
+  // 脱落した自分のカードにもバッジは残る。
+  const deadMe = Logic.buildCardsView(players, { playerId: 2 })[2];
+  assert.equal(deadMe.isMe, true);
+  assert.ok(deadMe.innerHtml.includes("あなた"), "脱落後も自分のカードと分かる");
+  // playerId が null（パス＆プレイ）なら誰にも付かない。
+  const pnpViews = Logic.buildCardsView(players, { playerId: null });
+  assert.ok(pnpViews.every(v => v.isMe === false));
+  assert.ok(!pnpViews.some(v => v.innerHtml.includes("あなた")));
+  // playerId を渡さなければ従来と完全に同じ（クラスは "card   "）。
+  const plain = Logic.buildCardsView(players, {});
+  assert.equal(plain[0].className, "card   ");
+  assert.ok(!plain[0].innerHtml.includes("あなた"));
+});
+
 test("ブラウザ側の draw は共有モジュールの buildCardsView と同一のカードを描く", () => {
   const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
   FB.setupGame();
@@ -1819,7 +1847,7 @@ test("ブラウザ側の draw は共有モジュールの buildCardsView と同�
     FB.draw();
     // ハーネスでは ICON_IMGS が空（fetch が失敗扱い）のため、モジュール
     // 側にも iconImgs: {} を渡して比べる。
-    const views = Logic.buildCardsView(s.players, { selectedId: s.selectedId, iconImgs: {} });
+    const views = Logic.buildCardsView(s.players, { selectedId: s.selectedId, iconImgs: {}, playerId: s.mode === "pnp" ? null : s.playerId });
     const cards = elements.get("cards").children;
     assert.equal(cards.length, s.players.length, `${label}：カードの枚数`);
     for (let i = 0; i < views.length; i++) {
@@ -1837,7 +1865,7 @@ test("ブラウザ側の draw は共有モジュールの buildCardsView と同�
     // 別レルムのオブジェクトは deepStrictEqual がプロトタイプ差で
     // 失敗するため JSON で比べる（PR #80 の教訓と同じ）。
     assert.equal(
-      JSON.stringify(FB.buildCardsViewLogic(s.players, { selectedId: s.selectedId, iconImgs: {} })),
+      JSON.stringify(FB.buildCardsViewLogic(s.players, { selectedId: s.selectedId, iconImgs: {}, playerId: s.mode === "pnp" ? null : s.playerId })),
       JSON.stringify(views),
       `${label}：ハーネス経由のモジュール関数とも同一`
     );
@@ -1890,6 +1918,26 @@ test("buildStageView：空・null は空配列、入力の players を変更し�
   const before = JSON.stringify(players);
   Logic.buildStageView(players);
   assert.equal(JSON.stringify(players), before);
+});
+
+test("buildStageView：playerId を渡すと自分の歩行者だけ ▼ マーカーと me クラスが付く", () => {
+  const players = [
+    { id: 0, name: "ルナ", roleKey: "apprenticeSeer", alive: true },
+    { id: 1, name: "ミオ", roleKey: "fakeGirl", alive: true },
+    { id: 2, name: "ユイ", roleKey: "mimic", alive: false },
+  ];
+  const views = Logic.buildStageView(players, { playerId: 1 });
+  assert.equal(views.length, 2, "脱落者は出ない（従来どおり）");
+  assert.equal(views[0].isMe, false);
+  assert.ok(views[0].html.includes('class="walker"'), views[0].html);
+  assert.ok(!views[0].html.includes("wme"), "他人の歩行者にマーカーは出ない");
+  assert.equal(views[1].isMe, true);
+  assert.ok(views[1].html.includes('class="walker me"'), views[1].html);
+  assert.ok(views[1].html.includes(`<span class="wme" aria-hidden="true">▼</span>`), views[1].html);
+  // playerId が null なら誰にも付かない（パス＆プレイ）。
+  const pnpViews = Logic.buildStageView(players, { playerId: null });
+  assert.ok(pnpViews.every(v => v.isMe === false));
+  assert.ok(!pnpViews.some(v => v.html.includes("wme")));
 });
 
 test("buildDrawView：夜のソロは夜行動ボタンだけが出て、他は隠れる", () => {
@@ -1996,7 +2044,7 @@ test("ブラウザ側の draw は共有モジュールの buildStageView・build
     assert.equal(elements.get("pnpTurnBanner").classList.contains("hidden"), view.pnpBanner.hidden, `${label}：手番バナー`);
     assert.equal(
       elements.get("stage").innerHTML,
-      Logic.buildStageView(s.players).map(w => w.html).join(""),
+      Logic.buildStageView(s.players, { playerId: s.mode === "pnp" ? null : s.playerId }).map(w => w.html).join(""),
       `${label}：ステージ歩行者`
     );
     // 別レルムのオブジェクトは JSON で比べる（PR #80 の教訓と同じ）。
