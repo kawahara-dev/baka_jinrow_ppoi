@@ -16,6 +16,7 @@
       icon: "🔮",
       faction: "イノセント",
       desc: "夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。",
+      guideDesc: "夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。",
       shortDesc: "夜に1人の陣営を調べられる。",
       nightActionHint: "怪しい相手を1人選んで調査しよ。",
       resultInterpretation: "表示された陣営をそのまま参考にしてOK。",
@@ -27,6 +28,7 @@
       icon: "🛡️",
       faction: "イノセント",
       desc: "夜に1人を守る。",
+      guideDesc: "夜に1人を襲撃や爆発から守る。",
       shortDesc: "夜に1人を守って、襲撃や爆発から助けられる。",
       nightActionHint: "襲われそうな子を1人選んでガード。",
       resultInterpretation: "夜の報告で襲撃が防がれたらガード成功の可能性あり。",
@@ -38,6 +40,7 @@
       icon: "👣",
       faction: "イノセント",
       desc: "夜に1人が誰を訪ねたか分かる。",
+      guideDesc: "夜に1人が誰を訪ねたか分かる。",
       shortDesc: "夜に1人が誰の家を訪ねたか分かる。",
       nightActionHint: "行動が怪しい相手を1人選んで追跡。",
       resultInterpretation: "『誰を訪れたか』は間接情報。単体で黒確定にはしないのがコツ。",
@@ -49,6 +52,7 @@
       icon: "🚔",
       faction: "イノセント",
       desc: "夜に1人を訪ねて、その夜の行動を封じる（FeignのPolice方式）。",
+      guideDesc: "夜に1人の行動を封じる（襲撃そのものは止められない）。",
       shortDesc: "夜に1人の行動を封じられる。",
       nightActionHint: "能力を使いそうな相手を1人選んで足止め。",
       resultInterpretation: "妨害した相手はその夜、能力を使えない（調査・護衛・追跡・盗み見・爆弾など）。ただしインポスター陣営の襲撃そのものは止められない。",
@@ -60,6 +64,7 @@
       icon: "🔭",
       faction: "イノセント",
       desc: "夜に1人の家を見張り、その夜に訪れた全員が分かる（FeignのLookout方式）。",
+      guideDesc: "夜に1人の家を訪れた全員が分かる。",
       shortDesc: "夜に1人の家を訪れた人たちを調べられる。",
       nightActionHint: "狙われそうな子や怪しい子の家を見張ろう。",
       resultInterpretation: "訪問者の中に襲撃者や能力者が混ざっている。誰が何をしたかまでは分からない。",
@@ -71,6 +76,7 @@
       icon: "🪤",
       faction: "イノセント",
       desc: "夜に1人の家へ罠を設置。その人が襲撃されて倒れたら、襲撃者も道連れになる（FeignのTrapper方式）。",
+      guideDesc: "夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。",
       shortDesc: "1人の家に罠をしかけ、襲撃者を道連れにできる。",
       nightActionHint: "襲われそうな子の家に罠を仕掛けよう。自分の家にも設置できる。",
       resultInterpretation: "罠が作動したら朝の報告で分かる。罠はその夜かぎり。",
@@ -82,6 +88,7 @@
       icon: "🩺",
       faction: "イノセント",
       desc: "夜に1人を診察。その人がその夜に襲撃や爆発で倒れたら、朝までに蘇生させる。",
+      guideDesc: "夜に1人を診察。その人がその夜倒れたら蘇生させる。",
       shortDesc: "選んだ人がその夜倒れたら、朝までに蘇生できる。",
       nightActionHint: "狙われそうな子を診察しておこう。自分も選べる。",
       resultInterpretation: "蘇生が起きると朝の報告で公開される（倒れた人の役職は公開されたまま）。",
@@ -93,6 +100,7 @@
       icon: "🐭",
       faction: "イノセント",
       desc: "能力は昼。ゲーム中1回だけ、議論中に1人の本当の役職を全員に公開できる（FeignのMouse方式）。",
+      guideDesc: "昼に1回だけ、1人の本当の役職を全員に公開できる。",
       shortDesc: "議論中に1回だけ、1人の本当の役職をみんなに公開できる。",
       nightActionHint: "夜は能力なし。昼の議論で公開ボタンのタイミングを計ろう。",
       resultInterpretation: "公開された役職は確定情報。インポスターがバレれば追放まっしぐら。",
@@ -104,6 +112,7 @@
       icon: "🗳️",
       faction: "イノセント",
       desc: "能力は投票。自分の票が常に2票分になる（FeignのPolitician方式）。",
+      guideDesc: "投票の票が2票分になる。",
       shortDesc: "自分の投票が2票分になる。",
       nightActionHint: "夜は能力なし。昼は投票で決着をつける動きを考えよう。",
       resultInterpretation: "票が割れそうな場面で特に強い。",
@@ -115,6 +124,7 @@
       icon: "🏠",
       faction: "イノセント",
       desc: "能力なし。議論と投票で戦う。",
+      guideDesc: "能力なし。議論と投票が主軸。",
       shortDesc: "特別な能力はない。議論と投票で戦う。",
       nightActionHint: "夜は情報整理に集中。朝ログと発言の矛盾を探そう。",
       resultInterpretation: "自分の夜結果はないので、他者の報告の整合性がカギ。",
@@ -126,6 +136,7 @@
       icon: "🎭",
       faction: "インポスター",
       desc: "インポスター陣営として夜に1人を脱落させる。襲撃しない夜は、イノセント側1人の夜行動を妨害する。",
+      guideDesc: "襲撃しない夜は、イノセント側1人の行動を妨害する。",
       shortDesc: "夜に仲間と1人を襲撃できる。襲撃しない夜は1人の行動を妨害できる。",
       nightActionHint: "仲間と相談した想定で、インポスター陣営として襲撃先を1人に絞る。",
       resultInterpretation: "襲撃が通れば盤面有利、守られると計画を立て直し。妨害された相手はその夜、能力を使えない。",
@@ -137,6 +148,7 @@
       icon: "🪞",
       faction: "インポスター",
       desc: "調査でイノセントに見えることがある。襲撃しない夜は、イノセント側1人の実役職を盗み見る。得た情報は陣営の襲撃先決定に使われる。",
+      guideDesc: "調査でイノセントに見えることがある。襲撃しない夜はイノセント側1人の実役職を盗み見する。",
       shortDesc: "調査でイノセントに見えることがある。襲撃しない夜は1人の役職を盗み見できる。",
       nightActionHint: "占いをいなしつつ、インポスター陣営の襲撃先相談に乗る立ち回り。",
       resultInterpretation: "調査を受けると、相手視点でイノセント結果が出る可能性がある。盗み見で占い師や守り手が割れると、優先的に狙われる。",
@@ -148,6 +160,7 @@
       icon: "💣",
       faction: "ニュートラル",
       desc: "第三勢力。夜に1人へ爆弾を仕掛け、翌日の夜に爆発する（FeignのBomber方式）。最後の1人になるか、爆弾で2人以上を倒して生き残ると勝利。",
+      guideDesc: "約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。",
       shortDesc: "毎晩1人に爆弾をしかけ、翌日の夜に爆発させる第三勢力。",
       nightActionHint: "毎晩だれか1人に爆弾を仕掛けよう。自分以外を全員倒せば勝ち。",
       resultInterpretation: "爆弾は護衛されている相手には効かない。占われると『ニュートラル』とバレる。",
@@ -159,6 +172,7 @@
       icon: "🃏",
       faction: "イノセント",
       desc: "本人には分からないが、別のイノセント役職として振る舞うトリッキー枠。表示された役職で夜行動できるが、その結果はすべて偽物（FeignのInsane方式）。",
+      guideDesc: "本人は別のイノセント役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。",
       shortDesc: "本人には別の役職に見えるけれど、夜の結果は全部デタラメになる。",
       nightActionHint: "表示された役職として夜行動しよう（能力なしのこともある）。ただし結果は信用できない。",
       resultInterpretation: "夜の結果はすべて偽物。占い判定はランダム、護衛は実際には守れず、追跡情報もデタラメ。実役職が分かるのは結果画面だけ。",
@@ -1304,6 +1318,33 @@
     };
   }
 
+  // 役職ボード（ゲーム画面の役職一覧）の並び順。静的な HTML にあった
+  // 14役職の順番そのまま。
+  const ROLE_GUIDE_ORDER = ["apprenticeSeer", "guardian", "tracker", "police", "lookout", "trapper", "doctor", "mouse", "politician", "villager", "fakeGirl", "mimic", "bomber", "baka"];
+
+  // 役職ボードの1タイル分の表示データ。アイコン・名前・陣営・陣営クラス・
+  // ボード用の説明文と、タイル1個分の HTML を返す純粋関数。ボード用の
+  // 説明文は ROLES の guideDesc（静的な HTML にあった文言そのまま）。
+  // 並び順は ROLE_GUIDE_ORDER。タイルの HTML は旧版の静的なものと同一。
+  function buildRoleGuideView() {
+    return ROLE_GUIDE_ORDER.map(roleKey => {
+      const r = ROLES[roleKey];
+      const factionClass = r.faction === "イノセント" ? "faction-innocent"
+        : r.faction === "インポスター" ? "faction-impostor" : "faction-neutral";
+      const iconButtonHtml = roleIconButtonHtml(roleKey);
+      return {
+        roleKey,
+        icon: r.icon,
+        name: r.name,
+        faction: r.faction,
+        factionClass,
+        desc: r.guideDesc,
+        iconButtonHtml,
+        tileHtml: `<li class="role-tile ${factionClass}">${iconButtonHtml}<div><strong>${r.name}</strong><span class="role-faction">${r.faction}</span>${r.guideDesc}</div></li>`,
+      };
+    });
+  }
+
   // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
   // 受け渡し画面で共通して使う。バカには表示役職だけを本物として見せる。
   function roleHtmlFor(player, players, opts) {
@@ -1678,6 +1719,8 @@
     roleHtmlFor,
     roleIconButtonHtml,
     buildRoleInfoView,
+    ROLE_GUIDE_ORDER,
+    buildRoleGuideView,
     buildRoleCardView,
     buildCardsView,
     buildStageView,
