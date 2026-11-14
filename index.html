@@ -686,6 +686,37 @@
     #gameScreen .result-row.dead .result-name { color: #b0a6cc; }
     #gameScreen .result-row.dead .result-role { color: #8f86ad; }
 
+    /* Feign風UI第2弾（その2）：タイトル画面のロビー風レイアウト。
+       参加者一覧と設定パネルを .lobby にまとめ、幅が641px以上ある
+       ときだけ左右2列に並べる（左：参加者、右：設定）。641px以下は
+       従来どおり1列（設定→参加者）で、スマホの既存寸法は変えない。
+       参加者パネルはゲーム画面と同じ町のボード風ダークテーマ。 */
+    .lobby { display: grid; gap: 14px; width: 100%; max-width: 880px; }
+    .lobby-roster {
+      background: linear-gradient(180deg, #2a2145 0%, #1d1733 100%);
+      border: 2px solid var(--town-deep);
+      border-radius: 16px;
+      padding: 14px;
+      color: #fff;
+      text-align: left;
+      box-shadow: 0 12px 28px rgba(10, 6, 28, 0.45);
+    }
+    .lobby-head { font-weight: 900; color: var(--gold); }
+    .lobby-roster-list {
+      list-style: none; margin: 10px 0 0; padding: 0;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    }
+    .lobby-roster-item {
+      display: flex; gap: 6px; align-items: center;
+      background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 10px; padding: 6px 8px; font-size: 0.9rem; font-weight: 800;
+    }
+    .lobby-note { margin: 10px 0 0; font-size: 0.82rem; font-weight: 700; color: #cfc2ee; }
+    @media (min-width: 641px) {
+      .lobby { grid-template-columns: 1fr 1fr; align-items: start; }
+      .lobby-roster { order: -1; }
+    }
+
     .right-panel {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -903,6 +934,7 @@
       <p class="subtitle">— おとぼけ魔女会議 —</p>
     </div>
     <p>かわいい村で正体隠匿バトル！夜の行動と昼の議論でインポスターを見抜こう。</p>
+    <div class="lobby">
     <div class="settings-panel" role="group" aria-label="ゲーム設定">
       <div class="settings-row">
         <span class="settings-label">インポスター人数</span>
@@ -970,6 +1002,12 @@
           <button type="button" data-value="180">3分</button>
         </div>
       </div>
+    </div>
+    <div class="lobby-roster" role="group" aria-label="参加者">
+      <div class="lobby-head">👥 参加者（8人）</div>
+      <ul id="lobbyRosterList" class="lobby-roster-list"></ul>
+      <p class="lobby-note">8人で対戦します。ソロはあなた＋CPU7人です。</p>
+    </div>
     </div>
     <div class="stats-panel">
       <div class="stats-head">📊 戦績</div>
@@ -1112,7 +1150,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2475,6 +2513,17 @@
     parade.innerHTML = buildParadeViewLogic().map(w => w.html).join("");
   }
   renderParade();
+
+  // タイトル画面のロビー参加者一覧は共有モジュール
+  // （buildLobbyRosterView）に切り出し済み。ここでは生成結果を一覧へ
+  // 代入するだけ。ソロもパス＆プレイも同じ8キャラなので、設定によらず
+  // 一覧は固定。
+  function renderLobbyRoster() {
+    const list = el("lobbyRosterList");
+    if (!list) return;
+    list.innerHTML = buildLobbyRosterViewLogic().map(m => m.html).join("");
+  }
+  renderLobbyRoster();
 
   let statsResetArmed = false;
   el("statsReset").onclick = () => {

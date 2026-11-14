@@ -1396,6 +1396,19 @@
     });
   }
 
+  // タイトル画面のロビー（Feign風UI第2弾）に並ぶ参加者8人分の表示
+  // データ。id 順に名前・アイコンと、参加者チップ1個分の HTML を返す
+  // 純粋関数。ソロもパス＆プレイも同じ8キャラで対戦するので、設定に
+  // よらず一覧は固定（ソロはあなた＋CPU7人）。
+  function buildLobbyRosterView() {
+    return PLAYER_NAMES.map((name, id) => ({
+      id,
+      name,
+      icon: PLAYER_ICONS[id],
+      html: `<li class="lobby-roster-item"><span class="lobby-roster-icon">${PLAYER_ICONS[id]}</span><span class="lobby-roster-name">${name}</span></li>`,
+    }));
+  }
+
   // 議論タイマーの警告しきい値。残りこの秒数以下で警告色になる。
   const DISCUSS_TIMER_LOW_SECONDS = 30;
 
@@ -2139,6 +2152,7 @@
     buildRoleGuideView,
     PARADE_BD,
     buildParadeView,
+    buildLobbyRosterView,
     DISCUSS_TIMER_LOW_SECONDS,
     formatDiscussTime,
     buildDiscussTimerView,
