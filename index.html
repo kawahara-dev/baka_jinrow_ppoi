@@ -1086,7 +1086,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1784,10 +1784,13 @@
     if (!stage || !stage.querySelector) return;
     const w = stage.querySelector(`.walker[data-player="${playerId}"]`);
     if (!w) return;
-    w.classList.remove("speaking");
+    // ホップのクラス名と時間は共有モジュール（buildStageBounceView）に
+    // 切り出し済み。クラスの付け外しとタイマーだけがブラウザ側に残る。
+    const view = buildStageBounceViewLogic();
+    w.classList.remove(view.className);
     void w.offsetWidth;
-    w.classList.add("speaking");
-    later(() => w.classList.remove("speaking"), 1000);
+    w.classList.add(view.className);
+    later(() => w.classList.remove(view.className), view.ms);
   }
 
   // Speech bubbles: public spoken lines (discussion CPU lines and the
@@ -1884,10 +1887,14 @@
     if (!stage || !stage.querySelector) return;
     const w = stage.querySelector(`.walker[data-player="${playerId}"]`);
     if (!w || !w.classList) return;
-    w.classList.remove(cls);
+    // モーションのクラス名と時間は共有モジュール
+    // （buildStageEventMotionView）に切り出し済み。
+    const view = buildStageEventMotionViewLogic(cls, ms);
+    if (!view) return;
+    w.classList.remove(view.className);
     void w.offsetWidth;
-    w.classList.add(cls);
-    later(() => w.classList.remove(cls), ms || 2000);
+    w.classList.add(view.className);
+    later(() => w.classList.remove(view.className), view.ms);
   }
 
   // Briefly re-show a player who just left the stage (attack victim,
@@ -1904,24 +1911,31 @@
     }
     const p = state.players[playerId];
     if (!p || typeof document === "undefined" || !document.createElement) return;
+    // 幽霊歩行者の表示データは共有モジュール（buildGhostWalkerView）に
+    // 切り出し済み。要素の生成・追加・削除だけがブラウザ側に残る。
+    const view = buildGhostWalkerViewLogic(playerId, cls, ms, ICON_SLUGS[playerId]);
+    if (!view) return;
     const span = document.createElement("span");
-    span.className = `walker ${cls}`;
-    span.setAttribute("data-player", String(playerId));
-    span.setAttribute("style", `--i:${playerId};--bd:0.34s`);
-    span.innerHTML = `<span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${ICON_SLUGS[playerId]}" data-frame="a" alt=""><img class="frame-b" data-slug="${ICON_SLUGS[playerId]}" data-frame="b" alt=""></span>`;
+    span.className = view.className;
+    span.setAttribute("data-player", String(view.playerId));
+    span.setAttribute("style", view.style);
+    span.innerHTML = view.innerHtml;
     stage.appendChild(span);
     hydrateWalkImages(span);
-    later(() => { if (span.remove) span.remove(); }, ms || 3200);
+    later(() => { if (span.remove) span.remove(); }, view.removeMs);
   }
 
   // Brief red edge-flash on the stage for a public attack.
   function stageFlashRed() {
     const stage = el("stage");
     if (!stage || !stage.classList) return;
-    stage.classList.remove("flash-red");
+    // 赤フラッシュのクラス名と時間は共有モジュール（buildStageFlashView）
+    // に切り出し済み。クラスの付け外しとタイマーだけがブラウザ側に残る。
+    const view = buildStageFlashViewLogic();
+    stage.classList.remove(view.className);
     void stage.offsetWidth;
-    stage.classList.add("flash-red");
-    later(() => stage.classList.remove("flash-red"), 1000);
+    stage.classList.add(view.className);
+    later(() => stage.classList.remove(view.className), view.ms);
   }
 
   // Character motion phase 2: the human's own night action. When the
@@ -1932,24 +1946,20 @@
   // action is never animated (anti-leak). Direction follows the
   // walkers' order on the stage: a larger --i (player id) walks
   // further right, so the target's id decides left vs right.
-  const OWN_ACTION_FAMILIES = {
-    investigate: "peek", spy: "peek", lookout: "peek",
-    protect: "guard", revive: "guard", block: "guard",
-    track: "sneak", attack: "slash", plant: "plant", trap: "plant",
-  };
   function stageOwnActionMotion(actorId, targetId, actionType) {
-    const family = OWN_ACTION_FAMILIES[actionType];
-    if (!family) return;
+    // 行動種別→モーション系統と方向からのクラス名は共有モジュール
+    // （buildOwnActionMotionView）に切り出し済み。対応表にない種別は
+    // 何もしない。
+    const view = buildOwnActionMotionViewLogic(actorId, targetId, actionType);
+    if (!view) return;
     const stage = el("stage");
     if (!stage || !stage.querySelector) return;
     const w = stage.querySelector(`.walker[data-player="${actorId}"]`);
     if (!w || !w.classList) return;
-    const dir = targetId >= actorId ? "r" : "l";
-    const cls = `motion-own-${family}-${dir}`;
-    w.classList.remove(`motion-own-${family}-r`, `motion-own-${family}-l`);
+    w.classList.remove(...view.removeClasses);
     void w.offsetWidth;
-    w.classList.add(cls);
-    later(() => w.classList.remove(cls), 1800);
+    w.classList.add(view.className);
+    later(() => w.classList.remove(view.className), view.ms);
   }
 
   // Mouse: publicly reveal one player's role, once per game. A baka
