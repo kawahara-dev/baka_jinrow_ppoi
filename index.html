@@ -1069,7 +1069,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1210,23 +1210,23 @@
   }
   function showPnpCover() {
     const player = pnpCurrentPlayer();
-    state.pnpStep = "handoff";
+    const view = buildPnpCoverViewLogic({ pNumber: state.pnpIndex + 1, playerName: player.name, kind: "handoff" });
+    state.pnpStep = view.step;
     el("pnpRole").classList.add("hidden");
     el("pnpCover").classList.remove("hidden");
-    el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpIndex + 1}（${player.name}）</strong>さんの番です。<br>周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
-    el("pnpRevealBtn").textContent = "タップして役職を見る";
+    el("pnpCoverText").innerHTML = view.coverTextHtml;
+    el("pnpRevealBtn").textContent = view.revealLabel;
     focusEl("pnpRevealBtn");
   }
   function showPnpRole() {
     const player = pnpCurrentPlayer();
-    state.pnpStep = "handoff";
+    const view = buildPnpRoleViewLogic({ isLast: state.pnpIndex + 1 >= state.humanPlayerIds.length, roleHtml: roleHtmlFor(player) });
+    state.pnpStep = view.step;
     el("pnpCover").classList.add("hidden");
     el("pnpRole").classList.remove("hidden");
-    el("pnpRoleTitle").textContent = "あなたの役職";
-    el("pnpPlayerRole").innerHTML = roleHtmlFor(player);
-    el("pnpConfirmBtn").textContent = state.pnpIndex + 1 < state.humanPlayerIds.length
-      ? "確認した（次の人へ）"
-      : "確認した（ゲーム開始）";
+    el("pnpRoleTitle").textContent = view.title;
+    el("pnpPlayerRole").innerHTML = view.roleHtml;
+    el("pnpConfirmBtn").textContent = view.confirmLabel;
     focusEl("pnpConfirmBtn");
   }
 
@@ -1267,11 +1267,12 @@
   }
   function showPnpNightCover() {
     const player = pnpNightCurrentPlayer();
-    state.pnpStep = "nightCover";
+    const view = buildPnpCoverViewLogic({ pNumber: state.pnpNightIndex + 1, playerName: player.name, kind: "night" });
+    state.pnpStep = view.step;
     el("pnpRole").classList.add("hidden");
     el("pnpCover").classList.remove("hidden");
-    el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpNightIndex + 1}（${player.name}）</strong>さんの番です。<br>夜行動の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
-    el("pnpRevealBtn").textContent = "タップして夜の番を始める";
+    el("pnpCoverText").innerHTML = view.coverTextHtml;
+    el("pnpRevealBtn").textContent = view.revealLabel;
     focusEl("pnpRevealBtn");
   }
   function showPnpNightTurn() {
@@ -1279,12 +1280,13 @@
     const results = state.pnpNightResults?.[player.id] || [];
     if (results.length) {
       // 前夜の結果を本人だけに表示する（公開ログには出さない）。
-      state.pnpStep = "nightResult";
+      const view = buildPnpNightResultViewLogic({ results });
+      state.pnpStep = view.step;
       el("pnpCover").classList.add("hidden");
       el("pnpRole").classList.remove("hidden");
-      el("pnpRoleTitle").textContent = "前夜の結果";
-      el("pnpPlayerRole").innerHTML = results.map(r => `<div>${r}</div>`).join("");
-      el("pnpConfirmBtn").textContent = "夜行動へ進む";
+      el("pnpRoleTitle").textContent = view.title;
+      el("pnpPlayerRole").innerHTML = view.roleHtml;
+      el("pnpConfirmBtn").textContent = view.confirmLabel;
       state.pnpNightResults[player.id] = [];
       focusEl("pnpConfirmBtn");
     } else {
@@ -1304,51 +1306,44 @@
     // の対象を入力する（設計メモ 3.6、フェーズ3）。
     // 代表者はキューで他のインポスター人間より前に並ぶため、ここに来る時点で
     // 代表者の入力は済んでいる。念のため未入力なら従来の相談画面にする。
-    if (ROLES[player.roleKey].faction === "インポスター" && rep && rep.id !== player.id) {
-      const repInput = state.pnpNightInputs?.[rep.id];
-      const repTarget = repInput !== undefined ? state.players[repInput] : null;
-      el("pnpCover").classList.add("hidden");
-      el("pnpRole").classList.remove("hidden");
-      el("pnpRoleTitle").textContent = "夜行動";
-      if (repTarget) {
-        state.pnpStep = "nightFakeAgree";
-        el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>インポスターの仲間（${rep.name}）が今夜の襲撃先に <strong>${repTarget.name}</strong> を選びました。<br>この襲撃先で合意しますか？`;
-        el("pnpConfirmBtn").textContent = "合意する（能力入力へ）";
-      } else {
-        state.pnpStep = "nightFakeConsult";
-        el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>インポスターの仲間（${rep.name}）と相談してください。<br>今夜の襲撃先は ${rep.name} が決めます。`;
-        el("pnpConfirmBtn").textContent = "相談した（能力入力へ）";
-      }
-      focusEl("pnpConfirmBtn");
+    const repInput = rep ? state.pnpNightInputs?.[rep.id] : undefined;
+    const repTarget = repInput !== undefined ? state.players[repInput] : null;
+    const view = buildPnpNightActionViewLogic({
+      playerName: player.name,
+      roleName: role.name,
+      faction: ROLES[player.roleKey].faction,
+      hasNightAction: !!role.nightAction,
+      repName: rep ? rep.name : null,
+      isRep: !!(rep && rep.id === player.id),
+      repTargetName: repTarget ? repTarget.name : null,
+      confirmLabel,
+    });
+    if (view.kind === "ability") {
+      // 能力あり：ゲーム画面で対象を選ぶ。
+      state.pnpStep = view.step;
+      state.pnpNightInputPending = player.id;
+      state.playerId = player.id;
+      state.selectedId = null;
+      el("pnpScreen").classList.add("hidden");
+      el("gameScreen").classList.remove("hidden");
+      el("factionText").textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番`;
+      updatePnpTurnBanner(player, role);
+      draw();
+      focusEl("phaseText");
       return;
     }
-    if (!role.nightAction) {
-      // 能力なし（村ガール・マウス・政治家など）の番。
-      state.pnpStep = "nightNoAction";
-      el("pnpCover").classList.add("hidden");
-      el("pnpRole").classList.remove("hidden");
-      el("pnpRoleTitle").textContent = "夜行動";
-      el("pnpPlayerRole").innerHTML = `<strong>${player.name}（${role.name}）</strong><br>今夜は能力がありません。朝まで静かに過ごしましょう。`;
-      el("pnpConfirmBtn").textContent = confirmLabel;
-      focusEl("pnpConfirmBtn");
-      return;
-    }
-    // 能力あり：ゲーム画面で対象を選ぶ。
-    state.pnpStep = "nightAction";
-    state.pnpNightInputPending = player.id;
-    state.playerId = player.id;
-    state.selectedId = null;
-    el("pnpScreen").classList.add("hidden");
-    el("gameScreen").classList.remove("hidden");
-    el("factionText").textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番`;
-    updatePnpTurnBanner(player, role);
-    draw();
-    focusEl("phaseText");
+    state.pnpStep = view.step;
+    el("pnpCover").classList.add("hidden");
+    el("pnpRole").classList.remove("hidden");
+    el("pnpRoleTitle").textContent = view.title;
+    el("pnpPlayerRole").innerHTML = view.bodyHtml;
+    el("pnpConfirmBtn").textContent = view.confirmLabel;
+    focusEl("pnpConfirmBtn");
   }
   function updatePnpTurnBanner(player, role, hintOverride) {
     const banner = el("pnpTurnBanner");
     if (!banner) return;
-    banner.textContent = `P${state.pnpNightIndex + 1}（${player.name}）の番 — ${role.name}：${hintOverride || getPhaseHint(role)}`;
+    banner.textContent = buildPnpTurnBannerTextLogic({ pNumber: state.pnpNightIndex + 1, playerName: player.name, label: role.name, hint: hintOverride || getPhaseHint(role) });
   }
   // インポスター非代表者の能力入力（フェーズ3）：襲撃の合意確認のあと、
   // 盗み見（なりすまし）・妨害（フェイクガール）の対象を自分で選ぶ。
@@ -1421,11 +1416,12 @@
   }
   function showPnpVoteCover() {
     const player = pnpVoteCurrentPlayer();
-    state.pnpStep = "voteCover";
+    const view = buildPnpCoverViewLogic({ pNumber: state.pnpVoteIndex + 1, playerName: player.name, kind: "vote" });
+    state.pnpStep = view.step;
     el("pnpRole").classList.add("hidden");
     el("pnpCover").classList.remove("hidden");
-    el("pnpCoverText").innerHTML = `次は <strong>P${state.pnpVoteIndex + 1}（${player.name}）</strong>さんの番です。<br>投票の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`;
-    el("pnpRevealBtn").textContent = "タップして投票の番を始める";
+    el("pnpCoverText").innerHTML = view.coverTextHtml;
+    el("pnpRevealBtn").textContent = view.revealLabel;
     focusEl("pnpRevealBtn");
   }
   function showPnpVoteTurn() {
@@ -1438,7 +1434,7 @@
     el("gameScreen").classList.remove("hidden");
     el("factionText").textContent = `P${state.pnpVoteIndex + 1}（${player.name}）の番`;
     const banner = el("pnpTurnBanner");
-    if (banner) banner.textContent = `P${state.pnpVoteIndex + 1}（${player.name}）の番 — 投票：${getPhaseHint(ROLES[player.roleKey])}`;
+    if (banner) banner.textContent = buildPnpTurnBannerTextLogic({ pNumber: state.pnpVoteIndex + 1, playerName: player.name, label: "投票", hint: getPhaseHint(ROLES[player.roleKey]) });
     draw();
     focusEl("phaseText");
   }

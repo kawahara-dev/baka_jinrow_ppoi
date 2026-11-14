@@ -1399,6 +1399,99 @@
     };
   }
 
+  // パス＆プレイの受け渡しカバー画面の表示データ。kind は handoff（役職確認）
+  // / night（夜行動）/ vote（投票）。文言とボタンは旧版のまま。kind が
+  // それ以外なら役職確認として扱う。返すのは表示データだけで、DOM には
+  // 触らない純粋関数。
+  function buildPnpCoverView({ pNumber, playerName, kind }) {
+    const head = `次は <strong>P${pNumber}（${playerName}）</strong>さんの番です。<br>`;
+    if (kind === "night") {
+      return {
+        step: "nightCover",
+        coverTextHtml: `${head}夜行動の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`,
+        revealLabel: "タップして夜の番を始める",
+      };
+    }
+    if (kind === "vote") {
+      return {
+        step: "voteCover",
+        coverTextHtml: `${head}投票の時間です。周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`,
+        revealLabel: "タップして投票の番を始める",
+      };
+    }
+    return {
+      step: "handoff",
+      coverTextHtml: `${head}周りの人に見られないように、端末を受け取ったら下のボタンをタップしてください。`,
+      revealLabel: "タップして役職を見る",
+    };
+  }
+
+  // パス＆プレイの役職確認画面の表示データ。roleHtml は roleHtmlFor の
+  // 生成結果をそのまま渡す。最後の人だけ確認ボタンが「ゲーム開始」になる。
+  function buildPnpRoleView({ isLast, roleHtml }) {
+    return {
+      step: "handoff",
+      title: "あなたの役職",
+      roleHtml: roleHtml || "",
+      confirmLabel: isLast ? "確認した（ゲーム開始）" : "確認した（次の人へ）",
+    };
+  }
+
+  // パス＆プレイの前夜の結果画面の表示データ。results は本人だけに
+  // 見せる前夜の結果の文言の配列（公開ログには出さない）。
+  function buildPnpNightResultView({ results }) {
+    const list = Array.isArray(results) ? results : [];
+    return {
+      step: "nightResult",
+      title: "前夜の結果",
+      roleHtml: list.map(r => `<div>${r}</div>`).join(""),
+      confirmLabel: "夜行動へ進む",
+    };
+  }
+
+  // パス＆プレイの夜行動画面の表示データ。kind でブラウザ側の振る舞いが
+  // 分かれる：fakeAgree / fakeConsult / noAction は受け渡し画面に文言を
+  // 出し、ability はゲーム画面で対象を選ぶ。インポスター陣営の人間で
+  // 代表者以外の場合だけ合意・相談画面になる（repTargetName があるときは
+  // 合意確認、ないときは相談画面）。代表者本人や代表者のいない人間は
+  // 能力入力へ進む。roleName は表示役職（バカは表示役職）の名前、
+  // faction は本当の陣営、hasNightAction は表示役職に夜行動があるかどうか。
+  function buildPnpNightActionView({ playerName, roleName, faction, hasNightAction, repName, isRep, repTargetName, confirmLabel }) {
+    if (faction === "インポスター" && repName && !isRep) {
+      if (repTargetName) {
+        return {
+          kind: "fakeAgree",
+          step: "nightFakeAgree",
+          title: "夜行動",
+          bodyHtml: `<strong>${playerName}（${roleName}）</strong><br>インポスターの仲間（${repName}）が今夜の襲撃先に <strong>${repTargetName}</strong> を選びました。<br>この襲撃先で合意しますか？`,
+          confirmLabel: "合意する（能力入力へ）",
+        };
+      }
+      return {
+        kind: "fakeConsult",
+        step: "nightFakeConsult",
+        title: "夜行動",
+        bodyHtml: `<strong>${playerName}（${roleName}）</strong><br>インポスターの仲間（${repName}）と相談してください。<br>今夜の襲撃先は ${repName} が決めます。`,
+        confirmLabel: "相談した（能力入力へ）",
+      };
+    }
+    if (!hasNightAction) {
+      return {
+        kind: "noAction",
+        step: "nightNoAction",
+        title: "夜行動",
+        bodyHtml: `<strong>${playerName}（${roleName}）</strong><br>今夜は能力がありません。朝まで静かに過ごしましょう。`,
+        confirmLabel,
+      };
+    }
+    return { kind: "ability", step: "nightAction", title: "", bodyHtml: "", confirmLabel: "" };
+  }
+
+  // パス＆プレイの手番バナーの文言。夜は役職名、投票は「投票」がラベルになる。
+  function buildPnpTurnBannerText({ pNumber, playerName, label, hint }) {
+    return `P${pNumber}（${playerName}）の番 — ${label}：${hint}`;
+  }
+
   // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
   // 受け渡し画面で共通して使う。バカには表示役職だけを本物として見せる。
   function roleHtmlFor(player, players, opts) {
@@ -1780,6 +1873,11 @@
     DISCUSS_TIMER_LOW_SECONDS,
     formatDiscussTime,
     buildDiscussTimerView,
+    buildPnpCoverView,
+    buildPnpRoleView,
+    buildPnpNightResultView,
+    buildPnpNightActionView,
+    buildPnpTurnBannerText,
     buildRoleCardView,
     buildCardsView,
     buildStageView,
