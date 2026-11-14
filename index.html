@@ -948,16 +948,7 @@
       <button id="startBtn" class="primary">START</button>
       <button id="howBtn" class="secondary">遊び方</button>
     </div>
-    <div class="parade" aria-hidden="true">
-      <span class="walker" style="--i:0;--bd:0.34s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="luna" data-frame="a" alt="ルナ"><img class="frame-b" data-slug="luna" data-frame="b" alt=""></span></span>
-      <span class="walker" style="--i:1;--bd:0.38s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="mio" data-frame="a" alt="ミオ"><img class="frame-b" data-slug="mio" data-frame="b" alt=""></span></span>
-      <span class="walker" style="--i:2;--bd:0.31s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="yui" data-frame="a" alt="ユイ"><img class="frame-b" data-slug="yui" data-frame="b" alt=""></span></span>
-      <span class="walker" style="--i:3;--bd:0.36s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="kanon" data-frame="a" alt="カノン"><img class="frame-b" data-slug="kanon" data-frame="b" alt=""></span></span>
-      <span class="walker" style="--i:4;--bd:0.33s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="suzu" data-frame="a" alt="スズ"><img class="frame-b" data-slug="suzu" data-frame="b" alt=""></span></span>
-      <span class="walker" style="--i:5;--bd:0.39s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="riri" data-frame="a" alt="リリ"><img class="frame-b" data-slug="riri" data-frame="b" alt=""></span></span>
-      <span class="walker" style="--i:6;--bd:0.32s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="noa" data-frame="a" alt="ノア"><img class="frame-b" data-slug="noa" data-frame="b" alt=""></span></span>
-      <span class="walker" style="--i:7;--bd:0.37s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="ema" data-frame="a" alt="エマ"><img class="frame-b" data-slug="ema" data-frame="b" alt=""></span></span>
-    </div>
+    <div class="parade" id="parade" aria-hidden="true"></div>
     <div id="howTo" class="screen hidden" style="max-width:720px;text-align:left;">
       <h3>遊び方</h3>
       <p>・8人でスタート。あなた1人＋CPU7人。</p>
@@ -1078,7 +1069,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2483,6 +2474,17 @@
     list.innerHTML = buildRoleGuideViewLogic().map(t => t.tileHtml).join("");
   }
   renderRoleGuide();
+
+  // タイトル画面のパレード歩行者は共有モジュール（buildParadeView）に
+  // 切り出し済み。ここでは生成結果をパレードへ代入するだけ。歩行
+  // スプライトの読み込み（hydrateWalkImages）はこの後に走るので、
+  // 生成された img もそのまま対象になる。
+  function renderParade() {
+    const parade = el("parade");
+    if (!parade) return;
+    parade.innerHTML = buildParadeViewLogic().map(w => w.html).join("");
+  }
+  renderParade();
 
   let statsResetArmed = false;
   el("statsReset").onclick = () => {

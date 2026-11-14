@@ -1345,6 +1345,29 @@
     });
   }
 
+  // タイトル画面のパレード（8人の歩行者）の歩行周期。静的な HTML に
+  // あった --bd の値そのまま（id 順）。ステージの歩行者とは周期の
+  // 決め方が別（こちらは 8 人ぶんの値がそのまま並んでいる）。
+  const PARADE_BD = ["0.34s", "0.38s", "0.31s", "0.36s", "0.33s", "0.39s", "0.32s", "0.37s"];
+
+  // タイトル画面のパレードに並ぶ歩行者8人分の表示データ。id 順に
+  // slug・名前・歩行周期と、歩行者 span 全体の HTML を返す純粋関数。
+  // 各歩行者の HTML は旧版の静的なものと同一。frame-a の alt だけ
+  // キャラ名で、frame-b は空。歩行スプライトの読み込みはブラウザ側
+  // （hydrateWalkImages）が生成後の img を対象にする。
+  function buildParadeView() {
+    return ICON_SLUGS.map((slug, id) => {
+      const duration = PARADE_BD[id];
+      return {
+        id,
+        slug,
+        name: PLAYER_NAMES[id],
+        duration,
+        html: `<span class="walker" style="--i:${id};--bd:${duration}"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${slug}" data-frame="a" alt="${PLAYER_NAMES[id]}"><img class="frame-b" data-slug="${slug}" data-frame="b" alt=""></span></span>`,
+      };
+    });
+  }
+
   // 1人のプレイヤー向けの役職表示 HTML。ソロの役職画面とパス＆プレイの
   // 受け渡し画面で共通して使う。バカには表示役職だけを本物として見せる。
   function roleHtmlFor(player, players, opts) {
@@ -1721,6 +1744,8 @@
     buildRoleInfoView,
     ROLE_GUIDE_ORDER,
     buildRoleGuideView,
+    PARADE_BD,
+    buildParadeView,
     buildRoleCardView,
     buildCardsView,
     buildStageView,
