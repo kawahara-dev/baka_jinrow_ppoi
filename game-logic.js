@@ -1982,6 +1982,69 @@
       ms: OWN_ACTION_MOTION_MS,
     };
   }
+  // 夜のカットイン組み立て：夜の結果から出すカットインの一覧を返す
+  // 純粋関数。各項目は buildCutinItem の表示データ＋表示時モーション
+  // の記述子（関数ではない plain data）。モーションは DOM を触るため
+  // ブラウザ側（nightCutins）が記述子を見て呼ぶ。表示時コールバック
+  // はキューに残って遅れて発火するため、対象 id は記述子に値として
+  // 固定する（次の夜・次の試合で state が置き換わっても古い報告を
+  // 読まない）。winAfterNight があるときは最後に勝利カットインを
+  // 出し、celebrate も true にする。出す順番・文言・分岐は旧版の
+  // nightCutins と同一（公開済みの結果だけを出し、誰が何をしたかは
+  // 出さない）。state・me・target は読み取るだけで変更しない。
+  const NIGHT_ACTION_CUTIN_META = {
+    investigate: ["🔍 調査", "info"], protect: ["🛡️ 護衛", "protect"],
+    track: ["👣 追跡", "info"], attack: ["🗡️ 襲撃", "attack"],
+    block: ["✋ 妨害", "info"], spy: ["👀 盗み見", "info"],
+    plant: ["💣 爆弾設置", "bomb"], lookout: ["🔭 見張り", "info"],
+    trap: ["🪤 罠設置", "info"], revive: ["💉 診察", "protect"],
+  };
+  function buildNightCutinsView(state, me, target, winAfterNight) {
+    const items = [];
+    // パス＆プレイでは個人の夜行動カットインは出さない（誰が何をしたか
+    // が全員に見えてしまうため）。公開済みの結果だけを出す。
+    if (state.mode !== "pnp") {
+      const myType = state.nightActionTypes?.[me.id] || ROLES[getEffectiveRoleKey(me)].nightAction?.type;
+      if (state.humanBlocked) {
+        items.push({ ...buildCutinItem("✋ 妨害された！", "今夜は行動できなかった…", "attack"), onShow: null });
+      } else if (myType) {
+        const meta = NIGHT_ACTION_CUTIN_META[myType];
+        if (meta) items.push({ ...buildCutinItem(meta[0], `→ ${target.name}`, meta[1],
+          { charId: me.id, targetCharId: target.id, motion: OWN_ACTION_FAMILIES[myType] }),
+          onShow: { kind: "ownAction", meId: me.id, targetId: target.id, type: myType } });
+      } else {
+        items.push({ ...buildCutinItem("🌙 夜行動", "あなたは静かに夜を過ごした", "phase"), onShow: null });
+      }
+    }
+    if (state.nightReport?.type === "eliminated") {
+      const vid = state.nightReport.victimId;
+      items.push({ ...buildCutinItem("🌙 夜の襲撃", `${state.players[vid].name} が倒れた…`, "attack", { charId: vid }),
+        onShow: { kind: "ghost", victimId: vid, motion: "motion-flinch", flash: true } });
+    } else if (state.nightReport?.type === "blocked") {
+      items.push({ ...buildCutinItem("🛡️ 襲撃は防がれた！", "誰かが守り切った", "protect"), onShow: null });
+    }
+    for (const vid of state.bombReport?.explodedVictims || []) {
+      items.push({ ...buildCutinItem("💣 爆弾が爆発！", `${state.players[vid].name} が巻き込まれた…`, "bomb", { charId: vid }),
+        onShow: { kind: "ghost", victimId: vid, motion: "motion-blast", flash: false } });
+    }
+    if (state.bombReport?.fizzled) items.push({ ...buildCutinItem("💣 爆弾は不発だった", "護衛が爆発を防いだ", "protect"), onShow: null });
+    if (state.trapReport) {
+      const trapAttackerId = state.trapReport.attackerId;
+      items.push({ ...buildCutinItem("🪤 罠が作動！", "襲撃者が道連れになった", "attack", { charId: trapAttackerId }),
+        onShow: { kind: "ghost", victimId: trapAttackerId, motion: "motion-trap", flash: false } });
+    }
+    if (state.doctorReport) {
+      const revivedId = state.doctorReport.victimId;
+      items.push({ ...buildCutinItem("💉 蘇生した！", `${state.players[revivedId].name} が助かった`, "protect", { charId: revivedId }),
+        onShow: { kind: "revive", victimId: revivedId, motion: "motion-revive" } });
+    }
+    let celebrate = false;
+    if (winAfterNight) {
+      items.push({ ...buildCutinItem(winAfterNight, "", "win"), onShow: null });
+      celebrate = true;
+    }
+    return { items, celebrate };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -2083,5 +2146,7 @@
     OWN_ACTION_FAMILIES,
     OWN_ACTION_MOTION_MS,
     buildOwnActionMotionView,
+    NIGHT_ACTION_CUTIN_META,
+    buildNightCutinsView,
   };
 });

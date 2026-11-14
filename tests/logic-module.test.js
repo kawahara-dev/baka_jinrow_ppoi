@@ -3489,3 +3489,176 @@ test("ブラウザ側の stageGhostWalker は共有モジュールの表示デ�
   assert.equal(stage.children.length, before2, "歩行者がいる場合は増えない");
   assert.equal(stage.querySelector('.walker[data-player="0"]').classList.contains("motion-flinch"), true, "代わりに汎用モーションが付く");
 });
+
+// ---- フェーズ0第29歩：夜のカットイン組み立ての抽出 ----
+
+function fakeNightPlayers(roleKeys) {
+  return Logic.PLAYER_NAMES.map((name, id) => ({
+    id, name, icon: Logic.PLAYER_ICONS[id],
+    roleKey: (roleKeys && roleKeys[id]) || "villager", alive: true,
+  }));
+}
+function fakeNightState(overrides = {}) {
+  return {
+    mode: "solo",
+    players: fakeNightPlayers(),
+    nightActionTypes: {},
+    humanBlocked: false,
+    nightReport: null,
+    bombReport: null,
+    trapReport: null,
+    doctorReport: null,
+    ...overrides,
+  };
+}
+
+test("NIGHT_ACTION_CUTIN_META：夜行動10種のタイトルと種類", () => {
+  assert.equal(Object.keys(Logic.NIGHT_ACTION_CUTIN_META).length, 10);
+  assert.deepEqual(Logic.NIGHT_ACTION_CUTIN_META.investigate, ["🔍 調査", "info"]);
+  assert.deepEqual(Logic.NIGHT_ACTION_CUTIN_META.protect, ["🛡️ 護衛", "protect"]);
+  assert.deepEqual(Logic.NIGHT_ACTION_CUTIN_META.attack, ["🗡️ 襲撃", "attack"]);
+  assert.deepEqual(Logic.NIGHT_ACTION_CUTIN_META.plant, ["💣 爆弾設置", "bomb"]);
+  assert.deepEqual(Logic.NIGHT_ACTION_CUTIN_META.revive, ["💉 診察", "protect"]);
+  assert.deepEqual(Logic.NIGHT_ACTION_CUTIN_META.lookout, ["🔭 見張り", "info"]);
+  assert.equal(Logic.NIGHT_ACTION_CUTIN_META.unknown, undefined);
+});
+
+test("buildNightCutinsView：行動なしの夜は『🌙 夜行動』だけ", () => {
+  const state = fakeNightState();
+  const me = state.players[0];
+  const target = state.players[1];
+  const view = Logic.buildNightCutinsView(state, me, target, null);
+  assert.equal(view.celebrate, false);
+  assert.equal(view.items.length, 1);
+  assert.equal(JSON.stringify(view.items[0]), JSON.stringify({
+    title: "🌙 夜行動", sub: "あなたは静かに夜を過ごした", kind: "phase",
+    charId: null, targetCharId: null, motion: null, onShow: null,
+  }));
+});
+
+test("buildNightCutinsView：役職の夜行動と nightActionTypes の上書き", () => {
+  const state = fakeNightState();
+  state.players[0].roleKey = "apprenticeSeer";
+  const me = state.players[0];
+  const target = state.players[2];
+  const view = Logic.buildNightCutinsView(state, me, target, null);
+  assert.equal(view.items.length, 1);
+  assert.equal(JSON.stringify(view.items[0]), JSON.stringify({
+    title: "🔍 調査", sub: `→ ${target.name}`, kind: "info",
+    charId: 0, targetCharId: 2, motion: "peek",
+    onShow: { kind: "ownAction", meId: 0, targetId: 2, type: "investigate" },
+  }));
+  // nightActionTypes があれば役職の能力よりそちらが優先される。
+  state.nightActionTypes = { 0: "protect" };
+  const view2 = Logic.buildNightCutinsView(state, me, target, null);
+  assert.equal(view2.items[0].title, "🛡️ 護衛");
+  assert.equal(view2.items[0].kind, "protect");
+  assert.equal(view2.items[0].motion, "guard");
+  assert.equal(view2.items[0].onShow.type, "protect");
+});
+
+test("buildNightCutinsView：妨害された夜は妨害だけ・未知の種別は出ない", () => {
+  const state = fakeNightState({ humanBlocked: true });
+  state.players[0].roleKey = "apprenticeSeer";
+  const view = Logic.buildNightCutinsView(state, state.players[0], state.players[1], null);
+  assert.equal(view.items.length, 1);
+  assert.equal(view.items[0].title, "✋ 妨害された！");
+  assert.equal(view.items[0].kind, "attack");
+  assert.equal(view.items[0].onShow, null);
+  // 未知の種別は個人カットインを出さない（旧版の meta なしと同じ）。
+  const state2 = fakeNightState({ nightActionTypes: { 0: "unknown" } });
+  const view2 = Logic.buildNightCutinsView(state2, state2.players[0], state2.players[1], null);
+  assert.equal(view2.items.length, 0);
+  assert.equal(view2.celebrate, false);
+});
+
+test("buildNightCutinsView：襲撃・爆弾・罠・蘇生の公開カットインと順番", () => {
+  const state = fakeNightState({
+    nightReport: { type: "eliminated", victimId: 1 },
+    bombReport: { explodedVictims: [2, 3], fizzled: false },
+    trapReport: { attackerId: 4 },
+    doctorReport: { victimId: 5 },
+  });
+  const view = Logic.buildNightCutinsView(state, state.players[0], state.players[6], "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
+  assert.equal(view.celebrate, true);
+  assert.deepEqual(view.items.map((i) => i.title), [
+    "🌙 夜行動", "🌙 夜の襲撃", "💣 爆弾が爆発！", "💣 爆弾が爆発！",
+    "🪤 罠が作動！", "💉 蘇生した！", "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！",
+  ]);
+  const [personal, eliminated, bomb1, bomb2, trap, doctor, win] = view.items;
+  assert.equal(personal.onShow, null);
+  assert.equal(JSON.stringify(eliminated.onShow), JSON.stringify({ kind: "ghost", victimId: 1, motion: "motion-flinch", flash: true }));
+  assert.equal(eliminated.sub, `${state.players[1].name} が倒れた…`);
+  assert.equal(eliminated.kind, "attack");
+  assert.equal(JSON.stringify(bomb1.onShow), JSON.stringify({ kind: "ghost", victimId: 2, motion: "motion-blast", flash: false }));
+  assert.equal(JSON.stringify(bomb2.onShow), JSON.stringify({ kind: "ghost", victimId: 3, motion: "motion-blast", flash: false }));
+  assert.equal(JSON.stringify(trap.onShow), JSON.stringify({ kind: "ghost", victimId: 4, motion: "motion-trap", flash: false }));
+  assert.equal(JSON.stringify(doctor.onShow), JSON.stringify({ kind: "revive", victimId: 5, motion: "motion-revive" }));
+  assert.equal(doctor.sub, `${state.players[5].name} が助かった`);
+  assert.equal(win.kind, "win");
+  assert.equal(win.sub, "");
+  assert.equal(win.onShow, null);
+});
+
+test("buildNightCutinsView：襲撃防衛と爆弾不発はモーションなしの protect", () => {
+  const state = fakeNightState({
+    nightReport: { type: "blocked" },
+    bombReport: { explodedVictims: [], fizzled: true },
+  });
+  const view = Logic.buildNightCutinsView(state, state.players[0], state.players[1], null);
+  assert.equal(view.celebrate, false);
+  assert.deepEqual(view.items.map((i) => i.title), ["🌙 夜行動", "🛡️ 襲撃は防がれた！", "💣 爆弾は不発だった"]);
+  assert.ok(view.items.every((i) => i.onShow === null), "どれも表示時モーションなし");
+  assert.equal(view.items[1].kind, "protect");
+  assert.equal(view.items[2].kind, "protect");
+});
+
+test("buildNightCutinsView：パス＆プレイでは個人カットインが出ない", () => {
+  const state = fakeNightState({ mode: "pnp", nightReport: { type: "eliminated", victimId: 1 } });
+  state.players[0].roleKey = "apprenticeSeer";
+  const view = Logic.buildNightCutinsView(state, { id: -1 }, state.players[1], null);
+  assert.deepEqual(view.items.map((i) => i.title), ["🌙 夜の襲撃"]);
+  assert.equal(view.celebrate, false);
+});
+
+test("buildNightCutinsView：純粋性（同じ入力で同じ結果・入力を変更しない）", () => {
+  const state = fakeNightState({
+    nightReport: { type: "eliminated", victimId: 1 },
+    bombReport: { explodedVictims: [2], fizzled: false },
+  });
+  state.players[0].roleKey = "guardian";
+  const before = JSON.stringify(state);
+  const a = Logic.buildNightCutinsView(state, state.players[0], state.players[3], "win");
+  const b = Logic.buildNightCutinsView(state, state.players[0], state.players[3], "win");
+  assert.equal(JSON.stringify(a), JSON.stringify(b), "同じ入力で同じ結果");
+  assert.equal(JSON.stringify(state), before, "入力 state を変更しない");
+});
+
+test("ブラウザ側の nightCutins は共有モジュールの buildNightCutinsView と同一にキューを作る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const me = s.players[s.playerId];
+  me.roleKey = "apprenticeSeer";
+  const target = s.players.find((p) => p.id !== me.id);
+  const victim = s.players.find((p) => p.id !== me.id && p.id !== target.id);
+  victim.alive = false;
+  s.nightActionTypes = {};
+  s.nightReport = { type: "eliminated", victimId: victim.id };
+  s.bombReport = { explodedVictims: [], fizzled: false };
+  FB.draw();
+  const view = Logic.buildNightCutinsView(s, me, target, null);
+  assert.equal(JSON.stringify(FB.buildNightCutinsViewLogic(s, me, target, null)), JSON.stringify(view));
+  FB.nightCutins(me, target, null);
+  // 先頭は即表示され、残りがキューに残る。
+  const shown = [elements.get("cutinTitle").textContent, ...FB.cutinQueue.map((i) => i.title)];
+  assert.deepEqual(shown, view.items.map((i) => i.title));
+  // 個人カットインを送ると襲撃カットインが出て、幽霊歩行者と赤フラッシュが付く。
+  const stage = elements.get("stage");
+  const before = stage.children.length;
+  elements.get("cutin").onclick();
+  assert.equal(elements.get("cutinTitle").textContent, "🌙 夜の襲撃");
+  assert.equal(stage.children.length, before + 1, "幽霊歩行者が増える");
+  assert.match(stage.children[stage.children.length - 1].className, /motion-flinch/);
+  assert.equal(stage.classList.contains("flash-red"), true, "赤フラッシュが付く");
+});
