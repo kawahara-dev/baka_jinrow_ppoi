@@ -170,6 +170,9 @@ function createSandbox(seedSettings, { fakeAudio = false, seedStorage = null } =
   if (seedStorage) {
     for (const [k, v] of Object.entries(seedStorage)) localStorage.setItem(k, v);
   }
+  // 画面振動の検証用：document.querySelector(".wrap") は振動対象の
+  // ラッパー要素を返す（それ以外は従来通り null）。
+  const wrapEl = makeElement("wrap");
   const sandbox = {
     console,
     Math,
@@ -189,7 +192,7 @@ function createSandbox(seedSettings, { fakeAudio = false, seedStorage = null } =
       body: makeElement("body"),
       getElementById: getEl,
       createElement: () => makeElement(),
-      querySelector: () => null,
+      querySelector: (sel) => (sel === ".wrap" ? wrapEl : null),
       querySelectorAll: () => [],
       // 役職説明ポップオーバーの委譲リスナー検証用：document 直付けの
       // リスナーを記録し、テストから dispatch できるようにする。
@@ -256,6 +259,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   get cutinQueue() { return cutinQueue; },
   buildCutinItemLogic, buildCutinFaceHtmlLogic, buildCutinViewLogic, cutinSfxForLogic,
   buildSpeechBubbleItemLogic, buildSpeechBubbleViewLogic, pickNextSpeechBubbleLogic,
+  celebrate, shakeScreen, buildShakeViewLogic, buildConfettiViewLogic, CONFETTI_REMOVE_MS,
   setLogFolded, toggleLogFold, LOG_FOLD_KEY,
   get logFold() { return logFold; },
 };

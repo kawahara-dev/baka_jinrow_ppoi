@@ -3235,3 +3235,84 @@ test("ブラウザ側の showResults の行 HTML は共有モジュールと同�
   assert.equal(elements.get("resultRows").innerHTML, FB.buildResultRowsViewLogic(expected.rows, {}));
   assert.equal(elements.get("resultRows").innerHTML, Logic.buildResultRowsView(expected.rows, {}));
 });
+
+// ---- フェーズ0第27歩：画面振動・紙吹雪の表示生成の抽出 ----
+
+test("buildShakeView：クラス名 shake と振動時間 500ms を返す", () => {
+  assert.equal(Logic.SHAKE_CLASS, "shake");
+  assert.equal(Logic.SHAKE_MS, 500);
+  assert.equal(JSON.stringify(Logic.buildShakeView()), JSON.stringify({ className: "shake", ms: 500 }));
+  assert.equal(JSON.stringify(Logic.buildShakeView()), JSON.stringify(Logic.buildShakeView()), "同じ入力で同じ結果");
+});
+
+test("buildConfettiPiece：固定乱数では位置・色・遅れ・落下時間が決定的", () => {
+  const fixed = () => 0.5;
+  assert.equal(JSON.stringify(Logic.buildConfettiPiece(0, fixed)), JSON.stringify({
+    className: "confetti-piece",
+    left: "50%",
+    background: "#ff6fb3",
+    delay: "0.25s",
+    duration: "3s",
+  }));
+  // 色は5色を巡回する（旧版 celebrate の colors[i % 5] と同じ）。
+  assert.equal(Logic.buildConfettiPiece(4, fixed).background, "#ffe08a");
+  assert.equal(Logic.buildConfettiPiece(5, fixed).background, "#ff6fb3");
+  assert.equal(Logic.buildConfettiPiece(6, fixed).background, "#b79bff");
+});
+
+test("buildConfettiView：26枚で、同じ乱数列なら同じ並びになる", () => {
+  assert.equal(Logic.CONFETTI_COUNT, 26);
+  assert.equal(Logic.CONFETTI_PIECE_CLASS, "confetti-piece");
+  assert.equal(Logic.CONFETTI_REMOVE_MS, 4600);
+  assert.equal(JSON.stringify(Logic.CONFETTI_COLORS), JSON.stringify(["#ff6fb3", "#b79bff", "#ffd7ec", "#8be0b0", "#ffe08a"]));
+  const seq = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+  const makeRnd = () => { let i = 0; return () => seq[i++ % seq.length]; };
+  const a = Logic.buildConfettiView(makeRnd());
+  const b = Logic.buildConfettiView(makeRnd());
+  assert.equal(a.length, 26);
+  assert.equal(JSON.stringify(a), JSON.stringify(b), "同じ乱数列で同じ結果");
+  assert.equal(a[0].left, "10%");
+  assert.equal(a[0].delay, "0.1s");
+  assert.equal(a[0].duration, "2.68s");
+  assert.equal(a[0].background, "#ff6fb3");
+  assert.equal(a[5].background, "#ff6fb3", "6枚目は色が1周する");
+  // 乱数なし（既定の Math.random）でも26枚の形は揃う。
+  const c = Logic.buildConfettiView();
+  assert.equal(c.length, 26);
+  for (const p of c) {
+    assert.equal(p.className, "confetti-piece");
+    assert.ok(Logic.CONFETTI_COLORS.includes(p.background), `色: ${p.background}`);
+    const left = parseFloat(p.left);
+    assert.ok(p.left.endsWith("%") && left >= 0 && left < 100, `横位置: ${p.left}`);
+    assert.ok(p.delay.endsWith("s"), `遅れ: ${p.delay}`);
+    assert.ok(p.duration.endsWith("s"), `落下時間: ${p.duration}`);
+  }
+});
+
+test("ブラウザ側の celebrate は共有モジュールの buildConfettiView と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  FB.celebrate();
+  const layer = elements.get("confetti");
+  assert.equal(layer.children.length, Logic.CONFETTI_COUNT, "紙吹雪は26枚");
+  for (const child of layer.children) {
+    assert.equal(child.className, Logic.CONFETTI_PIECE_CLASS);
+    assert.ok(Logic.CONFETTI_COLORS.includes(child.style.background), `色: ${child.style.background}`);
+    const left = parseFloat(child.style.left);
+    assert.ok(child.style.left.endsWith("%") && left >= 0 && left < 100, `横位置: ${child.style.left}`);
+    assert.ok(child.style.animationDelay.endsWith("s"), `遅れ: ${child.style.animationDelay}`);
+    assert.ok(child.style.animationDuration.endsWith("s"), `落下時間: ${child.style.animationDuration}`);
+  }
+  // 削除タイマーの時間もモジュールと同じ。
+  assert.equal(FB.CONFETTI_REMOVE_MS, Logic.CONFETTI_REMOVE_MS);
+});
+
+test("ブラウザ側の shakeScreen は共有モジュールの buildShakeView と同一に描く", () => {
+  const { FB, sandbox } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  assert.equal(JSON.stringify(FB.buildShakeViewLogic()), JSON.stringify(Logic.buildShakeView()));
+  const wrap = sandbox.document.querySelector(".wrap");
+  assert.equal(wrap.classList.contains("shake"), false, "振動前は shake なし");
+  FB.shakeScreen();
+  assert.equal(wrap.classList.contains("shake"), true, "振動中は shake が付く");
+});

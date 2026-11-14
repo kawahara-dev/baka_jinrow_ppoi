@@ -1069,7 +1069,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2303,24 +2303,28 @@
   function shakeScreen() {
     const w = document.querySelector ? document.querySelector(".wrap") : null;
     if (!w) return;
-    w.classList.remove("shake");
+    // 振動のクラス名と時間は共有モジュール（buildShakeView）に切り出し済み。
+    // クラスの付け外しとタイマーだけがブラウザ側に残る。
+    const view = buildShakeViewLogic();
+    w.classList.remove(view.className);
     void w.offsetWidth;
-    w.classList.add("shake");
-    later(() => w.classList.remove("shake"), 500);
+    w.classList.add(view.className);
+    later(() => w.classList.remove(view.className), view.ms);
   }
   function celebrate() {
     const layer = el("confetti");
     if (!layer) return;
-    const colors = ["#ff6fb3", "#b79bff", "#ffd7ec", "#8be0b0", "#ffe08a"];
-    for (let i = 0; i < 26; i++) {
+    // 紙吹雪1枚ごとの表示データは共有モジュール（buildConfettiView）に
+    // 切り出し済み。要素の生成・追加・削除だけがブラウザ側に残る。
+    for (const piece of buildConfettiViewLogic()) {
       const s = document.createElement("span");
-      s.className = "confetti-piece";
-      s.style.left = `${Math.random() * 100}%`;
-      s.style.background = colors[i % colors.length];
-      s.style.animationDelay = `${Math.random() * 0.5}s`;
-      s.style.animationDuration = `${2.2 + Math.random() * 1.6}s`;
+      s.className = piece.className;
+      s.style.left = piece.left;
+      s.style.background = piece.background;
+      s.style.animationDelay = piece.delay;
+      s.style.animationDuration = piece.duration;
       layer.appendChild(s);
-      if (s.remove) later(() => s.remove(), 4600);
+      if (s.remove) later(() => s.remove(), CONFETTI_REMOVE_MS);
     }
   }
 
