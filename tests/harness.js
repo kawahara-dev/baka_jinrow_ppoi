@@ -251,7 +251,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   recordPnpStats, loadPnpStats, renderPnpStats, recordStats, loadStats, focusEl,
   get state() { return state; },
   resolveNightActionsLogic, cpuVotePickLogic, planNightActionsLogic, planDiscussionTalksLogic, buildHighlightsLogic, applySoloStatsLogic, applyPnpStatsLogic, buildStatsViewLogic, buildResultSummaryLogic, buildResultRowsViewLogic, getPhaseHintLogic, getFakeAlliesTextLogic, getAlliesLineForRoleLogic, roleHtmlForLogic, buildRoleCardViewLogic, buildCardsViewLogic, buildStageViewLogic, buildDrawViewLogic, normalizeSettingsLogic, buildSettingsViewLogic, normalizeLogFoldLogic, buildLogFoldViewLogic, withLogFoldedLogic, buildAchievementsViewLogic, roleIconButtonHtmlLogic, buildRoleInfoViewLogic, buildRoleGuideViewLogic, buildParadeViewLogic, buildDiscussTimerViewLogic, formatActionLog,
-  buildPnpCoverViewLogic, buildPnpRoleViewLogic, buildPnpNightResultViewLogic, buildPnpNightActionViewLogic, buildPnpTurnBannerTextLogic,
+  buildPnpCoverViewLogic, buildPnpRoleViewLogic, buildPnpNightResultViewLogic, buildPnpNightActionViewLogic, buildPnpTurnBannerTextLogic, buildResultHighlightsViewLogic, buildAchievementsChipsViewLogic,
   BGM_CHORDS, startBgm, stopBgm, isBgmPlaying,
   nightCutins, runNightCutinMotion, stageBounce, stageGhostWalker, stageEventMotion, stageFlashRed, stageOwnActionMotion,
   showCutin, clearCutins,
