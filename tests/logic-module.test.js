@@ -3364,3 +3364,128 @@ test("ブラウザ側の shakeScreen は共有モジュールの buildShakeView 
   FB.shakeScreen();
   assert.equal(wrap.classList.contains("shake"), true, "振動中は shake が付く");
 });
+
+// ---- フェーズ0第28歩：ステージ歩行者モーションの表示生成の抽出 ----
+
+test("buildStageBounceView：ホップのクラス speaking と時間 1000ms を返す", () => {
+  assert.equal(Logic.STAGE_BOUNCE_CLASS, "speaking");
+  assert.equal(Logic.STAGE_BOUNCE_MS, 1000);
+  assert.equal(JSON.stringify(Logic.buildStageBounceView()), JSON.stringify({ className: "speaking", ms: 1000 }));
+  assert.equal(JSON.stringify(Logic.buildStageBounceView()), JSON.stringify(Logic.buildStageBounceView()), "同じ入力で同じ結果");
+});
+
+test("buildStageEventMotionView：クラスと時間（既定 2000ms）を返す", () => {
+  assert.equal(Logic.STAGE_EVENT_MOTION_MS, 2000);
+  assert.equal(JSON.stringify(Logic.buildStageEventMotionView("motion-revive")), JSON.stringify({ className: "motion-revive", ms: 2000 }));
+  assert.equal(JSON.stringify(Logic.buildStageEventMotionView("motion-flinch", 3200)), JSON.stringify({ className: "motion-flinch", ms: 3200 }));
+  assert.equal(Logic.buildStageEventMotionView(""), null);
+  assert.equal(Logic.buildStageEventMotionView(null), null);
+  assert.equal(Logic.buildStageEventMotionView(123), null);
+});
+
+test("buildGhostWalkerView：幽霊歩行者のクラス・id・style・中身・消去時間を返す", () => {
+  assert.equal(Logic.STAGE_GHOST_BD, "0.34s");
+  assert.equal(Logic.STAGE_GHOST_REMOVE_MS, 3200);
+  assert.equal(JSON.stringify(Logic.buildGhostWalkerView(3, "motion-blast", undefined, "kanon")), JSON.stringify({
+    className: "walker motion-blast",
+    playerId: 3,
+    style: "--i:3;--bd:0.34s",
+    innerHtml: `<span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="kanon" data-frame="a" alt=""><img class="frame-b" data-slug="kanon" data-frame="b" alt=""></span>`,
+    removeMs: 3200,
+  }));
+  assert.equal(Logic.buildGhostWalkerView(0, "motion-flinch", 1500, "luna").removeMs, 1500);
+  assert.equal(Logic.buildGhostWalkerView(0, "motion-flinch", undefined, "luna").removeMs, 3200);
+  assert.equal(Logic.buildGhostWalkerView(0, "", undefined, "luna"), null);
+  assert.equal(Logic.buildGhostWalkerView(0, null, undefined, "luna"), null);
+});
+
+test("buildStageFlashView：赤フラッシュのクラス flash-red と時間 1000ms を返す", () => {
+  assert.equal(Logic.STAGE_FLASH_CLASS, "flash-red");
+  assert.equal(Logic.STAGE_FLASH_MS, 1000);
+  assert.equal(JSON.stringify(Logic.buildStageFlashView()), JSON.stringify({ className: "flash-red", ms: 1000 }));
+});
+
+test("OWN_ACTION_FAMILIES：行動種別→モーション系統の対応表", () => {
+  assert.equal(JSON.stringify(Logic.OWN_ACTION_FAMILIES), JSON.stringify({
+    investigate: "peek", spy: "peek", lookout: "peek",
+    protect: "guard", revive: "guard", block: "guard",
+    track: "sneak", attack: "slash", plant: "plant", trap: "plant",
+  }));
+  assert.equal(Logic.OWN_ACTION_FAMILIES.unknown, undefined);
+});
+
+test("buildOwnActionMotionView：系統と左右からクラス名を決める", () => {
+  assert.equal(Logic.OWN_ACTION_MOTION_MS, 1800);
+  assert.equal(JSON.stringify(Logic.buildOwnActionMotionView(0, 3, "investigate")), JSON.stringify({
+    className: "motion-own-peek-r",
+    removeClasses: ["motion-own-peek-r", "motion-own-peek-l"],
+    ms: 1800,
+  }));
+  assert.equal(Logic.buildOwnActionMotionView(3, 0, "attack").className, "motion-own-slash-l");
+  assert.equal(Logic.buildOwnActionMotionView(2, 2, "protect").className, "motion-own-guard-r", "同じ id は右扱い（旧版の >= と同じ）");
+  assert.equal(Logic.buildOwnActionMotionView(0, 1, "track").className, "motion-own-sneak-r");
+  assert.equal(Logic.buildOwnActionMotionView(0, 1, "plant").className, "motion-own-plant-r");
+  assert.equal(Logic.buildOwnActionMotionView(0, 1, "trap").className, "motion-own-plant-r");
+  assert.equal(Logic.buildOwnActionMotionView(0, 1, "unknown"), null);
+  assert.equal(Logic.buildOwnActionMotionView(0, 1, undefined), null);
+});
+
+test("ブラウザ側の stageBounce／stageEventMotion／stageFlashRed は共有モジュールと同一に動く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  FB.draw();
+  const stage = elements.get("stage");
+  const walker0 = stage.querySelector('.walker[data-player="0"]');
+  assert.ok(walker0, "歩行者 0 がいる");
+  assert.equal(walker0.classList.contains("speaking"), false, "ホップ前は speaking なし");
+  FB.stageBounce(0);
+  assert.equal(walker0.classList.contains("speaking"), true, "ホップで speaking が付く");
+  assert.equal(JSON.stringify(FB.buildStageBounceViewLogic()), JSON.stringify(Logic.buildStageBounceView()));
+  FB.stageEventMotion(0, "motion-revive");
+  assert.equal(walker0.classList.contains("motion-revive"), true, "汎用モーションのクラスが付く");
+  assert.equal(JSON.stringify(FB.buildStageEventMotionViewLogic("motion-revive")), JSON.stringify(Logic.buildStageEventMotionView("motion-revive")));
+  assert.equal(stage.classList.contains("flash-red"), false, "フラッシュ前は flash-red なし");
+  FB.stageFlashRed();
+  assert.equal(stage.classList.contains("flash-red"), true, "赤フラッシュが付く");
+  assert.equal(JSON.stringify(FB.buildStageFlashViewLogic()), JSON.stringify(Logic.buildStageFlashView()));
+});
+
+test("ブラウザ側の stageOwnActionMotion は共有モジュールの表示データと同一に動く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  FB.draw();
+  const stage = elements.get("stage");
+  assert.equal(JSON.stringify(FB.buildOwnActionMotionViewLogic(0, 3, "investigate")), JSON.stringify(Logic.buildOwnActionMotionView(0, 3, "investigate")));
+  assert.equal(JSON.stringify(FB.OWN_ACTION_FAMILIES), JSON.stringify(Logic.OWN_ACTION_FAMILIES));
+  FB.stageOwnActionMotion(0, 3, "investigate");
+  assert.equal(stage.querySelector('.walker[data-player="0"]').classList.contains("motion-own-peek-r"), true, "調査は右への peek");
+  FB.stageOwnActionMotion(3, 0, "attack");
+  assert.equal(stage.querySelector('.walker[data-player="3"]').classList.contains("motion-own-slash-l"), true, "襲撃は左への slash");
+  // 対応表にない種別は何もしない。
+  FB.stageOwnActionMotion(0, 3, "unknown");
+  assert.equal(stage.querySelector('.walker[data-player="0"]').classList.contains("motion-own-peek-r"), true, "未知の種別で既存クラスは変わらない");
+});
+
+test("ブラウザ側の stageGhostWalker は共有モジュールの表示データと同一に幽霊歩行者を作る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  // 3番を脱落させて描き直すとステージから歩行者が消える。
+  FB.state.players[3].alive = false;
+  FB.draw();
+  const stage = elements.get("stage");
+  assert.equal(stage.querySelector('.walker[data-player="3"]'), null, "脱落者の歩行者はステージにいない");
+  const before = stage.children.length;
+  FB.stageGhostWalker(3, "motion-blast");
+  assert.equal(stage.children.length, before + 1, "幽霊歩行者が1つ増える");
+  const ghost = stage.children[stage.children.length - 1];
+  const view = Logic.buildGhostWalkerView(3, "motion-blast", undefined, "kanon");
+  assert.equal(ghost.className, view.className);
+  assert.equal(ghost.getAttribute("data-player"), String(view.playerId));
+  assert.equal(ghost.getAttribute("style"), view.style);
+  assert.equal(ghost.innerHTML, view.innerHtml);
+  // 歩行者がまだいる場合はゴーストを作らず汎用モーションに委譲する。
+  const before2 = stage.children.length;
+  FB.stageGhostWalker(0, "motion-flinch");
+  assert.equal(stage.children.length, before2, "歩行者がいる場合は増えない");
+  assert.equal(stage.querySelector('.walker[data-player="0"]').classList.contains("motion-flinch"), true, "代わりに汎用モーションが付く");
+});

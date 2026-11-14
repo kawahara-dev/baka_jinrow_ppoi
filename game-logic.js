@@ -1923,6 +1923,65 @@
     for (let i = 0; i < CONFETTI_COUNT; i++) pieces.push(buildConfettiPiece(i, random));
     return pieces;
   }
+  // ステージ歩行者のモーション表示生成（キャラクターモーション）。
+  // 吹き出し表示時のホップ（speaking クラス 1000ms）と、公開イベント
+  // 時の汎用モーション（クラスと時間。既定 2000ms）は、クラス名と時間
+  // だけを返す純粋関数。クラスの付け外しとタイマーはブラウザ側
+  // （stageBounce／stageEventMotion）が行う。
+  const STAGE_BOUNCE_CLASS = "speaking";
+  const STAGE_BOUNCE_MS = 1000;
+  function buildStageBounceView() {
+    return { className: STAGE_BOUNCE_CLASS, ms: STAGE_BOUNCE_MS };
+  }
+  const STAGE_EVENT_MOTION_MS = 2000;
+  function buildStageEventMotionView(cls, ms) {
+    if (typeof cls !== "string" || cls === "") return null;
+    return { className: cls, ms: ms || STAGE_EVENT_MOTION_MS };
+  }
+  // 退場したプレイヤーを幽霊歩行者として一時的に再表示する分の表示
+  // データ。クラス・配置用の style・中身の HTML・消えるまでの時間を
+  // 返す純粋関数。歩行者がまだステージにいるかの判断と要素の生成・
+  // 追加・削除はブラウザ側（stageGhostWalker）が行う。
+  const STAGE_GHOST_BD = "0.34s";
+  const STAGE_GHOST_REMOVE_MS = 3200;
+  function buildGhostWalkerView(playerId, cls, ms, iconSlug) {
+    if (typeof cls !== "string" || cls === "") return null;
+    return {
+      className: `walker ${cls}`,
+      playerId,
+      style: `--i:${playerId};--bd:${STAGE_GHOST_BD}`,
+      innerHtml: `<span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${iconSlug}" data-frame="a" alt=""><img class="frame-b" data-slug="${iconSlug}" data-frame="b" alt=""></span>`,
+      removeMs: ms || STAGE_GHOST_REMOVE_MS,
+    };
+  }
+  // 公開された襲撃時のステージ赤フラッシュ。クラス名と時間だけを返す
+  // 純粋関数。クラスの付け外しとタイマーはブラウザ側（stageFlashRed）
+  // が行う。
+  const STAGE_FLASH_CLASS = "flash-red";
+  const STAGE_FLASH_MS = 1000;
+  function buildStageFlashView() {
+    return { className: STAGE_FLASH_CLASS, ms: STAGE_FLASH_MS };
+  }
+  // 自分の夜行動時の歩行者モーション。行動種別→モーション系統の対応表
+  // と、方向（対象が自分より右か左か）からクラス名を決める純粋関数。
+  // 対応表にない種別は null。クラスの付け外しとタイマーはブラウザ側
+  // （stageOwnActionMotion）が行う。
+  const OWN_ACTION_FAMILIES = {
+    investigate: "peek", spy: "peek", lookout: "peek",
+    protect: "guard", revive: "guard", block: "guard",
+    track: "sneak", attack: "slash", plant: "plant", trap: "plant",
+  };
+  const OWN_ACTION_MOTION_MS = 1800;
+  function buildOwnActionMotionView(actorId, targetId, actionType) {
+    const family = OWN_ACTION_FAMILIES[actionType];
+    if (!family) return null;
+    const dir = targetId >= actorId ? "r" : "l";
+    return {
+      className: `motion-own-${family}-${dir}`,
+      removeClasses: [`motion-own-${family}-r`, `motion-own-${family}-l`],
+      ms: OWN_ACTION_MOTION_MS,
+    };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -2010,5 +2069,19 @@
     CONFETTI_REMOVE_MS,
     buildConfettiPiece,
     buildConfettiView,
+    STAGE_BOUNCE_CLASS,
+    STAGE_BOUNCE_MS,
+    buildStageBounceView,
+    STAGE_EVENT_MOTION_MS,
+    buildStageEventMotionView,
+    STAGE_GHOST_BD,
+    STAGE_GHOST_REMOVE_MS,
+    buildGhostWalkerView,
+    STAGE_FLASH_CLASS,
+    STAGE_FLASH_MS,
+    buildStageFlashView,
+    OWN_ACTION_FAMILIES,
+    OWN_ACTION_MOTION_MS,
+    buildOwnActionMotionView,
   };
 });
