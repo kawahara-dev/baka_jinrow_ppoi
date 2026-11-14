@@ -2862,6 +2862,39 @@ test("ブラウザ側の renderParade は共有モジュールの buildParadeVie
   assert.equal(elements.get("parade").innerHTML, expected, "再描画でも同一");
 });
 
+test("buildLobbyRosterView：8人の参加者が id 順に並び、名前・アイコンが揃う", () => {
+  const view = Logic.buildLobbyRosterView();
+  assert.equal(view.length, 8);
+  for (let i = 0; i < 8; i++) {
+    assert.equal(view[i].id, i, `参加者 ${i} の id`);
+    assert.equal(view[i].name, Logic.PLAYER_NAMES[i], `参加者 ${i} の名前`);
+    assert.equal(view[i].icon, Logic.PLAYER_ICONS[i], `参加者 ${i} のアイコン`);
+    assert.equal(view[i].html,
+      `<li class="lobby-roster-item"><span class="lobby-roster-icon">${Logic.PLAYER_ICONS[i]}</span><span class="lobby-roster-name">${Logic.PLAYER_NAMES[i]}</span></li>`,
+      `参加者 ${i} のチップ HTML`);
+  }
+});
+
+test("buildLobbyRosterView：PLAYER_NAMES・PLAYER_ICONS を変更しない（純粋関数）", () => {
+  const beforeNames = JSON.stringify(Logic.PLAYER_NAMES);
+  const beforeIcons = JSON.stringify(Logic.PLAYER_ICONS);
+  Logic.buildLobbyRosterView();
+  Logic.buildLobbyRosterView();
+  assert.equal(JSON.stringify(Logic.PLAYER_NAMES), beforeNames);
+  assert.equal(JSON.stringify(Logic.PLAYER_ICONS), beforeIcons);
+});
+
+test("ブラウザ側の renderLobbyRoster は共有モジュールの buildLobbyRosterView と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  const view = Logic.buildLobbyRosterView();
+  assert.equal(JSON.stringify(FB.buildLobbyRosterViewLogic()), JSON.stringify(view), "ハーネス経由の buildLobbyRosterView とも同一");
+  // 読み込み時に描画済みで、チップ8個がモジュールの HTML と同一。
+  const expected = view.map(m => m.html).join("");
+  assert.equal(elements.get("lobbyRosterList").innerHTML, expected);
+  FB.renderLobbyRoster();
+  assert.equal(elements.get("lobbyRosterList").innerHTML, expected, "再描画でも同一");
+});
+
 test("formatDiscussTime：残り秒数を「分:秒」表示にする", () => {
   assert.equal(Logic.formatDiscussTime(0), "0:00");
   assert.equal(Logic.formatDiscussTime(5), "0:05");

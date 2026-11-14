@@ -2102,6 +2102,43 @@ test("Feign風UI第2弾：結果画面は町のボード風ダークテーマ", 
   assert.match(style, /#gameScreen \.result-row\.dead \.result-role \{ color: #8f86ad; \}/);
 });
 
+test("Feign風UI第2弾：タイトル画面はロビー風レイアウト（参加者一覧＋設定パネルの左右配置）", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  // 参加者一覧と設定パネルは .lobby にまとめる。基本は1列（設定→参加者）。
+  const lobby = style.match(/\.lobby \{[^}]*\}/)[0];
+  assert.match(lobby, /display: grid/);
+  assert.match(lobby, /gap: 14px/);
+  assert.match(lobby, /width: 100%/);
+  assert.match(lobby, /max-width: 880px/);
+  assert.doesNotMatch(lobby, /grid-template-columns/);
+  // 幅641px以上でだけ左右2列にし、参加者を左・設定を右に置く。
+  assert.match(style, /@media \(min-width: 641px\) \{[\s\S]*?\.lobby \{ grid-template-columns: 1fr 1fr; align-items: start; \}/);
+  assert.match(style, /@media \(min-width: 641px\) \{[\s\S]*?\.lobby-roster \{ order: -1; \}/);
+  // 参加者パネルはゲーム画面と同じ町のボード風ダークテーマ。
+  const roster = style.match(/\.lobby-roster \{[^}]*\}/)[0];
+  assert.match(roster, /background: linear-gradient\(180deg, #2a2145 0%, #1d1733 100%\)/);
+  assert.match(roster, /border: 2px solid var\(--town-deep\)/);
+  assert.match(roster, /color: #fff/);
+  const head = style.match(/\.lobby-head \{[^}]*\}/)[0];
+  assert.match(head, /color: var\(--gold\)/);
+  const note = style.match(/\.lobby-note \{[^}]*\}/)[0];
+  assert.match(note, /color: #cfc2ee/);
+  // 参加者チップは2列グリッドで、半透明の白い pill。
+  const list = style.match(/\.lobby-roster-list \{[^}]*\}/)[0];
+  assert.match(list, /grid-template-columns: 1fr 1fr/);
+  const item = style.match(/\.lobby-roster-item \{[^}]*\}/)[0];
+  assert.match(item, /background: rgba\(255, 255, 255, 0\.08\)/);
+  // HTML: .lobby の中に設定パネルと参加者一覧が入る。
+  assert.match(html, /<div class="lobby">\s*<div class="settings-panel"/);
+  assert.match(html, /<div class="lobby-roster" role="group" aria-label="参加者">/);
+  assert.match(html, /<ul id="lobbyRosterList" class="lobby-roster-list"><\/ul>/);
+  // スマホ（641px以下）の既存寸法は変えない：タイトル画面とパレードの
+  // モバイル用ルールがそのまま残っている。
+  assert.match(style, /\.title-screen \{ min-height: 52vh; gap: 14px; \}/);
+  assert.match(style, /\.parade \{ height: 118px; margin-top: 6px; \}/);
+});
+
 test("役職アイコン: ROLES 全役職に仕様通りのアイコンがあり、重複・キャラ絵文字との衝突がない", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   const expected = {
