@@ -1069,7 +1069,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2209,12 +2209,6 @@
     fn();
     return null;
   }
-  // カットインに載せる顔。カードと同じ顔画像（ICON_IMGS）＋絵文字
-  // フォールバックで、キャラの顔だけを出す（役職は出さない）。
-  // 顔 HTML の生成は共有モジュール（buildCutinFaceHtml）に切り出し済み。
-  function cutinFaceHtml(playerId, small) {
-    return buildCutinFaceHtmlLogic(state.players[playerId], ICON_IMGS[ICON_SLUGS[playerId]], ICON_SLUGS[playerId], small);
-  }
   // opts: { charId, targetCharId, motion }。charId はそのカットイン自体が
   // 公開しているキャラだけ（被害者・助かった人・マウス公開の本人・追放
   // された人・自分の夜アクションの自分）。「防がれた」「不発」には付け
@@ -2254,18 +2248,21 @@
       box.classList.add("hidden");
       return;
     }
+    // 表示する内容（タイトル・サブ・種類・顔 HTML・系統モーション・画面振動・
+    // 効果音）は共有モジュール（buildCutinView）に切り出し済み。DOM への
+    // 代入とタイマー・クリックだけがブラウザ側に残る。
     cutinBusy = true;
-    el("cutinTitle").textContent = item.title;
-    el("cutinSub").textContent = item.sub;
-    if (box.dataset) box.dataset.kind = item.kind;
+    const view = buildCutinViewLogic(item, state.players, ICON_IMGS, ICON_SLUGS);
+    el("cutinTitle").textContent = view.title;
+    el("cutinSub").textContent = view.sub;
+    if (box.dataset) box.dataset.kind = view.kind;
     // 顔つきカットイン：charId があれば顔を出し、なければ隠したまま。
     // 自分の夜アクションは自分の顔（系統モーション付き）＋相手の顔（小）。
     const charBox = el("cutinChar");
     if (charBox) {
-      if (item.charId !== null && item.charId !== undefined) {
-        charBox.innerHTML = cutinFaceHtml(item.charId, false)
-          + (item.targetCharId !== null && item.targetCharId !== undefined ? cutinFaceHtml(item.targetCharId, true) : "");
-        if (charBox.dataset) charBox.dataset.own = item.motion || "";
+      if (view.hasChar) {
+        charBox.innerHTML = view.charHtml;
+        if (charBox.dataset) charBox.dataset.own = view.motion;
         charBox.classList.remove("hidden");
       } else {
         charBox.innerHTML = "";
@@ -2284,9 +2281,9 @@
       void band.offsetWidth;
       band.style.animation = "";
     }
-    if (item.kind === "bomb" || item.kind === "attack") shakeScreen();
-    // 効果音の種類は共有モジュール（cutinSfxFor）に切り出し済み。
-    sfx(cutinSfxForLogic(item.kind));
+    if (view.shake) shakeScreen();
+    // 効果音の種類は共有モジュール（buildCutinView）に切り出し済み。
+    sfx(view.sfx);
     const done = () => {
       box.classList.add("hidden");
       const charBox = el("cutinChar");
