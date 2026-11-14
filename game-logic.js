@@ -1250,6 +1250,26 @@
     });
     return { winnerFaction, myWin, sub, rows };
   }
+  // ---- 結果画面の行 HTML の生成 ----
+  // 結果画面の1行分の HTML。行データは buildResultSummary が作るもの。
+  // 顔画像は iconImgs（ICON_IMGS、slug キー）から差し込む。
+  // 勝敗モーション（キャラモーション第1弾）：勝った陣営はジャンプ、
+  // 負けた陣営はしょんぼり。
+  function buildResultRowHtml(row, iconImgs) {
+    const img = iconImgs ? iconImgs[ICON_SLUGS[row.id]] : undefined;
+    return `<div class="result-row ${row.alive ? "" : "dead"} ${row.isWinner ? "winner" : "loser"}">
+        <div class="avatar"><span>${row.icon}</span>${img ? `<img class="avatar-img" src="${img}" alt="${row.name}">` : ""}</div>
+        <div><div class="result-name">${row.name}${row.isMe ? "（あなた）" : ""}<span class="faction-chip ${row.chipClass}">${row.faction}</span></div>
+        <div class="result-role">${roleIconButtonHtml(row.roleKey)} ${row.roleName}${row.displayNote}${row.clumsyNote}</div></div>
+        <div class="result-status">${row.status}</div>
+      </div>`;
+  }
+
+  // 結果画面の全行の HTML。rows が空・null のときは空文字。
+  function buildResultRowsView(rows, iconImgs) {
+    if (!rows || !rows.length) return "";
+    return rows.map((r) => buildResultRowHtml(r, iconImgs)).join("");
+  }
   // ---- フェーズヒントの生成 ----
   // 役職カードとパス＆プレイの手番バナーに出す、そのフェーズでの行動の指針。
   // 夜は自分の表示役職（バカは表示役職）の nightActionHint、それ以外は
@@ -1863,6 +1883,8 @@
     applyPnpStats,
     buildStatsView,
     buildResultSummary,
+    buildResultRowHtml,
+    buildResultRowsView,
     getPhaseHint,
     getFakeAlliesText,
     getAlliesLineForRole,
