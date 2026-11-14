@@ -2045,6 +2045,37 @@
     }
     return { items, celebrate };
   }
+  // マウス公開の表示生成：公開する役職の決定と、公開文言・ログ・
+  // カットインの表示データを返す純粋関数。バカが公開する側だと
+  // バカ以外の役職からランダムに1つ選ぶ（旧版の revealMouse と
+  // 同じ）。乱数は opts.random で注入でき、既定は Math.random。
+  // shownRoleKey と suspicion（イノセント -5／それ以外 8）は表示の
+  // 決定そのものなので返り値に含め、ブラウザ側が
+  // state.revealedRoles と target.suspicion へ適用する。バカの対象は
+  // 表示役職が出る（getPublicRoleKey 経由）。actor・target がない、
+  // または公開する役職が分からなければ null。文言・ログ・カットイン
+  // は旧版の revealMouse と同一。actor・target は読み取るだけで
+  // 変更しない。
+  function buildRevealMouseView(actor, target, opts = {}) {
+    if (!actor || !target) return null;
+    const rnd = typeof opts.random === "function" ? opts.random : Math.random;
+    let shownRoleKey = getPublicRoleKey(target);
+    if (actor.roleKey === "baka") {
+      const pool = Object.keys(ROLES).filter(k => k !== "baka");
+      shownRoleKey = pool[Math.floor(rnd() * pool.length)];
+    }
+    const shown = ROLES[shownRoleKey];
+    if (!shown) return null;
+    const mouseLine = `ここでマウス能力！ ${target.name} は… ${shown.name}（${shown.faction}）だよ！`;
+    return {
+      shownRoleKey,
+      suspicion: shown.faction === "イノセント" ? -5 : 8,
+      mouseLine,
+      dialogueText: `🐭 ${actor.name}「${mouseLine}」`,
+      logText: formatActionLog("roleReveal", { label: "公開", target: target.name, role: shown.name, faction: shown.faction }),
+      cutin: buildCutinItem("🐭 役職公開", `${target.name} は ${shown.name}`, "info", { charId: target.id }),
+    };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -2148,5 +2179,6 @@
     buildOwnActionMotionView,
     NIGHT_ACTION_CUTIN_META,
     buildNightCutinsView,
+    buildRevealMouseView,
   };
 });

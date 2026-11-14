@@ -260,7 +260,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   buildCutinItemLogic, buildCutinFaceHtmlLogic, buildCutinViewLogic, cutinSfxForLogic,
   buildSpeechBubbleItemLogic, buildSpeechBubbleViewLogic, pickNextSpeechBubbleLogic,
   celebrate, shakeScreen, buildShakeViewLogic, buildConfettiViewLogic, CONFETTI_REMOVE_MS,
-  buildStageBounceViewLogic, buildStageEventMotionViewLogic, buildGhostWalkerViewLogic, buildStageFlashViewLogic, buildOwnActionMotionViewLogic, OWN_ACTION_FAMILIES, buildNightCutinsViewLogic,
+  buildStageBounceViewLogic, buildStageEventMotionViewLogic, buildGhostWalkerViewLogic, buildStageFlashViewLogic, buildOwnActionMotionViewLogic, OWN_ACTION_FAMILIES, buildNightCutinsViewLogic, buildRevealMouseViewLogic,
   setLogFolded, toggleLogFold, LOG_FOLD_KEY,
   get logFold() { return logFold; },
 };
