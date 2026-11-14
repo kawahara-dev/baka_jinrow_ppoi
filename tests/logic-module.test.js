@@ -2502,3 +2502,95 @@ test("ブラウザ側の showCutin／pumpCutin は共有モジュールの build
     + Logic.buildCutinFaceHtml(s.players[1], undefined, Logic.ICON_SLUGS[1], true));
   assert.equal(elements.get("cutinChar").dataset.own, "peek");
 });
+
+test("buildSpeechBubbleItem：有効な値はそのまま、発言者なし・空文言は null", () => {
+  assert.equal(JSON.stringify(Logic.buildSpeechBubbleItem(0, "怪しいな…")),
+    JSON.stringify({ playerId: 0, text: "怪しいな…" }));
+  assert.equal(JSON.stringify(Logic.buildSpeechBubbleItem(3, "🐭 ルナ「見たよ」")),
+    JSON.stringify({ playerId: 3, text: "🐭 ルナ「見たよ」" }));
+  assert.equal(Logic.buildSpeechBubbleItem(null, "セリフ"), null, "発言者なしは null");
+  assert.equal(Logic.buildSpeechBubbleItem(undefined, "セリフ"), null);
+  assert.equal(Logic.buildSpeechBubbleItem(0, ""), null, "空の文言は null");
+  assert.equal(Logic.buildSpeechBubbleItem(0, null), null);
+  assert.equal(Logic.buildSpeechBubbleItem(0, undefined), null);
+});
+
+test("buildSpeechBubbleView：クラス名 speech-bubble と文言、item なしは null", () => {
+  assert.equal(JSON.stringify(Logic.buildSpeechBubbleView({ playerId: 1, text: "怪しいな…" })),
+    JSON.stringify({ className: "speech-bubble", text: "怪しいな…" }));
+  assert.equal(Logic.buildSpeechBubbleView(null), null);
+  assert.equal(Logic.buildSpeechBubbleView(undefined), null);
+});
+
+test("pickNextSpeechBubble：空キューは none、議論以外は drop、議論中は先頭を show", () => {
+  assert.equal(Logic.pickNextSpeechBubble([], "discussion").action, "none");
+  assert.equal(Logic.pickNextSpeechBubble(null, "discussion").action, "none");
+  assert.equal(Logic.pickNextSpeechBubble(undefined, "discussion").action, "none");
+  const queue = [{ playerId: 0, text: "1件目" }, { playerId: 1, text: "2件目" }];
+  assert.equal(Logic.pickNextSpeechBubble(queue, "night").action, "drop", "夜は残りを破棄");
+  assert.equal(Logic.pickNextSpeechBubble(queue, "vote").action, "drop");
+  assert.equal(Logic.pickNextSpeechBubble(queue, "morning").action, "drop");
+  const next = Logic.pickNextSpeechBubble(queue, "discussion");
+  assert.equal(next.action, "show");
+  assert.equal(JSON.stringify(next.item), JSON.stringify({ playerId: 0, text: "1件目" }));
+  assert.equal(queue.length, 2, "先頭を返してもキューは減らない");
+});
+
+test("buildSpeechBubbleItem／buildSpeechBubbleView／pickNextSpeechBubble：入力を変更しない（純粋関数）", () => {
+  const item = { playerId: 0, text: "怪しいな…" };
+  const beforeItem = JSON.stringify(item);
+  const queue = [{ playerId: 0, text: "1件目" }, { playerId: 1, text: "2件目" }];
+  const beforeQueue = JSON.stringify(queue);
+  Logic.buildSpeechBubbleItem(2, "新しいセリフ");
+  Logic.buildSpeechBubbleView(item);
+  Logic.pickNextSpeechBubble(queue, "discussion");
+  Logic.pickNextSpeechBubble(queue, "vote");
+  assert.equal(JSON.stringify(item), beforeItem);
+  assert.equal(JSON.stringify(queue), beforeQueue);
+});
+
+test("SPEECH_BUBBLE_MS は 2200（従来の表示時間と同じ）", () => {
+  assert.equal(Logic.SPEECH_BUBBLE_MS, 2200);
+});
+
+test("ブラウザ側の enqueueSpeechBubble／showNextSpeechBubble は共有モジュールの吹き出し関数と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  s.phase = "discussion";
+  FB.draw();
+  // ハーネス経由のモジュール関数とも同一。
+  assert.equal(JSON.stringify(FB.buildSpeechBubbleItemLogic(0, "怪しいな…")),
+    JSON.stringify(Logic.buildSpeechBubbleItem(0, "怪しいな…")));
+  assert.equal(JSON.stringify(FB.buildSpeechBubbleViewLogic({ playerId: 0, text: "怪しいな…" })),
+    JSON.stringify(Logic.buildSpeechBubbleView({ playerId: 0, text: "怪しいな…" })));
+  assert.equal(JSON.stringify(FB.pickNextSpeechBubbleLogic([{ playerId: 0, text: "1件目" }], "discussion")),
+    JSON.stringify(Logic.pickNextSpeechBubble([{ playerId: 0, text: "1件目" }], "discussion")));
+  // 有効な enqueue はモジュールの生成結果そのままキューに入り、即座に
+  // 発言者のカードへ className・文言ともモジュール通りに出る。
+  // 1件目は表示されてキューから外れるので、2件目でキュー内容を確認する。
+  FB.enqueueSpeechBubble(0, "怪しいな…");
+  FB.enqueueSpeechBubble(1, "2件目だよ");
+  assert.equal(JSON.stringify(FB.speechQueue[0]),
+    JSON.stringify(Logic.buildSpeechBubbleItem(1, "2件目だよ")));
+  const card = elements.get("cards").children.find(
+    (c) => c.getAttribute("data-player") === "0");
+  const bubble = card.children.find((c) => c.className === "speech-bubble");
+  assert.ok(bubble, "発言者のカードに吹き出しがない");
+  const view = Logic.buildSpeechBubbleView({ playerId: 0, text: "怪しいな…" });
+  assert.equal(bubble.className, view.className);
+  assert.equal(bubble.textContent, view.text);
+  // 無効な enqueue はキューに入らない（モジュールが null を返す条件と同じ）。
+  const queued = FB.speechQueue.length;
+  FB.enqueueSpeechBubble(null, "セリフ");
+  FB.enqueueSpeechBubble(1, "");
+  FB.enqueueSpeechBubble(1, null);
+  assert.equal(FB.speechQueue.length, queued);
+  // 議論フェーズ以外で enqueue すると残りは破棄される（drop）。
+  FB.clearSpeechBubbles();
+  s.phase = "night";
+  FB.enqueueSpeechBubble(0, "夜のセリフ");
+  assert.equal(FB.speechQueue.length, 0, "議論以外ではキューが残らない");
+  assert.equal(elements.get("cards").children.flatMap((c) =>
+    c.children.filter((x) => x.className === "speech-bubble")).length, 0);
+});

@@ -252,6 +252,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   get cutinQueueLength() { return cutinQueue.length; },
   get cutinQueue() { return cutinQueue; },
   buildCutinItemLogic, buildCutinFaceHtmlLogic, cutinSfxForLogic,
+  buildSpeechBubbleItemLogic, buildSpeechBubbleViewLogic, pickNextSpeechBubbleLogic,
   setLogFolded, toggleLogFold, LOG_FOLD_KEY,
   get logFold() { return logFold; },
 };

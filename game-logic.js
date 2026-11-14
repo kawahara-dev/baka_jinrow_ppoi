@@ -1616,6 +1616,29 @@
     if (!player) return "";
     return `<span class="cutin-face${small ? " small" : ""}"><span>${player.icon}</span>${iconImg ? `<img class="avatar-img" data-icon-slug="${slug}" src="${iconImg}" alt="${player.name}" onerror="this.remove()">` : ""}</span>`;
   }
+  // 吹き出しの表示時間（ミリ秒）。議論の CPU セリフとマウス公開が
+  // 1件ずつ発言者のカードの上にこの時間だけ出る。DOM を使わない定数。
+  const SPEECH_BUBBLE_MS = 2200;
+  // 吹き出しキュー1件分の表示データを返す純粋関数。発言者なし・
+  // 空の文言はキューに入れない（ブラウザ側の enqueue と同じ条件）。
+  function buildSpeechBubbleItem(playerId, text) {
+    if (playerId == null || !text) return null;
+    return { playerId, text };
+  }
+  // 吹き出し要素の表示データを返す純粋関数。クラス名と文言だけ。
+  // 要素の生成・代入はブラウザ側（showNextSpeechBubble）が行う。
+  function buildSpeechBubbleView(item) {
+    if (!item) return null;
+    return { className: "speech-bubble", text: item.text };
+  }
+  // 次に表示する吹き出しの判断を返す純粋関数。キューが空なら none、
+  // 議論フェーズ以外なら drop（残りは破棄）、それ以外は先頭を show。
+  // カードの有無は DOM なのでブラウザ側で判断する。キューは変更しない。
+  function pickNextSpeechBubble(queue, phase) {
+    if (!queue || queue.length === 0) return { action: "none" };
+    if (phase !== "discussion") return { action: "drop" };
+    return { action: "show", item: queue[0] };
+  }
   return {
     ROLES,
     PHASE_META,
@@ -1675,5 +1698,9 @@
     cutinSfxFor,
     buildCutinItem,
     buildCutinFaceHtml,
+    SPEECH_BUBBLE_MS,
+    buildSpeechBubbleItem,
+    buildSpeechBubbleView,
+    pickNextSpeechBubble,
   };
 });
