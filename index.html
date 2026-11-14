@@ -1069,7 +1069,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -1977,29 +1977,25 @@
   // 合図だけを出し、進むタイミングは人間が決める。
   let discussTimerId = null;
   let discussSecondsLeft = 0;
-  function formatDiscussTime(sec) {
-    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
-  }
+  // 議論タイマーの表示は共有モジュール（game-logic.js の
+  // buildDiscussTimerView）に切り出し済み。表示データを受け取って
+  // DOM へ代入するだけの薄いラッパー。隠すときは旧版では文言が残って
+  // いたが、隠れた要素の文言は見えないため表示データの空文字で上書きする。
   function renderDiscussTimer() {
     const box = el("discussTimer");
     if (!box) return;
     const nextBtn = el("nextBtn");
-    if (state.mode !== "pnp" || state.phase !== "discussion" || !(Number(gameSettings.discussTimer) > 0)) {
-      box.classList.add("hidden");
-      box.classList.remove("timer-low", "timer-expired");
-      if (nextBtn) nextBtn.classList.remove("vote-ready");
-      return;
-    }
-    box.classList.remove("hidden");
-    // 残り30秒以下は警告色、時間切れは投票ボタンもパルスさせて目立たせる。
-    const expired = discussSecondsLeft <= 0;
-    const low = !expired && discussSecondsLeft <= 30;
-    box.classList.toggle("timer-low", low);
-    box.classList.toggle("timer-expired", expired);
-    if (nextBtn) nextBtn.classList.toggle("vote-ready", expired);
-    box.textContent = expired
-      ? "⏰ 時間切れ！「議論を終えて投票へ」を押してね"
-      : `🗣️ 議論タイマー 残り ${formatDiscussTime(discussSecondsLeft)}`;
+    const view = buildDiscussTimerViewLogic({
+      mode: state.mode,
+      phase: state.phase,
+      discussTimerSetting: gameSettings.discussTimer,
+      secondsLeft: discussSecondsLeft,
+    });
+    box.classList.toggle("hidden", view.hidden);
+    box.classList.toggle("timer-low", view.low);
+    box.classList.toggle("timer-expired", view.expired);
+    if (nextBtn) nextBtn.classList.toggle("vote-ready", view.voteReady);
+    box.textContent = view.text;
   }
   function discussTimerTick() {
     if (state.mode !== "pnp" || state.phase !== "discussion") { discussTimerId = null; return; }
