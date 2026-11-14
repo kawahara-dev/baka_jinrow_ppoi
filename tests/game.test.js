@@ -2139,6 +2139,50 @@ test("Feign風UI第2弾：タイトル画面はロビー風レイアウト（参
   assert.match(style, /\.parade \{ height: 118px; margin-top: 6px; \}/);
 });
 
+test("Feign風UI第2弾：ステージの町並みは家・街灯・夜の窓明かり", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+  // 旧版の絵文字の家並みはなくなり、SVG のシルエットに置き換わる。
+  assert.doesNotMatch(style, /🏠 🏡 🏠 🏘️ 🏠/);
+  // 家並みは ::before に SVG（屋根＋窓＋木）で描き、ステージ下部に並べる。
+  const houses = style.match(/#gameScreen \.stage::before \{[^}]*\}/)[0];
+  assert.match(houses, /content: ""/);
+  assert.match(houses, /bottom: 0/);
+  assert.match(houses, /height: 44px/);
+  assert.match(houses, /z-index: 0/);
+  assert.match(houses, /background-image: url\("data:image\/svg\+xml,/);
+  assert.match(houses, /background-repeat: repeat-x/);
+  assert.match(houses, /background-position: left bottom/);
+  assert.match(houses, /background-size: 220px 44px/);
+  assert.match(houses, /polygon points='4,18 31,4 58,18'/); // 屋根
+  assert.match(houses, /%23ffe9a8/); // 昼の窓
+  assert.match(houses, /%234e8a5f/); // 木
+  // 街灯は ::after に SVG（柱＋灯り）で描く。家並みより細かく繰り返す。
+  const lamps = style.match(/#gameScreen \.stage::after \{[^}]*\}/)[0];
+  assert.match(lamps, /content: ""/);
+  assert.match(lamps, /bottom: 0/);
+  assert.match(lamps, /height: 44px/);
+  assert.match(lamps, /z-index: 0/);
+  assert.match(lamps, /background-image: url\("data:image\/svg\+xml,/);
+  assert.match(lamps, /background-repeat: repeat-x/);
+  assert.match(lamps, /background-size: 110px 44px/);
+  // 夜は窓明かりが金色に灯り（ハロー付き）、街灯の光も強くなる。
+  const nightHouses = style.match(/body\[data-phase="night"\] #gameScreen \.stage::before \{[^}]*\}/)[0];
+  assert.match(nightHouses, /%23ffd24d/);
+  assert.match(nightHouses, /opacity='0\.3'/); // 窓のハロー
+  assert.doesNotMatch(nightHouses, /%23ffe9a8/); // 昼の窓色は使わない
+  const nightLamps = style.match(/body\[data-phase="night"\] #gameScreen \.stage::after \{[^}]*\}/)[0];
+  assert.match(nightLamps, /opacity='0\.45'/); // 昼（0.18）より強い灯り
+  // 歩行者は z-index: 1 で町並み（0）より前に出る。
+  assert.match(style, /\.walker \{ position: absolute; bottom: 8px; left: 0; z-index: 1;/);
+  // スマホ（641px以下）は町並みを縮小し、ステージと歩行者の既存寸法は変えない。
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?#gameScreen \.stage::before \{ height: 30px; background-size: 150px 30px; \}/);
+  assert.match(style, /@media \(max-width: 640px\) \{[\s\S]*?#gameScreen \.stage::after \{ height: 30px; background-size: 75px 30px; \}/);
+  assert.match(style, /@media \(max-width: 640px\) \{ \.stage \{ height: 64px; \} \.stage \.wbody img \{ height: 50px; \} \}/);
+  assert.match(style, /\.stage \{ position: relative; height: 92px;/);
+  assert.match(style, /\.stage \.wbody img \{ height: 74px; \}/);
+});
+
 test("役職アイコン: ROLES 全役職に仕様通りのアイコンがあり、重複・キャラ絵文字との衝突がない", () => {
   const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
   const expected = {
@@ -2552,10 +2596,11 @@ test("役職アイコン拡大とFeign風UI: ボタンは大きく、ゲーム�
   assert.match(style, /\.role-icon-btn\.faction-innocent \{ border-color: var\(--innocent\); \}/);
   assert.match(style, /\.role-icon-btn\.faction-impostor \{ border-color: var\(--impostor\); \}/);
   assert.match(style, /\.role-icon-btn\.faction-neutral \{ border-color: var\(--neutral\); \}/);
-  // ゲーム画面はダークな町のボード、選択中はゴールド枠、ステージに家並み。
+  // ゲーム画面はダークな町のボード、選択中はゴールド枠、ステージに家並み
+  // （Feign風UI第2弾その3で絵文字から SVG のシルエットに置き換わった）。
   assert.match(style, /#gameScreen \{[^}]*linear-gradient\(180deg, #342a55/);
   assert.match(style, /#gameScreen \.card\.selected \{[^}]*outline: 3px solid var\(--gold\);/);
-  assert.match(style, /#gameScreen \.stage::before \{[^}]*🏠/);
+  assert.match(style, /#gameScreen \.stage::before \{[^}]*data:image\/svg\+xml/);
   // 役職ボードは陣営カラーのタイル一覧。
   assert.match(style, /\.role-tile\.faction-innocent \{[^}]*border-left-color: var\(--innocent\);/);
   assert.match(style, /\.role-tile\.faction-impostor \{[^}]*border-left-color: var\(--impostor\);/);
