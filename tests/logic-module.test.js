@@ -2664,3 +2664,55 @@ test("ブラウザ側の renderRoleGuide は共有モジュールの buildRoleGu
   assert.equal(elements.get("roleInfoName").textContent, "守り手");
   FB.closeRoleInfo();
 });
+
+test("buildParadeView：8人の歩行者が id 順に並び、slug・名前・歩行周期が揃う", () => {
+  assert.equal(JSON.stringify(Logic.PARADE_BD),
+    JSON.stringify(["0.34s", "0.38s", "0.31s", "0.36s", "0.33s", "0.39s", "0.32s", "0.37s"]));
+  const view = Logic.buildParadeView();
+  assert.equal(view.length, 8);
+  for (let i = 0; i < 8; i++) {
+    assert.equal(view[i].id, i, `歩行者 ${i} の id`);
+    assert.equal(view[i].slug, Logic.ICON_SLUGS[i], `歩行者 ${i} の slug`);
+    assert.equal(view[i].name, Logic.PLAYER_NAMES[i], `歩行者 ${i} の名前`);
+    assert.equal(view[i].duration, Logic.PARADE_BD[i], `歩行者 ${i} の歩行周期`);
+    assert.ok(view[i].html.includes(`--i:${i};--bd:${Logic.PARADE_BD[i]}`), `歩行者 ${i} の style`);
+    assert.ok(view[i].html.includes(`data-slug="${Logic.ICON_SLUGS[i]}"`), `歩行者 ${i} の slug 属性`);
+  }
+});
+
+test("buildParadeView：歩行者の HTML は旧版の静的なものと同一", () => {
+  const view = Logic.buildParadeView();
+  assert.equal(view[0].html,
+    `<span class="walker" style="--i:0;--bd:0.34s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="luna" data-frame="a" alt="ルナ"><img class="frame-b" data-slug="luna" data-frame="b" alt=""></span></span>`);
+  assert.equal(view[7].html,
+    `<span class="walker" style="--i:7;--bd:0.37s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="ema" data-frame="a" alt="エマ"><img class="frame-b" data-slug="ema" data-frame="b" alt=""></span></span>`);
+  // 全歩行者が同じ形で、frame-a の alt だけキャラ名、frame-b は空。
+  for (const w of view) {
+    assert.ok(w.html.startsWith(`<span class="walker" style="--i:${w.id};--bd:${w.duration}">`), `歩行者 ${w.id} の開始タグ`);
+    assert.ok(w.html.endsWith("</span></span>"), `歩行者 ${w.id} の終了タグ`);
+    assert.ok(w.html.includes(`<img class="frame-a" data-slug="${w.slug}" data-frame="a" alt="${w.name}">`), `歩行者 ${w.id} の frame-a`);
+    assert.ok(w.html.includes(`<img class="frame-b" data-slug="${w.slug}" data-frame="b" alt="">`), `歩行者 ${w.id} の frame-b`);
+  }
+});
+
+test("buildParadeView：PLAYER_NAMES・ICON_SLUGS・PARADE_BD を変更しない（純粋関数）", () => {
+  const beforeNames = JSON.stringify(Logic.PLAYER_NAMES);
+  const beforeSlugs = JSON.stringify(Logic.ICON_SLUGS);
+  const beforeBd = JSON.stringify(Logic.PARADE_BD);
+  Logic.buildParadeView();
+  Logic.buildParadeView();
+  assert.equal(JSON.stringify(Logic.PLAYER_NAMES), beforeNames);
+  assert.equal(JSON.stringify(Logic.ICON_SLUGS), beforeSlugs);
+  assert.equal(JSON.stringify(Logic.PARADE_BD), beforeBd);
+});
+
+test("ブラウザ側の renderParade は共有モジュールの buildParadeView と同一に描く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  const view = Logic.buildParadeView();
+  assert.equal(JSON.stringify(FB.buildParadeViewLogic()), JSON.stringify(view), "ハーネス経由の buildParadeView とも同一");
+  // 読み込み時に描画済みで、歩行者が旧版の静的な HTML と同一。
+  const expected = view.map(w => w.html).join("");
+  assert.equal(elements.get("parade").innerHTML, expected);
+  FB.renderParade();
+  assert.equal(elements.get("parade").innerHTML, expected, "再描画でも同一");
+});
