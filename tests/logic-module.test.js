@@ -3662,3 +3662,94 @@ test("ブラウザ側の nightCutins は共有モジュールの buildNightCutin
   assert.match(stage.children[stage.children.length - 1].className, /motion-flinch/);
   assert.equal(stage.classList.contains("flash-red"), true, "赤フラッシュが付く");
 });
+
+test("buildRevealMouseView：イノセント公開は疑念 -5・文言とログとカットイン", () => {
+  const players = fakeNightPlayers();
+  const actor = { ...players[0], roleKey: "mouse" };
+  const target = { ...players[1], roleKey: "villager" };
+  const view = Logic.buildRevealMouseView(actor, target);
+  assert.equal(view.shownRoleKey, "villager");
+  assert.equal(view.suspicion, -5);
+  assert.equal(view.mouseLine, `ここでマウス能力！ ${target.name} は… 村ガール（イノセント）だよ！`);
+  assert.equal(view.dialogueText, `🐭 ${actor.name}「${view.mouseLine}」`);
+  assert.equal(view.logText, `[公開] ${target.name} → 役職: 村ガール / 陣営: イノセント`);
+  assert.equal(JSON.stringify(view.cutin), JSON.stringify({
+    title: "🐭 役職公開", sub: `${target.name} は 村ガール`, kind: "info",
+    charId: target.id, targetCharId: null, motion: null,
+  }));
+});
+
+test("buildRevealMouseView：インポスター公開は疑念 8", () => {
+  const players = fakeNightPlayers();
+  const actor = { ...players[0], roleKey: "mouse" };
+  const target = { ...players[1], roleKey: "fakeGirl" };
+  const view = Logic.buildRevealMouseView(actor, target);
+  assert.equal(view.shownRoleKey, "fakeGirl");
+  assert.equal(view.suspicion, 8);
+  assert.equal(view.mouseLine, `ここでマウス能力！ ${target.name} は… フェイクガール（インポスター）だよ！`);
+  assert.equal(view.logText, `[公開] ${target.name} → 役職: フェイクガール / 陣営: インポスター`);
+  assert.equal(view.cutin.sub, `${target.name} は フェイクガール`);
+});
+
+test("buildRevealMouseView：バカが公開する側はバカ以外の役職をランダムに選ぶ", () => {
+  const players = fakeNightPlayers();
+  const actor = { ...players[0], roleKey: "baka" };
+  const target = { ...players[1], roleKey: "villager" };
+  // 注入した乱数で先頭と末尾が決定的に選ばれる（旧版の rand と同じ選び方）。
+  assert.equal(Logic.buildRevealMouseView(actor, target, { random: () => 0 }).shownRoleKey, "apprenticeSeer");
+  assert.equal(Logic.buildRevealMouseView(actor, target, { random: () => 0.999 }).shownRoleKey, "bomber");
+  // どの乱数でもバカ自身は選ばれない。
+  for (let i = 0; i < 20; i++) {
+    const shown = Logic.buildRevealMouseView(actor, target, { random: () => i / 20 }).shownRoleKey;
+    assert.notEqual(shown, "baka", `バカは選ばれない: ${shown}`);
+  }
+});
+
+test("buildRevealMouseView：バカの対象は表示役職が出る", () => {
+  const players = fakeNightPlayers();
+  const actor = { ...players[0], roleKey: "mouse" };
+  const target = { ...players[1], roleKey: "baka", fakeDisplayRoleKey: "tracker" };
+  const view = Logic.buildRevealMouseView(actor, target);
+  assert.equal(view.shownRoleKey, "tracker");
+  assert.equal(view.suspicion, -5);
+  assert.ok(view.mouseLine.includes("追跡係"), `表示役職で公開される: ${view.mouseLine}`);
+  assert.ok(!view.mouseLine.includes("バカ"), `実役職は出ない: ${view.mouseLine}`);
+});
+
+test("buildRevealMouseView：不正な入力は null・純粋性", () => {
+  const players = fakeNightPlayers();
+  const actor = { ...players[0], roleKey: "mouse" };
+  const target = { ...players[1], roleKey: "villager" };
+  assert.equal(Logic.buildRevealMouseView(null, target), null);
+  assert.equal(Logic.buildRevealMouseView(actor, null), null);
+  assert.equal(Logic.buildRevealMouseView(actor, { ...target, roleKey: "unknownRole" }), null);
+  const beforeActor = JSON.stringify(actor);
+  const beforeTarget = JSON.stringify(target);
+  const a = Logic.buildRevealMouseView(actor, target, { random: () => 0.5 });
+  const b = Logic.buildRevealMouseView(actor, target, { random: () => 0.5 });
+  assert.equal(JSON.stringify(a), JSON.stringify(b), "同じ入力で同じ結果");
+  assert.equal(JSON.stringify(actor), beforeActor, "actor を変更しない");
+  assert.equal(JSON.stringify(target), beforeTarget, "target を変更しない");
+});
+
+test("ブラウザ側の revealMouse は共有モジュールの buildRevealMouseView と同一に表示する", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.setupGame();
+  const s = FB.state;
+  const me = s.players[s.playerId];
+  me.roleKey = "mouse";
+  const target = s.players.find((p) => p.id !== me.id);
+  target.roleKey = "villager";
+  const view = Logic.buildRevealMouseView(me, target);
+  const before = elements.get("dialogueLog").children.length;
+  FB.revealMouse(me, target);
+  assert.equal(FB.state.revealedRoles[target.id], view.shownRoleKey);
+  assert.equal(target.suspicion, view.suspicion);
+  assert.equal(me.mouseUsed, true);
+  const dialogueLines = elements.get("dialogueLog").children.slice(before).map((c) => c.textContent);
+  assert.deepEqual(dialogueLines, [view.dialogueText]);
+  const actionLines = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(actionLines.includes(view.logText), `行動ログに公開行がある: ${actionLines.join(" / ")}`);
+  assert.equal(elements.get("cutinTitle").textContent, view.cutin.title);
+  assert.equal(elements.get("cutinSub").textContent, view.cutin.sub);
+});
