@@ -22,7 +22,7 @@ test("ROLES は14役職で、各役職に表示に必要な項目が揃ってい
   assert.equal(keys.length, 14);
   for (const key of keys) {
     const r = Logic.ROLES[key];
-    for (const field of ["name", "icon", "faction", "desc", "nightActionHint", "resultInterpretation", "riskNote"]) {
+    for (const field of ["name", "icon", "faction", "desc", "shortDesc", "guideDesc", "nightActionHint", "resultInterpretation", "riskNote"]) {
       assert.equal(typeof r[field], "string", `${key}.${field} は文字列`);
       assert.ok(r[field].length > 0, `${key}.${field} は空でない`);
     }
@@ -2593,4 +2593,74 @@ test("ブラウザ側の enqueueSpeechBubble／showNextSpeechBubble は共有モ
   assert.equal(FB.speechQueue.length, 0, "議論以外ではキューが残らない");
   assert.equal(elements.get("cards").children.flatMap((c) =>
     c.children.filter((x) => x.className === "speech-bubble")).length, 0);
+});
+
+test("buildRoleGuideView：14役職がボード順に並び、陣営クラスとボード用説明文が揃う", () => {
+  assert.equal(JSON.stringify(Logic.ROLE_GUIDE_ORDER),
+    JSON.stringify(["apprenticeSeer", "guardian", "tracker", "police", "lookout", "trapper", "doctor", "mouse", "politician", "villager", "fakeGirl", "mimic", "bomber", "baka"]));
+  const view = Logic.buildRoleGuideView();
+  assert.equal(view.length, 14);
+  assert.equal(JSON.stringify(view.map(t => t.roleKey)), JSON.stringify(Logic.ROLE_GUIDE_ORDER));
+  const byKey = Object.fromEntries(view.map(t => [t.roleKey, t]));
+  // 陣営クラス：ボマーだけニュートラル、フェイクガール・なりすましがインポスター、残りはイノセント。
+  assert.equal(byKey.bomber.factionClass, "faction-neutral");
+  assert.equal(byKey.fakeGirl.factionClass, "faction-impostor");
+  assert.equal(byKey.mimic.factionClass, "faction-impostor");
+  for (const key of Logic.ROLE_GUIDE_ORDER) {
+    if (["bomber", "fakeGirl", "mimic"].includes(key)) continue;
+    assert.equal(byKey[key].factionClass, "faction-innocent", `${key} はイノセント枠`);
+  }
+  // ボード用の説明文は旧版の静的な HTML にあった文言そのまま。
+  assert.equal(byKey.guardian.desc, "夜に1人を襲撃や爆発から守る。");
+  assert.equal(byKey.police.desc, "夜に1人の行動を封じる（襲撃そのものは止められない）。");
+  assert.equal(byKey.bomber.desc, "約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。");
+  assert.equal(byKey.baka.desc, "本人は別のイノセント役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。");
+  for (const t of view) {
+    assert.equal(t.icon, Logic.ROLES[t.roleKey].icon, `${t.roleKey} のアイコン`);
+    assert.equal(t.name, Logic.ROLES[t.roleKey].name, `${t.roleKey} の名前`);
+    assert.equal(t.faction, Logic.ROLES[t.roleKey].faction, `${t.roleKey} の陣営`);
+    assert.equal(t.desc, Logic.ROLES[t.roleKey].guideDesc, `${t.roleKey} の説明は guideDesc`);
+    assert.ok(t.iconButtonHtml.includes(`data-role-info="${t.roleKey}"`), `${t.roleKey} のボタン`);
+  }
+});
+
+test("buildRoleGuideView：タイルの HTML は旧版の静的なものと同一", () => {
+  const byKey = Object.fromEntries(Logic.buildRoleGuideView().map(t => [t.roleKey, t]));
+  assert.equal(byKey.guardian.tileHtml,
+    `<li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="guardian" aria-label="守り手の簡単な説明を見る">🛡️</button><div><strong>守り手</strong><span class="role-faction">イノセント</span>夜に1人を襲撃や爆発から守る。</div></li>`);
+  assert.equal(byKey.bomber.tileHtml,
+    `<li class="role-tile faction-neutral"><button type="button" class="role-icon-btn faction-neutral" data-role-info="bomber" aria-label="ボマーの簡単な説明を見る">💣</button><div><strong>ボマー</strong><span class="role-faction">ニュートラル</span>約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</div></li>`);
+  // 全タイルが同じ形で、役職名・陣営・説明文を漏れなく含む。
+  for (const t of Logic.buildRoleGuideView()) {
+    assert.ok(t.tileHtml.startsWith(`<li class="role-tile ${t.factionClass}">`), `${t.roleKey} の開始タグ`);
+    assert.ok(t.tileHtml.endsWith("</div></li>"), `${t.roleKey} の終了タグ`);
+    assert.ok(t.tileHtml.includes(`<strong>${t.name}</strong>`), `${t.roleKey} の名前`);
+    assert.ok(t.tileHtml.includes(`<span class="role-faction">${t.faction}</span>`), `${t.roleKey} の陣営`);
+    assert.ok(t.tileHtml.includes(t.desc), `${t.roleKey} の説明文`);
+  }
+});
+
+test("buildRoleGuideView：ROLES と ROLE_GUIDE_ORDER を変更しない（純粋関数）", () => {
+  const beforeRoles = JSON.stringify(Logic.ROLES);
+  const beforeOrder = JSON.stringify(Logic.ROLE_GUIDE_ORDER);
+  Logic.buildRoleGuideView();
+  Logic.buildRoleGuideView();
+  assert.equal(JSON.stringify(Logic.ROLES), beforeRoles);
+  assert.equal(JSON.stringify(Logic.ROLE_GUIDE_ORDER), beforeOrder);
+});
+
+test("ブラウザ側の renderRoleGuide は共有モジュールの buildRoleGuideView と同一に描く", () => {
+  const { FB, elements, sandbox } = loadGame({ seedSettings: BASE_SETTINGS });
+  const view = Logic.buildRoleGuideView();
+  assert.equal(JSON.stringify(FB.buildRoleGuideViewLogic()), JSON.stringify(view), "ハーネス経由の buildRoleGuideView とも同一");
+  // 読み込み時に描画済みで、タイルが旧版の静的な HTML と同一。
+  const expected = view.map(t => t.tileHtml).join("");
+  assert.equal(elements.get("roleGuideList").innerHTML, expected);
+  FB.renderRoleGuide();
+  assert.equal(elements.get("roleGuideList").innerHTML, expected, "再描画でも同一");
+  // 動的生成のボタンでも、説明ポップオーバーの委譲が拾う。
+  const btn = { dataset: { roleInfo: "guardian" }, closest: (sel) => (sel === "[data-role-info]" ? btn : null) };
+  sandbox.document.dispatch("click", { target: btn, preventDefault() {}, stopPropagation() {} });
+  assert.equal(elements.get("roleInfoName").textContent, "守り手");
+  FB.closeRoleInfo();
 });

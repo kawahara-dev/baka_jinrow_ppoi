@@ -2084,12 +2084,15 @@ test("役職アイコン: ROLES 全役職に仕様通りのアイコンがあり
   for (const icon of icons) {
     assert.ok(!charEmojis.includes(icon), `キャラ絵文字と衝突: ${icon}`);
   }
-  // 役職ボード（静的 HTML）にも同じアイコンが説明ボタンとして並んでいる。
-  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  // 役職ボード（共有モジュールの buildRoleGuideView が生成し、
+  // renderRoleGuide が描く）にも同じアイコンが説明ボタンとして並んでいる。
+  const tiles = FB.buildRoleGuideViewLogic();
   for (const [key, icon] of Object.entries(expected)) {
     const name = FB.ROLES[key].name;
-    assert.ok(html.includes(`data-role-info="${key}" aria-label="${name}の簡単な説明を見る">${icon}</button>`), `ボードに ${icon} ${name} のボタン`);
-    assert.ok(html.includes(`<strong>${name}</strong>`), `ボードに ${name}`);
+    const tile = tiles.find(t => t.roleKey === key);
+    assert.ok(tile, `ボードに ${name} のタイル`);
+    assert.ok(tile.iconButtonHtml.includes(`data-role-info="${key}" aria-label="${name}の簡単な説明を見る">${icon}</button>`), `ボードに ${icon} ${name} のボタン`);
+    assert.ok(tile.tileHtml.includes(`<strong>${name}</strong>`), `ボードに ${name}`);
   }
 });
 

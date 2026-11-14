@@ -1053,22 +1053,7 @@
 
     <details class="role-guide">
       <summary>役職ボード（アイコンを押すと簡単な説明）</summary>
-      <ul>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="apprenticeSeer" aria-label="見習い占い師の簡単な説明を見る">🔮</button><div><strong>見習い占い師</strong><span class="role-faction">イノセント</span>夜に1人の陣営を調べる。結果がズレる個体が混ざることがある（本人にも分からない）。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="guardian" aria-label="守り手の簡単な説明を見る">🛡️</button><div><strong>守り手</strong><span class="role-faction">イノセント</span>夜に1人を襲撃や爆発から守る。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="tracker" aria-label="追跡係の簡単な説明を見る">👣</button><div><strong>追跡係</strong><span class="role-faction">イノセント</span>夜に1人が誰を訪ねたか分かる。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="police" aria-label="ポリスの簡単な説明を見る">🚔</button><div><strong>ポリス</strong><span class="role-faction">イノセント</span>夜に1人の行動を封じる（襲撃そのものは止められない）。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="lookout" aria-label="見張り役の簡単な説明を見る">🔭</button><div><strong>見張り役</strong><span class="role-faction">イノセント</span>夜に1人の家を訪れた全員が分かる。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="trapper" aria-label="トラッパーの簡単な説明を見る">🪤</button><div><strong>トラッパー</strong><span class="role-faction">イノセント</span>夜に1人の家へ罠を設置。その人が襲撃で倒れたら襲撃者も道連れ。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="doctor" aria-label="ドクターの簡単な説明を見る">🩺</button><div><strong>ドクター</strong><span class="role-faction">イノセント</span>夜に1人を診察。その人がその夜倒れたら蘇生させる。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="mouse" aria-label="マウスの簡単な説明を見る">🐭</button><div><strong>マウス</strong><span class="role-faction">イノセント</span>昼に1回だけ、1人の本当の役職を全員に公開できる。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="politician" aria-label="政治家の簡単な説明を見る">🗳️</button><div><strong>政治家</strong><span class="role-faction">イノセント</span>投票の票が2票分になる。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="villager" aria-label="村ガールの簡単な説明を見る">🏠</button><div><strong>村ガール</strong><span class="role-faction">イノセント</span>能力なし。議論と投票が主軸。</div></li>
-        <li class="role-tile faction-impostor"><button type="button" class="role-icon-btn faction-impostor" data-role-info="fakeGirl" aria-label="フェイクガールの簡単な説明を見る">🎭</button><div><strong>フェイクガール</strong><span class="role-faction">インポスター</span>襲撃しない夜は、イノセント側1人の行動を妨害する。</div></li>
-        <li class="role-tile faction-impostor"><button type="button" class="role-icon-btn faction-impostor" data-role-info="mimic" aria-label="なりすましの簡単な説明を見る">🪞</button><div><strong>なりすまし</strong><span class="role-faction">インポスター</span>調査でイノセントに見えることがある。襲撃しない夜はイノセント側1人の実役職を盗み見する。</div></li>
-        <li class="role-tile faction-neutral"><button type="button" class="role-icon-btn faction-neutral" data-role-info="bomber" aria-label="ボマーの簡単な説明を見る">💣</button><div><strong>ボマー</strong><span class="role-faction">ニュートラル</span>約半分のゲームに登場。爆弾は翌日の夜に爆発。最後の1人になるか、爆弾で2人以上倒して生き残ると勝利。</div></li>
-        <li class="role-tile faction-innocent"><button type="button" class="role-icon-btn faction-innocent" data-role-info="baka" aria-label="バカの簡単な説明を見る">🃏</button><div><strong>バカ</strong><span class="role-faction">イノセント</span>本人は別のイノセント役職だと思って行動するが、結果はすべて偽物。本人も自分がバカだとは分からない。実役職は結果画面でのみ公開される。</div></li>
-      </ul>
+      <ul id="roleGuideList"></ul>
       <p style="margin-top:8px;">イノセント側の役職（占い師・バカ以外）は毎ゲーム抽選で、登場しないこともあります。インポスター陣営の襲撃は陣営で1回だけ。</p>
     </details>
 
@@ -1093,7 +1078,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, INNOCENT_ROLE_KEYS, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, LEGACY_ROLE_NAMES, LEGACY_FACTION_NAMES, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, getAlliesLineForRole: getAlliesLineForRoleLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, roleIconButtonHtml: roleIconButtonHtmlLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2487,6 +2472,17 @@
     box.innerHTML = buildAchievementsViewLogic(stats).map(a =>
       `<span class="stats-chip ${a.unlocked ? "" : "locked"}" title="${a.hint}">${a.icon} ${a.name}</span>`).join("");
   }
+
+  // 役職ボードのタイルは共有モジュール（buildRoleGuideView）に切り出し
+  // 済み。ここでは生成結果を一覧へ代入するだけ。アイコン押下の説明
+  // ポップオーバーは document の委譲リスナーが拾うので、動的生成でも
+  // そのまま動く。
+  function renderRoleGuide() {
+    const list = el("roleGuideList");
+    if (!list) return;
+    list.innerHTML = buildRoleGuideViewLogic().map(t => t.tileHtml).join("");
+  }
+  renderRoleGuide();
 
   let statsResetArmed = false;
   el("statsReset").onclick = () => {
