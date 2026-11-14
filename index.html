@@ -228,6 +228,10 @@
        （カード側 64px の 3.4rem と同じ「ほぼ全面」の比率）。 */
     .result-row.dead .avatar::after { font-size: 2.4rem; }
     .card.selected { outline: 3px solid var(--pink); box-shadow: 0 0 0 5px rgba(255, 111, 179, 0.18), 0 10px 18px rgba(184, 155, 255, 0.22); }
+    /* 自分のカード：金色の枠＋名前の横の「あなた」バッジで一目で分かる
+       ようにする（ソロのみ。パス＆プレイでは付けない）。 */
+    .card.me { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 201, 77, 0.5), 0 5px 12px rgba(184, 155, 255, 0.1); }
+    .me-badge { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; background: var(--gold); color: #4a3200; font-size: 0.66rem; font-weight: 800; line-height: 1.7; vertical-align: 2px; }
     .card.voted::after {
       content: "投票済";
       position: absolute;
@@ -352,6 +356,14 @@
       animation-direction: normal, alternate; }
     @keyframes stageBreathe { from { transform: translateY(0) scaleY(1); } to { transform: translateY(-2px) scaleY(1.03); } }
     .stage .wbody img { height: 74px; }
+    /* 自分の歩行者の頭上マーカー（▼）。ステージは overflow:hidden・
+       高さ 92px で歩行者の上端は約10px下なので、top:-7px までなら
+       切れない。体にも金色の光彩を付けて見つけやすくする。 */
+    .stage .walker .wme { position: absolute; left: 50%; top: -7px; transform: translateX(-50%); z-index: 3;
+      color: var(--gold); font-size: 0.75rem; line-height: 1; pointer-events: none;
+      text-shadow: 0 1px 3px rgba(30, 16, 60, 0.55); animation: wmeBob 1.1s ease-in-out infinite; }
+    @keyframes wmeBob { 0%, 100% { margin-top: 0; } 50% { margin-top: 3px; } }
+    .stage .walker.me .wbody { filter: drop-shadow(0 0 5px rgba(255, 201, 77, 0.9)); }
     .stage .walker.speaking .wbody { animation: stageHop 0.45s ease 2; }
     @keyframes stageHop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-13px); } }
     /* 公開イベントのモーション（公開される結果のみ。CPU の私的な夜行動は
@@ -548,6 +560,7 @@
       .stage .walker, .stage .walker .wbody, .stage.flash-red, .speech-bubble,
       .result-row.winner .avatar, .result-row.loser .avatar,
       #actionBtn:not(.hidden), #voteBtn:not(.hidden), #nextBtn.vote-ready:not(.hidden) { animation: none !important; }
+      .stage .walker .wme { animation: none !important; }
     }
     .avatar { font-size: 1.8rem; position: relative; width: 64px; height: 64px; margin: 0 auto; }
     .avatar-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
@@ -640,6 +653,10 @@
     #gameScreen .card.selected {
       outline: 3px solid var(--gold);
       box-shadow: 0 0 0 5px rgba(255, 201, 77, 0.30), 0 10px 18px rgba(24, 16, 44, 0.35);
+    }
+    #gameScreen .card.me {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(255, 201, 77, 0.35), 0 10px 18px rgba(24, 16, 44, 0.35);
     }
     #gameScreen .right-panel .screen { border: 2px solid rgba(255, 255, 255, 0.35); }
 
@@ -1563,7 +1580,7 @@
     const cards = el("cards"); cards.innerHTML = "";
     // カード1枚分の表示データは共有モジュールで作る（クラス・aria・
     // メタ・中身の HTML）。DOM の生成とイベントの紐付けだけここで行う。
-    for (const view of buildCardsViewLogic(state.players, { selectedId: state.selectedId, iconImgs: ICON_IMGS })) {
+    for (const view of buildCardsViewLogic(state.players, { selectedId: state.selectedId, iconImgs: ICON_IMGS, playerId: state.mode === "pnp" ? null : state.playerId })) {
       const p = state.players[view.id];
       const div = document.createElement("div");
       div.style.animationDelay = view.animationDelay;
@@ -1596,7 +1613,7 @@
     const stage = el("stage");
     if (stage) {
       // ステージの歩行者は共有モジュール（buildStageView）で作る。
-      stage.innerHTML = buildStageViewLogic(state.players).map(w => w.html).join("");
+      stage.innerHTML = buildStageViewLogic(state.players, { playerId: state.mode === "pnp" ? null : state.playerId }).map(w => w.html).join("");
       hydrateWalkImages(stage);
     }
     el("mouseBtn").classList.toggle("hidden", view.mouseBtn.hidden);

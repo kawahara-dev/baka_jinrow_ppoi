@@ -1563,6 +1563,9 @@
     if (!players || !players.length) return [];
     const selectedId = opts && opts.selectedId;
     const iconImgs = (opts && opts.iconImgs) || {};
+    // playerId はソロで自分を指す id。null（パス＆プレイ等）なら
+    // どのカードにも「あなた」マーカーは付かない。
+    const playerId = opts && typeof opts.playerId === "number" ? opts.playerId : null;
     return players.map((p, cardIndex) => {
       // 脱落者のカードも結果画面までバカの実役職は出さない。
       const revealedRole = p.alive ? "？" : ROLES[getPublicRoleKey(p)].name;
@@ -1574,19 +1577,23 @@
         : roleIconButtonHtml(getPublicRoleKey(p), { ariaLabel: "役職の簡単な説明を見る" });
       const img = iconImgs[ICON_SLUGS[p.id]];
       const avatarHtml = `<span>${p.icon}</span>${img ? `<img class="avatar-img" data-icon-slug="${ICON_SLUGS[p.id]}" src="${img}" alt="${p.name}" onerror="this.remove()">` : ""}`;
+      // 自分のカードだけ名前の横に「あなた」バッジを付け、me クラスで
+      // 金色の枠にする（脱落後も自分と分かるようバッジは残す）。
+      const isMe = playerId !== null && p.id === playerId;
       const innerHtml = `
         <div class="avatar">${avatarHtml}</div>
         <div class="card-main">
-          <div class="name">${p.name}</div>
+          <div class="name">${p.name}${isMe ? `<span class="me-badge">あなた</span>` : ""}</div>
           <div class="meta">${metaHtml}</div>
         </div>
       `;
       return {
         id: p.id,
+        isMe,
         animationDelay: `${cardIndex * 45}ms`,
-        className: `card ${p.alive ? "" : "dead"} ${selectedId === p.id ? "selected" : ""} ${p.voted ? "voted" : ""}`,
+        className: `card ${p.alive ? "" : "dead"} ${selectedId === p.id ? "selected" : ""} ${p.voted ? "voted" : ""}${isMe ? " me" : ""}`,
         revealedRole,
-        ariaLabel: `${p.name}、${revealedRole}、${p.alive ? "生存中" : "脱落済み"}`,
+        ariaLabel: `${p.name}${isMe ? "（あなた）" : ""}、${revealedRole}、${p.alive ? "生存中" : "脱落済み"}`,
         tabIndex: p.alive ? 0 : -1,
         ariaDisabled: !p.alive,
         metaHtml,
@@ -1600,17 +1607,22 @@
   // players の順に返し、1人分は歩行者の span 全体の HTML。--bd は歩行の
   // 周期で、id を 4 で割った余りで 0.31s / 0.34s / 0.37s / 0.40s になる。
   // players が空のときは空配列を返す。
-  function buildStageView(players) {
+  function buildStageView(players, opts) {
     if (!players || !players.length) return [];
+    // playerId はソロで自分を指す id。自分の歩行者だけ頭上に ▼ の
+    // マーカー（.wme）と me クラスを付ける。null なら従来どおり。
+    const playerId = opts && typeof opts.playerId === "number" ? opts.playerId : null;
     return players.filter(p => p.alive).map(p => {
       const slug = ICON_SLUGS[p.id];
       const duration = (0.31 + (p.id % 4) * 0.03).toFixed(2);
+      const isMe = playerId !== null && p.id === playerId;
       return {
         id: p.id,
         slug,
         duration: `${duration}s`,
+        isMe,
         html: `
-        <span class="walker" data-player="${p.id}" style="--i:${p.id};--bd:${duration}s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${slug}" data-frame="a" alt=""><img class="frame-b" data-slug="${slug}" data-frame="b" alt=""></span></span>`,
+        <span class="walker${isMe ? " me" : ""}" data-player="${p.id}" style="--i:${p.id};--bd:${duration}s"><span class="wshadow"></span><span class="wbody"><img class="frame-a" data-slug="${slug}" data-frame="a" alt=""><img class="frame-b" data-slug="${slug}" data-frame="b" alt=""></span>${isMe ? `<span class="wme" aria-hidden="true">▼</span>` : ""}</span>`,
       };
     });
   }
