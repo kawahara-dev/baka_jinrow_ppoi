@@ -428,6 +428,23 @@
     endgame: ["もう人数が少ない…外したら終わりだよ","ここからは一票が重い。慎重にいこ","残り少ないし、情報は全部出して考えよ"]
   };
 
+  // 議論の定型文（設計メモ §9-1：定型文＋短い自由入力）。text の
+  // {target} は対象の名前に置き換える。target を取る文言は対象が必須。
+  // サーバー（server/game.js の submitTalk）とクライアント（議論パネル
+  // のボタン）の両方が同じ一覧を使うため、共有モジュールに置く。
+  const CANNED_TALKS = [
+    { id: "suspicious", text: "{target} が怪しいと思う", needsTarget: true },
+    { id: "innocent", text: "{target} は白だと思う", needsTarget: true },
+    { id: "ask", text: "{target}、昨夜なにしてた？", needsTarget: true },
+    { id: "agree", text: "そう思う", needsTarget: false },
+    { id: "disagree", text: "そうは思わない", needsTarget: false },
+    { id: "wait", text: "まだ様子見したい", needsTarget: false },
+    { id: "unite", text: "票を合わせよう", needsTarget: false },
+    { id: "noInfo", text: "情報が足りないな", needsTarget: false },
+  ];
+  // 自由入力の上限（短い自由入力。設計メモ §9-1）。
+  const FREE_TALK_MAX_LENGTH = 100;
+
   // Discussion CPU talk selection (the pure part of morningToDiscussion):
   // decides which CPU players speak in the discussion and what they say.
   // Returns an ordered list of events for the browser to perform:
@@ -1870,6 +1887,34 @@
     };
   }
 
+  // オンライン対戦の議論パネルの表示データ（フェーズ2 第2歩の後半）。
+  // 定型文（CANNED_TALKS）をボタン化する。{target} を含む文言は選んだ
+  // 対象の名前で置き換え、対象が未選択ならボタンを無効にする
+  // （サーバー側でも弾くが、画面でも押せないようにする）。
+  // input: { selectedTargetName, meAlive, discussionDoneSent }。
+  // 返すのは表示データだけで、DOM には触らない純粋関数。
+  function buildOnlineDiscussView(input) {
+    const opts = input || {};
+    const meAlive = !!opts.meAlive;
+    const done = !!opts.discussionDoneSent;
+    const targetName = typeof opts.selectedTargetName === "string" ? opts.selectedTargetName : null;
+    return {
+      hint: done
+        ? "議論を終えたよ。全員が終えるかタイマーで投票へ進むよ。"
+        : "カードをタップして対象を選び、定型文か自由入力で発言してね。",
+      phrases: CANNED_TALKS.map(c => ({
+        id: c.id,
+        needsTarget: !!c.needsTarget,
+        text: c.needsTarget ? c.text.replaceAll("{target}", targetName || "？") : c.text,
+        disabled: !meAlive || done || (!!c.needsTarget && !targetName),
+      })),
+      freeMaxLength: FREE_TALK_MAX_LENGTH,
+      freeDisabled: !meAlive || done,
+      doneDisabled: !meAlive || done,
+      doneLabel: done ? "議論を終えたよ（待機中）" : "議論を終える",
+    };
+  }
+
   // セリフ／行動ログの折りたたみ。状態は独立キー fakeBloomLogFold に
   // 保存され、保存がなければ両方とも折りたたんだ状態で始める。
   // 定義（キー・要素 id・見出し文言）と既定値はオンライン対戦の
@@ -2252,6 +2297,8 @@
     pickTalkLine,
     DISCUSSION_TEMPLATES,
     planDiscussionTalks,
+    CANNED_TALKS,
+    FREE_TALK_MAX_LENGTH,
     INNOCENT_ROLE_KEYS,
     CLUMSY_SEER_RATE,
     rand,
@@ -2311,6 +2358,7 @@
     isOnlineAvailable,
     buildOnlineLobbyView,
     buildOnlineGameView,
+    buildOnlineDiscussView,
     LOG_FOLD_DEFAULT,
     LOG_FOLD_DEFS,
     normalizeLogFold,

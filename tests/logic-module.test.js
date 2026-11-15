@@ -4056,3 +4056,50 @@ test("buildOnlineGameView：不正な入力は null・入力を変更しない",
   Logic.buildOnlineGameView(fixture, { selectedId: 1 });
   assert.equal(JSON.stringify(fixture), before);
 });
+
+test("CANNED_TALKS：議論の定型文は8件で、対象あり3件・対象なし5件", () => {
+  assert.equal(Logic.CANNED_TALKS.length, 8);
+  assert.ok(Logic.CANNED_TALKS.every((c) => typeof c.id === "string" && typeof c.text === "string" && typeof c.needsTarget === "boolean"));
+  assert.deepEqual(Logic.CANNED_TALKS.filter((c) => c.needsTarget).map((c) => c.id), ["suspicious", "innocent", "ask"]);
+  assert.ok(Logic.CANNED_TALKS.filter((c) => c.needsTarget).every((c) => c.text.includes("{target}")));
+  assert.equal(Logic.FREE_TALK_MAX_LENGTH, 100);
+});
+
+test("buildOnlineDiscussView：対象未選択では対象あり文言が無効で「？」表示になる", () => {
+  const view = Logic.buildOnlineDiscussView({ selectedTargetName: null, meAlive: true, discussionDoneSent: false });
+  assert.equal(view.phrases.length, 8);
+  const suspicious = view.phrases.find((p) => p.id === "suspicious");
+  assert.equal(suspicious.needsTarget, true);
+  assert.equal(suspicious.disabled, true);
+  assert.ok(suspicious.text.includes("？"));
+  const agree = view.phrases.find((p) => p.id === "agree");
+  assert.equal(agree.disabled, false);
+  assert.equal(agree.text, "そう思う");
+  assert.equal(view.freeMaxLength, 100);
+  assert.equal(view.freeDisabled, false);
+  assert.equal(view.doneDisabled, false);
+  assert.equal(view.doneLabel, "議論を終える");
+});
+
+test("buildOnlineDiscussView：対象を選ぶと文言に対象名が入り、ボタンが有効になる", () => {
+  const view = Logic.buildOnlineDiscussView({ selectedTargetName: "ユイ", meAlive: true, discussionDoneSent: false });
+  const suspicious = view.phrases.find((p) => p.id === "suspicious");
+  assert.equal(suspicious.text, "ユイ が怪しいと思う");
+  assert.equal(suspicious.disabled, false);
+  const ask = view.phrases.find((p) => p.id === "ask");
+  assert.equal(ask.text, "ユイ、昨夜なにしてた？");
+});
+
+test("buildOnlineDiscussView：脱落中・議論終了済みは全ボタンが無効になる", () => {
+  const dead = Logic.buildOnlineDiscussView({ selectedTargetName: "ユイ", meAlive: false, discussionDoneSent: false });
+  assert.ok(dead.phrases.every((p) => p.disabled));
+  assert.equal(dead.freeDisabled, true);
+  assert.equal(dead.doneDisabled, true);
+  const done = Logic.buildOnlineDiscussView({ selectedTargetName: "ユイ", meAlive: true, discussionDoneSent: true });
+  assert.ok(done.phrases.every((p) => p.disabled));
+  assert.equal(done.freeDisabled, true);
+  assert.equal(done.doneDisabled, true);
+  assert.equal(done.doneLabel, "議論を終えたよ（待機中）");
+  assert.ok(done.hint.includes("議論を終えたよ"));
+});
+

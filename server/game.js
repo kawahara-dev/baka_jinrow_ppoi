@@ -43,6 +43,8 @@ const {
   cpuVotePick,
   buildHighlights,
   buildResultSummary,
+  CANNED_TALKS,
+  FREE_TALK_MAX_LENGTH,
 } = require("../game-logic.js");
 
 const IMPOSTOR_ROLE_KEYS = ["fakeGirl", "mimic"];
@@ -54,20 +56,8 @@ const NIGHT_TIMEOUT_MS = 60000;
 // とだけあり秒数はないため、夜と同じ目安60秒にする）。createServer の
 // options.voteTimeoutMs で上書きできる（テスト用）。
 const VOTE_TIMEOUT_MS = 60000;
-// 議論の定型文（設計メモ §9-1：定型文＋短い自由入力）。text の
-// {target} は対象の名前に置き換える。target を取る文言は対象が必須。
-const CANNED_TALKS = [
-  { id: "suspicious", text: "{target} が怪しいと思う", needsTarget: true },
-  { id: "innocent", text: "{target} は白だと思う", needsTarget: true },
-  { id: "ask", text: "{target}、昨夜なにしてた？", needsTarget: true },
-  { id: "agree", text: "そう思う", needsTarget: false },
-  { id: "disagree", text: "そうは思わない", needsTarget: false },
-  { id: "wait", text: "まだ様子見したい", needsTarget: false },
-  { id: "unite", text: "票を合わせよう", needsTarget: false },
-  { id: "noInfo", text: "情報が足りないな", needsTarget: false },
-];
-// 自由入力の上限（短い自由入力。設計メモ §9-1）。
-const FREE_TALK_MAX_LENGTH = 100;
+// 議論の定型文と自由入力の上限は共有モジュール（game-logic.js）に置く。
+// クライアントの議論パネルも同じ一覧を使う（単一の出所）。
 
 // 役職を配り、サーバー内だけが持つ試合状態を作る。
 // roomPlayers: 部屋の players（id / name / icon）。8 席に満たない分は

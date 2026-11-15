@@ -760,6 +760,14 @@
     .online-seg button.active { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff;
       box-shadow: 0 4px 12px rgba(122, 95, 208, 0.35); }
     .online-seg button:disabled { opacity: 0.45; cursor: default; }
+    /* オンライン議論パネル：定型文ボタン・自由入力・議論を終えるボタン。
+       試合画面のカード下に出し、ソロ／パス＆プレイでは使わない。 */
+    .online-discuss { margin-top: 12px; padding: 12px; border: 2px solid var(--line); border-radius: 12px; background: #fff; }
+    .online-talk-phrases { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .online-talk-phrases button { border: 2px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 700; cursor: pointer; }
+    .online-talk-phrases button:disabled { opacity: 0.45; cursor: default; }
+    .online-talk-free { display: flex; gap: 8px; margin: 8px 0; }
+    .online-talk-free input { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 2px solid var(--line); border-radius: 8px; font-size: 1rem; }
 
     /* Feign風UI第2弾（その4）：ログパネルをチャット／ノート風に。
        見出しはチャットのヘッダー風（濃紺の帯＋ゴールド文字＋アイコン）、
@@ -1220,6 +1228,16 @@
       </aside>
     </div>
 
+    <div id="onlineDiscussPanel" class="online-discuss hidden">
+      <p id="onlineDiscussHint" class="lobby-note"></p>
+      <div id="onlineTalkPhrases" class="online-talk-phrases"></div>
+      <div class="online-talk-free">
+        <input id="onlineTalkFree" type="text" maxlength="100" placeholder="自由入力（100文字まで）" aria-label="自由入力の発言">
+        <button id="onlineTalkSendBtn" type="button" class="secondary">発言する</button>
+      </div>
+      <button id="onlineDiscussDoneBtn" type="button" class="primary">議論を終える</button>
+    </div>
+
     <section id="resultPanel" class="result-panel hidden">
       <h3 id="resultTitle" class="result-title" tabindex="-1"></h3>
       <p id="resultSub" class="result-sub"></p>
@@ -1263,7 +1281,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeRoomSettings: normalizeRoomSettingsLogic, isOnlineAvailable: isOnlineAvailableLogic, buildOnlineLobbyView: buildOnlineLobbyViewLogic, buildOnlineGameView: buildOnlineGameViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeRoomSettings: normalizeRoomSettingsLogic, isOnlineAvailable: isOnlineAvailableLogic, buildOnlineLobbyView: buildOnlineLobbyViewLogic, buildOnlineGameView: buildOnlineGameViewLogic, buildOnlineDiscussView: buildOnlineDiscussViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2929,11 +2947,14 @@
   // オンラインの接続状態。サーバーから届いた roomCreated / roomUpdate 等の
   // 公開情報だけを持つ（実役職などの秘匿情報はここには入らない）。
   // view は試合開始後に届く player view（自分の役職は表示役職だけ）。
-  // selectedId は夜・投票で選んだ対象、nightSentId は送り済みの夜入力。
+  // selectedId は夜・議論・投票で選んだ対象、nightSentId は送り済みの
+  // 夜入力、voteSentId は送り済みの投票、discussionDoneSent は議論を
+  // 終えたことの送信済みフラグ。
   let online = {
     socket: null, code: null, token: null, playerId: null,
     players: [], settings: null, gameStarted: false, connected: false,
     view: null, selectedId: null, nightSentId: null,
+    voteSentId: null, discussionDoneSent: false,
   };
   function isOnlineHost() { return online.playerId === 0; }
   function onlineHostname() {
@@ -3054,17 +3075,54 @@
       stage.innerHTML = view.stage.map(w => w.html).join("");
       hydrateWalkImages(stage);
     }
-    // ボタンはこの歩では夜だけ。投票・次へ・マウスは議論・投票の
-    // 接続（第2歩の後半）で扱うため、オンライン中は出さない。
+    // ボタンはフェーズで切り替える。夜は夜行動ボタン、投票は投票ボタン、
+    // 議論は下の議論パネル。次へ・マウスはオンラインでは出さない
+    // （マウスの公開は送信メッセージが未整備のため見送り。後半の残課題）。
     const nightActive = view.phase === "night" && view.meAlive && view.hasNightAction;
     el("actionBtn").textContent = online.nightSentId != null ? "夜行動を変更する" : "夜行動を実行";
     el("actionBtn").classList.toggle("hidden", !nightActive);
-    el("voteBtn").classList.add("hidden");
+    const voteActive = view.phase === "vote" && view.meAlive;
+    el("voteBtn").textContent = online.voteSentId != null ? "投票を変更する" : "投票する";
+    el("voteBtn").classList.toggle("hidden", !voteActive);
     el("nextBtn").classList.add("hidden");
     el("mouseBtn").classList.add("hidden");
     const pnpBanner = el("pnpTurnBanner");
     if (pnpBanner) pnpBanner.classList.add("hidden");
+    renderOnlineDiscussPanel(view);
     reattachSpeechBubble();
+  }
+  // 議論パネルの描画（定型文ボタン・自由入力・議論を終えるボタン）。
+  // 表示データは共有モジュール（buildOnlineDiscussViewLogic）が作り、
+  // ここでは DOM への代入だけを行う。議論フェーズ以外・脱落中は隠す。
+  function renderOnlineDiscussPanel(view) {
+    const panel = el("onlineDiscussPanel");
+    if (!panel) return;
+    const active = view.phase === "discussion" && view.meAlive;
+    panel.classList.toggle("hidden", !active);
+    if (!active) return;
+    const target = (online.view.players || []).find(p => p.id === online.selectedId);
+    const discussView = buildOnlineDiscussViewLogic({
+      selectedTargetName: target ? target.name : null,
+      meAlive: view.meAlive,
+      discussionDoneSent: online.discussionDoneSent,
+    });
+    const hint = el("onlineDiscussHint");
+    if (hint) hint.textContent = discussView.hint;
+    const phrases = el("onlineTalkPhrases");
+    if (phrases) {
+      phrases.innerHTML = discussView.phrases.map(p =>
+        `<button type="button" data-phrase-id="${p.id}" data-needs-target="${p.needsTarget ? "true" : "false"}"${p.disabled ? " disabled" : ""}>${p.text}</button>`
+      ).join("");
+    }
+    const free = el("onlineTalkFree");
+    if (free) free.disabled = discussView.freeDisabled;
+    const sendBtn = el("onlineTalkSendBtn");
+    if (sendBtn) sendBtn.disabled = discussView.freeDisabled;
+    const doneBtn = el("onlineDiscussDoneBtn");
+    if (doneBtn) {
+      doneBtn.disabled = discussView.doneDisabled;
+      doneBtn.textContent = discussView.doneLabel;
+    }
   }
   function showOnlineGame() {
     el("titleScreen").classList.add("hidden");
@@ -3081,19 +3139,128 @@
     actionLog("オンライン対戦が始まったよ！夜行動からスタートだよ。");
     focusEl("phaseText");
   }
-  // オンラインの夜の対象選択（この歩では夜だけ。投票は後半で扱う）。
-  // 選べるのは生存中の他人。自分は夜行動が自分可の役職のときだけ。
+  // オンラインの対象選択（夜・議論・投票で共通）。選べるのは生存中の
+  // 他人。自分は夜行動が自分可の役職のときだけ（議論・投票は他人だけ）。
+  // 脱落中・議論を終えたあとは選べない。
   function selectOnlineTarget(id) {
     if (!online.view) return;
     const target = (online.view.players || []).find(p => p.id === id);
     if (!target || !target.alive) return;
+    const me = (online.view.players || []).find(p => p.id === online.view.me.id);
+    if (!me || !me.alive) return;
     sfx("tick");
     if (online.view.phase === "night") {
       const meRole = ROLES[online.view.me.roleKey];
       if (id === online.view.me.id && !meRole?.nightAction?.allowSelf) return;
       online.selectedId = id;
       renderOnlineGame();
+      return;
     }
+    if (online.view.phase === "discussion") {
+      if (id === online.view.me.id || online.discussionDoneSent) return;
+      online.selectedId = id;
+      renderOnlineGame();
+      return;
+    }
+    if (online.view.phase === "vote") {
+      if (id === online.view.me.id) return;
+      online.selectedId = id;
+      renderOnlineGame();
+    }
+  }
+  // 議論の定型文をサーバーへ送る。対象が必要な文言はカードで選んだ
+  // 対象を付ける（未選択なら送らない）。サーバーが文言を検証する。
+  function sendOnlineTalk(phraseId, needsTarget) {
+    if (!online.view || online.view.phase !== "discussion") return;
+    if (needsTarget && online.selectedId == null) { alert("対象を選んでね！"); return; }
+    const msg = { type: "talk", phraseId };
+    if (needsTarget) msg.targetId = online.selectedId;
+    if (!sendOnline(msg)) actionLog("サーバーに送信できなかったよ。接続を確認してね。");
+  }
+  // 議論の自由入力（100文字まで）をサーバーへ送る。送ったら欄を空ける。
+  function sendOnlineFreeTalk() {
+    if (!online.view || online.view.phase !== "discussion") return;
+    const input = el("onlineTalkFree");
+    const text = String(input && input.value ? input.value : "").trim();
+    if (!text) { alert("発言を入力してね！"); return; }
+    if (!sendOnline({ type: "talk", text })) {
+      actionLog("サーバーに送信できなかったよ。接続を確認してね。");
+      return;
+    }
+    if (input) input.value = "";
+  }
+  // 議論を終えたことをサーバーへ送る（全員分が揃うかタイマーで投票へ）。
+  function confirmOnlineDiscussionDone() {
+    if (!online.view || online.view.phase !== "discussion") return;
+    if (!sendOnline({ type: "discussionDone" })) {
+      actionLog("サーバーに送信できなかったよ。接続を確認してね。");
+    }
+  }
+  // 投票をサーバーへ送る（集計までは送り直して変更できる）。
+  function confirmOnlineVote() {
+    if (online.selectedId == null) { alert("投票先を選んでね！"); return; }
+    if (!sendOnline({ type: "vote", targetId: online.selectedId })) {
+      actionLog("サーバーに送信できなかったよ。接続を確認してね。");
+    }
+  }
+  // 議論の開始を画面へ反映する。CPU の発言はセリフ（吹き出し付き）で、
+  // マウス公開は公開ログとセリフで出す（カットイン等の演出は第3歩）。
+  function applyOnlineDiscussionStarted(msg) {
+    for (const e of msg.talks || []) {
+      if (e.type === "mouse") { applyOnlineMouseReveal(e); continue; }
+      const speaker = (online.view.players || []).find(p => p.id === e.speakerId);
+      if (!speaker) continue;
+      sayDialogue(e.speakerId, `${speaker.name}：${e.text}`, e.text);
+    }
+    actionLog("議論が始まったよ。定型文か自由入力で発言してね。");
+  }
+  // CPU のマウス公開を画面へ反映する。公開される役職はサーバーが
+  // 送った publicRoleKey だけ（実役職は出ない）。表示はソロの
+  // revealMouse と同じ文面（共有モジュールの buildRevealMouseView）。
+  function applyOnlineMouseReveal(event) {
+    if (!event || event.publicRoleKey == null) return;
+    const speaker = (online.view.players || []).find(p => p.id === event.speakerId);
+    const target = (online.view.players || []).find(p => p.id === event.targetId);
+    if (!speaker || !target) return;
+    const view = buildRevealMouseViewLogic(
+      { id: speaker.id, name: speaker.name, roleKey: "mouse" },
+      { id: target.id, name: target.name, roleKey: event.publicRoleKey, fakeDisplayRoleKey: null, clumsy: false }
+    );
+    if (!view) return;
+    sayDialogue(event.speakerId, view.dialogueText, view.mouseLine);
+    actionLog(view.logText);
+  }
+  // 投票の集計をログへ反映する。票の内訳は公開情報として出し、
+  // 追放・同数の文言はサーバーが送ったログのまま出す。
+  function applyOnlineVoteResolved(vote) {
+    for (const msg of vote.logs || []) actionLog(msg);
+    if (Array.isArray(vote.tally) && vote.tally.length) {
+      actionLog(`🗳️ 票数：${vote.tally.map(t => `${t.name} ${t.votes}票`).join("・")}`);
+    }
+  }
+  // オンラインの結果画面。サーバーが送った結果（勝敗文言・ハイライト・
+  // 全員の実役職の行）をそのまま出す。戦績の記録はしない（ソロ／
+  // パス＆プレイだけの仕組みのため）。自分の行には「（あなた）」を付ける。
+  function showOnlineResults(result) {
+    if (!result) return;
+    clearSpeechBubbles();
+    const meId = online.view && online.view.me ? online.view.me.id : null;
+    const rows = (result.rows || []).map(r => ({ ...r, isMe: r.id === meId }));
+    el("resultTitle").textContent = result.winText || "";
+    el("resultSub").textContent = result.sub || "";
+    el("resultHighlights").innerHTML = buildResultHighlightsViewLogic(result.highlights || []);
+    el("resultRows").innerHTML = buildResultRowsViewLogic(rows, ICON_IMGS);
+    el("resultPanel").classList.remove("hidden");
+    el("titleBtn").classList.remove("hidden");
+    el("retryBtn").classList.add("hidden");
+    el("actionBtn").classList.add("hidden");
+    el("voteBtn").classList.add("hidden");
+    const panel = el("onlineDiscussPanel");
+    if (panel) panel.classList.add("hidden");
+    const myFaction = online.view && online.view.me ? online.view.me.faction : null;
+    sfx(result.winnerFaction && myFaction === result.winnerFaction ? "win" : "lose");
+    if (el("resultPanel").scrollIntoView) el("resultPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    focusEl("resultTitle");
   }
   // 夜行動をサーバーへ送る（解決までは送り直して変更できる）。
   function confirmOnlineNightAction() {
@@ -3150,6 +3317,7 @@
       socket: null, code: null, token: null, playerId: null,
       players: [], settings: null, gameStarted: false, connected: false,
       view: null, selectedId: null, nightSentId: null,
+      voteSentId: null, discussionDoneSent: false,
     };
     // 試合中に抜けるときは試合画面も隠す（タイトルへは呼び出し側が戻す）。
     el("gameScreen").classList.add("hidden");
@@ -3182,6 +3350,8 @@
       online.view = msg.view || null;
       online.selectedId = null;
       online.nightSentId = null;
+      online.voteSentId = null;
+      online.discussionDoneSent = false;
       if (online.view) showOnlineGame();
       return;
     }
@@ -3197,6 +3367,57 @@
       online.nightSentId = null;
       if (msg.night) applyOnlineNightResolved(msg.night);
       renderOnlineGame();
+      return;
+    }
+    if (msg.type === "discussionStarted") {
+      if (!msg.view) return;
+      online.view = msg.view;
+      online.selectedId = null;
+      online.discussionDoneSent = false;
+      applyOnlineDiscussionStarted(msg);
+      renderOnlineGame();
+      return;
+    }
+    if (msg.type === "talk") {
+      if (typeof msg.speakerId !== "number" || typeof msg.text !== "string") return;
+      sayDialogue(msg.speakerId, `${msg.speakerName || ""}：${msg.text}`, msg.text);
+      return;
+    }
+    if (msg.type === "discussionDoneAccepted") {
+      online.discussionDoneSent = true;
+      if (online.view) renderOnlineGame();
+      return;
+    }
+    if (msg.type === "discussionEnded") {
+      if (!msg.view) return;
+      online.view = msg.view;
+      online.selectedId = null;
+      online.voteSentId = null;
+      actionLog(formatActionLog("voteGuide", { label: "投票" }));
+      renderOnlineGame();
+      return;
+    }
+    if (msg.type === "voteAccepted") {
+      online.voteSentId = msg.targetId;
+      if (online.view) renderOnlineGame();
+      return;
+    }
+    if (msg.type === "voteResolved") {
+      if (!msg.view) return;
+      online.view = msg.view;
+      online.selectedId = null;
+      online.voteSentId = null;
+      if (msg.vote) applyOnlineVoteResolved(msg.vote);
+      renderOnlineGame();
+      return;
+    }
+    if (msg.type === "gameEnded") {
+      if (!msg.view) return;
+      online.view = msg.view;
+      online.selectedId = null;
+      online.voteSentId = null;
+      renderOnlineGame();
+      if (msg.result) showOnlineResults(msg.result);
       return;
     }
     if (msg.type === "error") {
@@ -3298,6 +3519,18 @@
     sendOnline({ type: "setSettings", settings: next });
   });
   el("onlineStartBtn").onclick = () => { sendOnline({ type: "startGame" }); };
+  // 議論パネルの操作は委譲で受ける（定型文ボタンは discussionStarted の
+  // たびに描き直すため）。対象が必要な文言は選んだ対象を付けて送る。
+  el("onlineTalkPhrases").addEventListener("click", (event) => {
+    const btn = event.target && event.target.closest ? event.target.closest("button[data-phrase-id]") : null;
+    if (!btn || btn.disabled) return;
+    sendOnlineTalk(btn.dataset.phraseId, btn.dataset.needsTarget === "true");
+  });
+  el("onlineTalkSendBtn").onclick = () => sendOnlineFreeTalk();
+  el("onlineTalkFree").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); sendOnlineFreeTalk(); }
+  });
+  el("onlineDiscussDoneBtn").onclick = () => confirmOnlineDiscussionDone();
   el("onlineLeaveBtn").onclick = () => { leaveOnlineRoom(); };
   el("onlineBackBtn").onclick = () => {
     leaveOnlineRoom();
@@ -3414,7 +3647,11 @@
     if (state.mode === "pnp" && state.pnpNightInputPending != null) confirmPnpNightAction();
     else runNight();
   };
-  el("voteBtn").onclick = doVote;
+  el("voteBtn").onclick = () => {
+    // オンライン対戦中は投票をサーバーへ送る（ソロ／パス＆プレイは従来通り）。
+    if (online.view) { confirmOnlineVote(); return; }
+    doVote();
+  };
   el("nextBtn").onclick = () => {
     if (state.phase === "morning") morningToDiscussion();
     else if (state.phase === "discussion") discussionToVote();
