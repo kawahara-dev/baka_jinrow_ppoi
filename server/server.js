@@ -260,7 +260,10 @@ function createServer(options = {}) {
 
   // 議論を開始し、CPU の発言イベントを部屋の各ソケットへ席ごとに送る
   // （view が席ごとに違うため broadcast は使わない。発言イベント自体は
-  // 公開情報で全席共通）。タイマーもここで回す。
+  // 公開情報で全席共通）。タイマーもここで回す。生存中の人間が
+  // いなければ、議論は始まった時点で終わっている（誰も discussionDone
+  // を送れないため、タイマーなしではここで止まってしまう）ので、夜の
+  // 即解決と同じくすぐ投票へ進める。
   function startDiscussionForRoom(room) {
     if (!room.game || room.game.phase !== "morning") return;
     const events = startDiscussion(room.game, random);
@@ -274,10 +277,13 @@ function createServer(options = {}) {
       if (msg) sendJson(socket, msg);
     }
     scheduleDiscussionTimer(room);
+    if (discussionComplete(room.game)) endDiscussionForRoom(room);
   }
 
   // 議論を終え、投票フェーズへ移す。view を席ごとに送る。
-  // 投票の締め切りタイマーもここで回す。
+  // 投票の締め切りタイマーもここで回す。生存中の人間がいなければ、
+  // 投票は始まった時点で揃っている（誰も vote を送れないため、60秒の
+  // タイマーまで待ってしまう）ので、夜・議論の即解決と同じくすぐ集計する。
   function endDiscussionForRoom(room) {
     clearDiscussionTimer(room.code);
     if (!room.game || room.game.phase !== "discussion") return;
@@ -291,6 +297,7 @@ function createServer(options = {}) {
       if (msg) sendJson(socket, msg);
     }
     scheduleVoteTimer(room);
+    if (votesComplete(room.game)) resolveVoteForRoom(room);
   }
 
   function handleMessage(socket, msg) {
