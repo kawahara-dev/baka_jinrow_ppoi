@@ -2966,3 +2966,177 @@ test("オンライン試合画面：試合中のエラーは行動ログへ出�
   // ロビーのエラー欄には出ない。
   assert.equal(elements.get("onlineLobbyError").textContent, "");
 });
+
+// 議論・投票・結果画面の通しテスト用：ロビーから試合画面へ進める。
+function beginOnlineGame(FB, meId = 0) {
+  FB.handleOnlineMessage({
+    type: "roomCreated", code: "ABCD", token: "token-1", playerId: 0,
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  FB.handleOnlineMessage({ type: "gameStarted", code: "ABCD", view: onlineGameViewMessage(meId) });
+}
+
+test("オンライン議論：discussionStarted で議論パネルが出て、CPU の発言とマウス公開がログに出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const discussion = onlineGameViewMessage(0);
+  discussion.phase = "discussion";
+  FB.handleOnlineMessage({
+    type: "discussionStarted", code: "ABCD", view: discussion,
+    talks: [
+      { type: "talk", speakerId: 2, text: "ユイの動きが気になる" },
+      { type: "mouse", speakerId: 3, targetId: 4, publicRoleKey: "villager" },
+    ],
+  });
+  assert.equal(elements.get("phaseText").textContent, "昼の議論");
+  assert.ok(!elements.get("onlineDiscussPanel").classList.contains("hidden"));
+  assert.ok(elements.get("onlineTalkPhrases").innerHTML.includes("怪しいと思う"));
+  assert.ok(elements.get("onlineTalkPhrases").innerHTML.includes("そう思う"));
+  assert.equal(elements.get("onlineDiscussDoneBtn").textContent, "議論を終える");
+  const dialogue = elements.get("dialogueLog").children.map((c) => c.textContent);
+  assert.ok(dialogue.some(t => t.includes("ユイ：ユイの動きが気になる")));
+  assert.ok(dialogue.some(t => t.includes("カノン") && t.includes("スズ")));
+  const action = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(action.some(t => t.includes("スズ") && t.includes("村ガール")));
+  assert.ok(action.some(t => t.includes("議論が始まったよ")));
+});
+
+test("オンライン議論：定型文と自由入力を送れて、議論を終えると投票へ進む", () => {
+  const { FB, elements, alerts } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const sent = [];
+  FB.online.socket = { readyState: 1, send(msg) { sent.push(msg); } };
+  const discussion = onlineGameViewMessage(0);
+  discussion.phase = "discussion";
+  FB.handleOnlineMessage({ type: "discussionStarted", code: "ABCD", view: discussion, talks: [] });
+  // 対象を選ばずに対象あり文言を押すとアラートが出て送られない。
+  const suspiciousBtn = { dataset: { phraseId: "suspicious", needsTarget: "true" }, disabled: false };
+  elements.get("onlineTalkPhrases").dispatch("click", { target: { closest: () => suspiciousBtn } });
+  assert.deepEqual(alerts, ["対象を選んでね！"]);
+  assert.equal(sent.length, 0);
+  // カード（ユイ=2）を選ぶと文言に名前が入って送れる。
+  elements.get("cards").children[2].onclick();
+  assert.equal(FB.online.selectedId, 2);
+  assert.ok(elements.get("onlineTalkPhrases").innerHTML.includes("ユイ が怪しいと思う"));
+  elements.get("onlineTalkPhrases").dispatch("click", { target: { closest: () => suspiciousBtn } });
+  assert.equal(sent.length, 1);
+  assert.deepEqual(JSON.parse(sent[0]), { type: "talk", phraseId: "suspicious", targetId: 2 });
+  // 対象なし文言は選ばなくても送れる。
+  const agreeBtn = { dataset: { phraseId: "agree", needsTarget: "false" }, disabled: false };
+  elements.get("onlineTalkPhrases").dispatch("click", { target: { closest: () => agreeBtn } });
+  assert.deepEqual(JSON.parse(sent[1]), { type: "talk", phraseId: "agree" });
+  // 自由入力は前後の空白を除いて送られ、欄が空になる。
+  elements.get("onlineTalkFree").value = " 様子見したいな ";
+  elements.get("onlineTalkSendBtn").onclick();
+  assert.deepEqual(JSON.parse(sent[2]), { type: "talk", text: "様子見したいな" });
+  assert.equal(elements.get("onlineTalkFree").value, "");
+  // 他人の発言が届くとセリフに出る。
+  FB.handleOnlineMessage({ type: "talk", code: "ABCD", speakerId: 1, speakerName: "ミオ", text: "そう思う" });
+  const dialogue = elements.get("dialogueLog").children.map((c) => c.textContent);
+  assert.ok(dialogue.some(t => t.includes("ミオ：そう思う")));
+  // 議論を終えると待機表示になり、discussionEnded で投票へ進む。
+  elements.get("onlineDiscussDoneBtn").onclick();
+  assert.deepEqual(JSON.parse(sent[3]), { type: "discussionDone" });
+  FB.handleOnlineMessage({ type: "discussionDoneAccepted" });
+  assert.equal(FB.online.discussionDoneSent, true);
+  assert.equal(elements.get("onlineDiscussDoneBtn").textContent, "議論を終えたよ（待機中）");
+  const vote = onlineGameViewMessage(0);
+  vote.phase = "vote";
+  FB.handleOnlineMessage({ type: "discussionEnded", code: "ABCD", view: vote });
+  assert.equal(elements.get("phaseText").textContent, "投票");
+  assert.ok(!elements.get("voteBtn").classList.contains("hidden"));
+  assert.ok(elements.get("onlineDiscussPanel").classList.contains("hidden"));
+  const action = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(action.some(t => t.includes("投票")));
+});
+
+test("オンライン投票：投票を送ると変更表示になり、voteResolved で追放と票数がログに出て翌日の夜へ進む", () => {
+  const { FB, elements, alerts } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const sent = [];
+  FB.online.socket = { readyState: 1, send(msg) { sent.push(msg); } };
+  const vote = onlineGameViewMessage(0);
+  vote.phase = "vote";
+  FB.handleOnlineMessage({ type: "discussionEnded", code: "ABCD", view: vote });
+  // 選ばずに押すとアラートが出て送られない。
+  elements.get("voteBtn").onclick();
+  assert.deepEqual(alerts, ["投票先を選んでね！"]);
+  assert.equal(sent.length, 0);
+  // カード（カノン=3）を選んで投票する。
+  elements.get("cards").children[3].onclick();
+  assert.equal(FB.online.selectedId, 3);
+  elements.get("voteBtn").onclick();
+  assert.deepEqual(JSON.parse(sent[0]), { type: "vote", targetId: 3 });
+  FB.handleOnlineMessage({ type: "voteAccepted", targetId: 3 });
+  assert.equal(FB.online.voteSentId, 3);
+  assert.equal(elements.get("voteBtn").textContent, "投票を変更する");
+  // 自分は選べない。
+  elements.get("cards").children[0].onclick();
+  assert.equal(FB.online.selectedId, 3, "自分は選べないので選択は変わらない");
+  // 集計でカノンが追放され、翌日の夜へ進む。
+  const night2 = onlineGameViewMessage(0);
+  night2.phase = "night";
+  night2.day = 2;
+  night2.players[3] = { id: 3, name: "カノン", icon: "🎀", alive: false, isCpu: true, publicRoleKey: "fakeGirl" };
+  FB.handleOnlineMessage({
+    type: "voteResolved", code: "ABCD", view: night2,
+    vote: {
+      logs: ["[投票] カノン が追放された（5票）", "[公開] カノン は フェイクガール（インポスター）だよ！"],
+      exiledId: 3, exiledName: "カノン", exiledPublicRoleKey: "fakeGirl",
+      tally: [{ id: 3, name: "カノン", votes: 5 }, { id: 2, name: "ユイ", votes: 2 }],
+    },
+  });
+  assert.equal(elements.get("phaseText").textContent, "夜行動");
+  assert.equal(elements.get("dayText").textContent, "2");
+  assert.equal(FB.online.selectedId, null, "投票の選択はリセットされる");
+  assert.equal(FB.online.voteSentId, null);
+  assert.ok(elements.get("voteBtn").classList.contains("hidden"), "夜は投票ボタンが出ない");
+  assert.ok(!elements.get("actionBtn").classList.contains("hidden"), "占い師は翌日の夜行動ボタンが出る");
+  const lines = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(lines.some(t => t.includes("カノン が追放された")));
+  assert.ok(lines.some(t => t.includes("フェイクガール")));
+  assert.ok(lines.some(t => t.includes("票数：カノン 5票・ユイ 2票")));
+  assert.ok(elements.get("cards").children[3].className.includes("dead"));
+});
+
+test("オンライン結果：gameEnded で結果画面が出て、自分の行に（あなた）が付く", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const names = ["ルナ", "ミオ", "ユイ", "カノン", "スズ", "リリ", "ノア", "エマ"];
+  const icons = ["🌸", "🪄", "🧁", "🎀", "💫", "🫧", "🍬", "🌙"];
+  const roleKeys = ["apprenticeSeer", "fakeGirl", "villager", "guardian", "doctor", "police", "lookout", "bomber"];
+  const players = names.map((name, id) => ({
+    id, name, icon: icons[id], roleKey: roleKeys[id], fakeDisplayRoleKey: null,
+    clumsy: false, alive: id !== 3, isCpu: id >= 2, deathCause: id === 3 ? "追放" : null, deathDay: id === 3 ? 1 : null,
+  }));
+  const summary = FB.buildResultSummaryLogic(players, { winText: "イノセント陣営の勝利！", mode: "pnp", playerId: 0, humanCount: 2 });
+  const end = onlineGameViewMessage(0);
+  end.phase = "end";
+  FB.handleOnlineMessage({
+    type: "gameEnded", code: "ABCD", view: end,
+    result: {
+      winText: "イノセント陣営の勝利！",
+      winnerFaction: "イノセント",
+      sub: "オンライン対戦（人間2人）で遊びました。",
+      highlights: ["📅 2日目で決着"],
+      rows: summary.rows,
+    },
+  });
+  assert.ok(!elements.get("resultPanel").classList.contains("hidden"));
+  assert.equal(elements.get("resultTitle").textContent, "イノセント陣営の勝利！");
+  assert.equal(elements.get("resultSub").textContent, "オンライン対戦（人間2人）で遊びました。");
+  assert.ok(elements.get("resultHighlights").innerHTML.includes("2日目で決着"));
+  const rowsHtml = elements.get("resultRows").innerHTML;
+  assert.ok(rowsHtml.includes("ルナ（あなた）"));
+  assert.ok(rowsHtml.includes("フェイクガール"));
+  assert.ok(!elements.get("titleBtn").classList.contains("hidden"));
+  assert.ok(elements.get("voteBtn").classList.contains("hidden"));
+  assert.ok(elements.get("actionBtn").classList.contains("hidden"));
+  // オンラインの結果ではソロの戦績は記録されない。
+  assert.equal(localStorage.getItem("fakeBloomStats"), null);
+  assert.equal(localStorage.getItem("fakeBloomPnpStats"), null);
+});
