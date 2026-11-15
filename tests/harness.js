@@ -234,7 +234,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   ROLES, PHASE_META, CHAR_TALK, charTalkPool, pickTalkLine, setupGame, runNight, resolveNightActions, doVote,
   morningToDiscussion, discussionToVote, revealMouse, checkWin, dealRoles, resolveVoteTally, checkWinCondition,
   getEffectiveRoleKey, getPublicRoleKey, getPhaseHint, updateInGameRoleCard,
-  getFakeAlliesText, getAlliesLineForRole, showRoleInfo, closeRoleInfo, renderRoleGuide, renderParade,
+  showRoleInfo, closeRoleInfo, renderRoleGuide, renderParade,
   renderLobbyRoster,
   renderStats, renderAchievements, CLUMSY_SEER_RATE, showResults, buildHighlights, gameSettings,
   draw, paintSettings, roleHtmlFor, startHandoff, showPnpCover, showPnpRole,
