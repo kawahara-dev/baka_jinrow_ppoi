@@ -1597,7 +1597,7 @@ test("roleHtmlFor：入力の players を変更しない（純粋関数）", () 
   assert.equal(JSON.stringify(players), before);
 });
 
-test("ブラウザ側の roleHtmlFor / getFakeAlliesText / getAlliesLineForRole は共有モジュールと同一の表示になる", () => {
+test("ブラウザ側の roleHtmlFor は共有モジュールと同一の表示になる", () => {
   const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
   FB.setupGame();
   const s = FB.state;
@@ -1605,8 +1605,6 @@ test("ブラウザ側の roleHtmlFor / getFakeAlliesText / getAlliesLineForRole 
   const me = s.players[s.playerId];
   for (const p of s.players) {
     assert.equal(FB.roleHtmlFor(p), Logic.roleHtmlFor(p, s.players, opts), `${p.name} の役職表示が一致`);
-    assert.equal(FB.getFakeAlliesText(p), Logic.getFakeAlliesText(s.players, p, opts), `${p.name} の仲間表示が一致`);
-    assert.equal(FB.getAlliesLineForRole(p), Logic.getAlliesLineForRole(s.players, p, opts), `${p.name} の仲間行が一致`);
     assert.equal(FB.getFakeAlliesTextLogic(s.players, p, opts), Logic.getFakeAlliesText(s.players, p, opts), `ハーネス経由のモジュール関数とも一致（${p.name}）`);
     assert.equal(FB.roleHtmlForLogic(p, s.players, opts), Logic.roleHtmlFor(p, s.players, opts), `ハーネス経由の roleHtmlFor とも一致（${p.name}）`);
   }
@@ -1626,7 +1624,6 @@ test("ブラウザ側の roleHtmlFor / getFakeAlliesText / getAlliesLineForRole 
   const popts = { mode: ps.mode, humanPlayerIds: ps.humanPlayerIds };
   for (const p of ps.players) {
     assert.equal(pnp.FB.roleHtmlFor(p), Logic.roleHtmlFor(p, ps.players, popts), `PnP ${p.name} の役職表示が一致`);
-    assert.equal(pnp.FB.getFakeAlliesText(p), Logic.getFakeAlliesText(ps.players, p, popts), `PnP ${p.name} の仲間表示が一致`);
   }
 });
 

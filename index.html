@@ -1610,16 +1610,9 @@
   }
 
 
-  // インポスター仲間の名前列は共有モジュールで生成する。
-  function getFakeAlliesText(player) {
-    return getFakeAlliesTextLogic(state.players, player, { mode: state.mode, humanPlayerIds: state.humanPlayerIds });
-  }
-
-
-  // インポスター仲間の表示行は共有モジュールで生成する。
-  function getAlliesLineForRole(player) {
-    return getAlliesLineForRoleLogic(state.players, player, { mode: state.mode, humanPlayerIds: state.humanPlayerIds });
-  }
+  // インポスター仲間の名前列・表示行は、役職カードの表示データ（buildRoleCardView）
+  // が共有モジュールで生成する。以前あった薄いラッパー getFakeAlliesText /
+  // getAlliesLineForRole はゲーム側からの呼び出しがなくなり削除した。
   // フェーズヒントは共有モジュールで生成する。role 引数は従来の呼び出し
   // 互換のために残す（夜のヒントは state の現在プレイヤーから決まる）。
   function getPhaseHint(role) {
