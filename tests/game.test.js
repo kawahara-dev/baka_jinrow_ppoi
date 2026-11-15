@@ -578,8 +578,13 @@ test("renderStats: 旧セーブの clumsySeer 記録は当時の名前で表示�
 test("シミュレーション: Feign 式秘匿化でも陣営勝率は目安から大きく崩れない", () => {
   // 素朴な自動プレイヤーで回す。変更前（2026-11-12 計測）の目安は
   // イノセント 46.5% / インポスター 53.0% / ボマー 0.5%（200試合）。
+  // 2026-11-15 の計測で N=60 だと 30 回中 1 回だけ判定を外した
+  // （イノセント 32% / インポスター 68.3%）が、N=200 だと 16 回中
+  // 0 回で、平均もイノセント 約42% / インポスター 約57% / ボマー
+  // 約1% と安定していた。標本を目安と同じ 200 試合に増やし、
+  // 判定幅（28〜68% / ボマー 15% 以下）は変えずに誤検出を減らす。
   const counts = { "イノセント": 0, "インポスター": 0, "ニュートラル": 0 };
-  const N = 60;
+  const N = 200;
   for (let i = 0; i < N; i++) {
     const { FB, elements } = loadGame({ seedSettings: { fakeCount: "random", bomber: "random", sound: "off", difficulty: "normal" } });
     const end = playFullGame(FB, elements);
