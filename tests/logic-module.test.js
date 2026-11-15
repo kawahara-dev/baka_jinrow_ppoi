@@ -3852,3 +3852,107 @@ test("ブラウザ側の renderAchievements は共有モジュールの buildAch
   FB.renderAchievements();
   assert.equal(elements.get("achvList").innerHTML, Logic.buildAchievementsChipsView(view));
 });
+
+test("normalizeRoomSettings：部屋設定の4キーだけを検証し、不正・欠け・null は既定値に戻る", () => {
+  const valid = { fakeCount: "1", bomber: "on", difficulty: "hard", discussTimer: "120" };
+  assert.deepEqual(Logic.normalizeRoomSettings(valid), valid);
+  assert.deepEqual(Logic.normalizeRoomSettings(null), Logic.DEFAULT_ROOM_SETTINGS);
+  assert.deepEqual(Logic.normalizeRoomSettings(undefined), Logic.DEFAULT_ROOM_SETTINGS);
+  assert.deepEqual(Logic.normalizeRoomSettings("not-an-object"), Logic.DEFAULT_ROOM_SETTINGS);
+  assert.deepEqual(Logic.normalizeRoomSettings(42), Logic.DEFAULT_ROOM_SETTINGS);
+  // 許容外の値はそのキーだけ既定値に戻る（有効な値は残る）。
+  const bad = { fakeCount: "3", bomber: "maybe", difficulty: "extreme", discussTimer: "90" };
+  assert.deepEqual(Logic.normalizeRoomSettings(bad), Logic.DEFAULT_ROOM_SETTINGS);
+  // キーが欠けた古い設定はそのキーだけ既定値（後方互換）。
+  assert.deepEqual(Logic.normalizeRoomSettings({ difficulty: "easy" }), { ...Logic.DEFAULT_ROOM_SETTINGS, difficulty: "easy" });
+  assert.deepEqual(Logic.normalizeRoomSettings({}), Logic.DEFAULT_ROOM_SETTINGS);
+  // 余分なキー（端末ごとの設定）は無視される。
+  assert.deepEqual(Logic.normalizeRoomSettings({ ...valid, sound: "off", bgm: "on", mode: "pnp", humanCount: "5", extra: "x" }), valid);
+});
+
+test("normalizeRoomSettings：入力を変更しない（純粋関数）", () => {
+  const parsed = { fakeCount: "3", difficulty: "extreme" };
+  const before = JSON.stringify(parsed);
+  Logic.normalizeRoomSettings(parsed);
+  assert.equal(JSON.stringify(parsed), before);
+});
+
+test("isOnlineAvailable：サーバー配信のホスト名だけ true（Pages 版は false）", () => {
+  assert.equal(Logic.isOnlineAvailable("127.0.0.1"), true);
+  assert.equal(Logic.isOnlineAvailable("localhost"), true);
+  assert.equal(Logic.isOnlineAvailable("kawahara-dev.github.io"), false);
+  assert.equal(Logic.isOnlineAvailable(""), false);
+  assert.equal(Logic.isOnlineAvailable(undefined), false);
+});
+
+test("buildOnlineLobbyView：ホストは設定を変えられて開始できる（2人以上）", () => {
+  const players = [
+    { id: 0, name: "ルナ", icon: "🌸", connected: true },
+    { id: 1, name: "ミオ", icon: "🪄", connected: true },
+  ];
+  const view = Logic.buildOnlineLobbyView({
+    code: "ABCD", players,
+    settings: { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "60" },
+    isHost: true, myPlayerId: 0, gameStarted: false,
+  });
+  assert.equal(view.codeText, "ABCD");
+  assert.equal(view.playerCount, 2);
+  assert.ok(view.playersHtml.includes("ルナ") && view.playersHtml.includes("ホスト") && view.playersHtml.includes("あなた"));
+  assert.ok(view.playersHtml.includes("ミオ") && !view.playersHtml.includes("切断中"));
+  assert.equal(view.startDisabled, false);
+  assert.equal(view.startNote, "準備ができたら「試合開始」を押してください。");
+  assert.equal(view.settingsDisabled, false);
+  const fake = view.segments.find(s => s.key === "fakeCount");
+  assert.deepEqual(fake.buttons.map(b => b.value), ["random", "1", "2"]);
+  assert.equal(fake.buttons.find(b => b.value === "1").active, true);
+  assert.equal(fake.buttons.every(b => b.disabled === false), true);
+  const timer = view.segments.find(s => s.key === "discussTimer");
+  assert.equal(timer.buttons.find(b => b.value === "60").active, true);
+});
+
+test("buildOnlineLobbyView：ゲストは設定を変えられず開始もできない。ホスト1人では開始できない", () => {
+  const players = [
+    { id: 0, name: "ルナ", icon: "🌸", connected: true },
+    { id: 1, name: "ミオ", icon: "🪄", connected: true },
+  ];
+  const view = Logic.buildOnlineLobbyView({
+    code: "ABCD", players, settings: null, isHost: false, myPlayerId: 1, gameStarted: false,
+  });
+  assert.equal(view.startDisabled, true);
+  assert.equal(view.startNote, "ホストが試合を開始するのを待っています。");
+  assert.equal(view.settingsDisabled, true);
+  assert.ok(view.segments.every(s => s.buttons.every(b => b.disabled === true)));
+  const hostView = Logic.buildOnlineLobbyView({
+    code: "ABCD", players: [players[0]], settings: null, isHost: true, myPlayerId: 0, gameStarted: false,
+  });
+  assert.equal(hostView.startDisabled, true);
+  assert.equal(hostView.startNote, "開始するにはあと1人必要です（2人以上で開始できます）。");
+});
+
+test("buildOnlineLobbyView：切断中の参加者にバッジが付き、試合開始後は開始できない", () => {
+  const players = [
+    { id: 0, name: "ルナ", icon: "🌸", connected: true },
+    { id: 1, name: "ミオ", icon: "🪄", connected: false },
+  ];
+  const view = Logic.buildOnlineLobbyView({
+    code: "ABCD", players, settings: null, isHost: true, myPlayerId: 0, gameStarted: true,
+  });
+  assert.ok(view.playersHtml.includes("切断中"));
+  assert.equal(view.startDisabled, true);
+  assert.equal(view.startNote, "試合が始まりました。試合画面の接続は次のステップで対応します。");
+  assert.equal(view.settingsDisabled, true);
+  assert.equal(view.gameStarted, true);
+});
+
+test("buildOnlineLobbyView：設定が不正でも既定値で描き、入力を変更しない", () => {
+  const settings = { fakeCount: "9", bomber: "maybe", difficulty: "hard", discussTimer: "999" };
+  const before = JSON.stringify(settings);
+  const view = Logic.buildOnlineLobbyView({
+    code: "ABCD", players: [], settings, isHost: true, myPlayerId: 0, gameStarted: false,
+  });
+  assert.equal(JSON.stringify(settings), before);
+  assert.equal(view.segments.find(s => s.key === "fakeCount").buttons.find(b => b.active).value, "random");
+  assert.equal(view.segments.find(s => s.key === "difficulty").buttons.find(b => b.active).value, "hard");
+  assert.equal(view.codeText, "ABCD");
+  assert.equal(view.playersHtml, "");
+});

@@ -1735,6 +1735,86 @@
     };
   }
 
+  // オンライン対戦の部屋設定（フェーズ2 第1歩）。
+  // タイトル画面の設定のうち、試合内容に関わる4キーだけを部屋で共有する
+  // （効果音・BGM・遊び方・参加人数は端末ごとの設定なので部屋には含めない）。
+  // サーバー（rooms.js）とブラウザの両方で同じ規則を使う。
+  const ONLINE_SETTINGS_KEYS = ["fakeCount", "bomber", "difficulty", "discussTimer"];
+  const DEFAULT_ROOM_SETTINGS = { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" };
+  // 選択肢は [値, 表示名] の並びで持つ（オブジェクトのキーだと
+  // 「1」「2」のような数値キーが先頭に並び替えられてしまうため）。
+  const ONLINE_SETTINGS_LABELS = {
+    fakeCount: { label: "インポスター人数", values: [["random", "ランダム"], ["1", "1人"], ["2", "2人"]] },
+    bomber: { label: "ボマー", values: [["random", "ランダム"], ["on", "あり"], ["off", "なし"]] },
+    difficulty: { label: "難易度", values: [["easy", "かんたん"], ["normal", "ふつう"], ["hard", "つよい"]] },
+    discussTimer: { label: "議論タイマー", values: [["0", "なし"], ["60", "1分"], ["120", "2分"], ["180", "3分"]] },
+  };
+  // 部屋設定を検証して返す純粋関数。normalizeSettings と同じ規則で、
+  // 対象キーは部屋設定の4キーのみ。parsed が null・非オブジェクト・
+  // キー欠け・許容外の値のときはそのキーだけ既定値に戻す（後方互換）。
+  // 余分なキーは無視する。入力は変更しない。
+  function normalizeRoomSettings(parsed) {
+    const out = { ...DEFAULT_ROOM_SETTINGS };
+    if (!parsed || typeof parsed !== "object") return out;
+    for (const key of ONLINE_SETTINGS_KEYS) {
+      if (SETTINGS_ALLOWED[key].includes(parsed[key])) out[key] = parsed[key];
+    }
+    return out;
+  }
+  // サーバー配信のときだけオンライン入口を出す判定。Pages 版
+  // （kawahara-dev.github.io）ではオンラインは使えないので入口を出さない。
+  // hostname だけを見る純粋関数。ブラウザ側は location.hostname を渡す。
+  function isOnlineAvailable(hostname) {
+    return hostname === "127.0.0.1" || hostname === "localhost";
+  }
+  // オンラインロビーの表示データ。部屋コード・参加者一覧・部屋設定・
+  // 開始ボタンの状態を、ブラウザ側が DOM へ代入するための形で返す。
+  // 返すのは表示データだけで、DOM には触らない純粋関数。設定が許容外の
+  // 値でも normalizeRoomSettings で既定値に直してから判定する。
+  // players は公開情報のみ（{ id, name, icon, connected }）。
+  // ホストは作成者（id 0）で、設定を変えられるのはホストだけ。
+  function buildOnlineLobbyView({ code, players, settings, isHost, myPlayerId, gameStarted }) {
+    const normalized = normalizeRoomSettings(settings);
+    const list = Array.isArray(players) ? players : [];
+    const started = !!gameStarted;
+    const host = !!isHost;
+    const playersHtml = list.map(p => {
+      const badges = [];
+      if (p.id === 0) badges.push("ホスト");
+      if (p.id === myPlayerId) badges.push("あなた");
+      if (p.connected === false) badges.push("切断中");
+      const badgeHtml = badges.length ? ` <span class="online-player-badge">${badges.join("・")}</span>` : "";
+      return `<li class="lobby-roster-item"><span class="lobby-roster-icon">${p.icon || ""}</span><span class="lobby-roster-name">${p.name || ""}</span>${badgeHtml}</li>`;
+    }).join("");
+    const segments = ONLINE_SETTINGS_KEYS.map(key => ({
+      key,
+      label: ONLINE_SETTINGS_LABELS[key].label,
+      buttons: ONLINE_SETTINGS_LABELS[key].values.map(([value, label]) => ({
+        value,
+        label,
+        active: value === normalized[key],
+        disabled: !host || started,
+      })),
+    }));
+    const startDisabled = !host || list.length < 2 || started;
+    let startNote = "";
+    if (started) startNote = "試合が始まりました。試合画面の接続は次のステップで対応します。";
+    else if (!host) startNote = "ホストが試合を開始するのを待っています。";
+    else if (list.length < 2) startNote = "開始するにはあと1人必要です（2人以上で開始できます）。";
+    else startNote = "準備ができたら「試合開始」を押してください。";
+    return {
+      codeText: typeof code === "string" ? code : "",
+      playersHtml,
+      playerCount: list.length,
+      segments,
+      settingsDisabled: !host || started,
+      settingsNote: host ? "設定はホストだけが変更できます（全員に同期されます）。" : "設定はホストだけが変更できます。",
+      startDisabled,
+      startNote,
+      gameStarted: started,
+    };
+  }
+
   // セリフ／行動ログの折りたたみ。状態は独立キー fakeBloomLogFold に
   // 保存され、保存がなければ両方とも折りたたんだ状態で始める。
   // 定義（キー・要素 id・見出し文言）と既定値はオンライン対戦の
@@ -2169,6 +2249,12 @@
     SETTINGS_ALLOWED,
     normalizeSettings,
     buildSettingsView,
+    ONLINE_SETTINGS_KEYS,
+    DEFAULT_ROOM_SETTINGS,
+    ONLINE_SETTINGS_LABELS,
+    normalizeRoomSettings,
+    isOnlineAvailable,
+    buildOnlineLobbyView,
     LOG_FOLD_DEFAULT,
     LOG_FOLD_DEFS,
     normalizeLogFold,

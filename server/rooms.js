@@ -6,7 +6,12 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const { PLAYER_NAMES, PLAYER_ICONS } = require("../game-logic.js");
+const {
+  PLAYER_NAMES,
+  PLAYER_ICONS,
+  DEFAULT_ROOM_SETTINGS,
+  normalizeRoomSettings,
+} = require("../game-logic.js");
 
 const MAX_PLAYERS = 8;
 // 見間違いやすい文字（0/O、1/I/l）を除いた 4 文字コード。
@@ -61,11 +66,28 @@ function createRoomStore(deps = {}) {
     return typeof code === "string" ? code.trim().toUpperCase() : "";
   }
 
-  function createRoom() {
-    const room = { code: makeCode(), createdAt: now(), players: [], game: null };
+  // 部屋設定はホストの初期設定で始まる（フェーズ2 第1歩）。
+  // なければ既定値。検証は共有モジュール（normalizeRoomSettings）。
+  function createRoom(settings) {
+    const room = {
+      code: makeCode(),
+      createdAt: now(),
+      players: [],
+      game: null,
+      settings: normalizeRoomSettings(settings),
+    };
     rooms.set(room.code, room);
     const player = addPlayer(room);
     return { room, player };
+  }
+
+  // ホストが部屋設定を変える（フェーズ2 第1歩）。検証済みの設定を
+  // 返し、部屋へ反映する。指定のないキーは今の部屋設定のままにする
+  // （一部のキーだけ送っても、他のキーが既定値に戻らないようにする）。
+  // ホストかどうか・試合開始前かどうかは呼び出し側（server.js）が見る。
+  function setRoomSettings(room, settings) {
+    room.settings = normalizeRoomSettings({ ...room.settings, ...(settings || {}) });
+    return room.settings;
   }
 
   function joinRoom(code) {
@@ -105,10 +127,20 @@ function createRoomStore(deps = {}) {
     disconnect,
     getRoom,
     publicPlayers,
+    setRoomSettings,
+    DEFAULT_ROOM_SETTINGS,
+    normalizeRoomSettings,
     MAX_PLAYERS,
     ROOM_CODE_ALPHABET,
     ROOM_CODE_LENGTH,
   };
 }
 
-module.exports = { createRoomStore, MAX_PLAYERS, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH };
+module.exports = {
+  createRoomStore,
+  MAX_PLAYERS,
+  ROOM_CODE_ALPHABET,
+  ROOM_CODE_LENGTH,
+  DEFAULT_ROOM_SETTINGS,
+  normalizeRoomSettings,
+};
