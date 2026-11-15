@@ -22,12 +22,22 @@ const {
   discussionStartedMessage,
   talkBroadcast,
   discussionEndedMessage,
+  checkWin,
+  endGame,
+  submitVote,
+  markVoteAbstained,
+  clearVoteAbstained,
+  votesComplete,
+  resolveVote,
+  voteResolvedMessage,
+  gameEndedMessage,
   CANNED_TALKS,
   FREE_TALK_MAX_LENGTH,
   MIN_PLAYERS_TO_START,
   NIGHT_TIMEOUT_MS,
+  VOTE_TIMEOUT_MS,
 } = require("../game.js");
-const { ROLES, getEffectiveRoleKey } = require("../../game-logic.js");
+const { ROLES, PLAYER_NAMES, PLAYER_ICONS, getEffectiveRoleKey } = require("../../game-logic.js");
 
 // 決定的な乱数源（mulberry32）。seed を変えて何通りかの配役を試す。
 function seededRandom(seed) {
@@ -450,4 +460,254 @@ test("discussionStartedMessage／talkBroadcast／discussionEndedMessage：席ご
     assert.equal(json.includes("fakeDisplayRoleKey"), false);
   }
   assert.equal(discussionEndedMessage(game, 99), null);
+});
+
+// 投票フェーズのヘルパー：8人全員が人間の試合を作り、phase を "vote"
+// にする。8人全員が人間なので CPU の投票は入らず、集計は人間の投票
+// だけで決まる。役職は dealRoles のまま（テストごとに上書きする）。
+function gameInVote(seed = 42) {
+  const roomPlayers = PLAYER_NAMES.map((name, id) => ({
+    id,
+    name,
+    icon: PLAYER_ICONS[id],
+  }));
+  const game = createGame("ABCD", roomPlayers, undefined, seededRandom(seed));
+  game.phase = "vote";
+  return game;
+}
+
+test("submitVote：投票の検証と上書き（自分・死亡・存在しない席・CPU・フェーズ外）", () => {
+  const game = gameInVote();
+  assert.equal(submitVote(game, 0, 2), null);
+  assert.equal(game.votes[0], 2);
+  // 送り直しは上書きできる。
+  assert.equal(submitVote(game, 0, 3), null);
+  assert.equal(game.votes[0], 3);
+  // 自分への投票は弾く（パス＆プレイと同じ）。
+  assert.equal(submitVote(game, 0, 0), "invalid_target");
+  // 死亡・存在しない席への投票は弾く。
+  game.players[4].alive = false;
+  assert.equal(submitVote(game, 0, 4), "invalid_target");
+  assert.equal(submitVote(game, 0, 99), "invalid_target");
+  // 投票は上書きされず残る。
+  assert.equal(game.votes[0], 3);
+  // 死亡した人間からの投票は弾く。
+  assert.equal(submitVote(game, 4, 2), "not_alive");
+  // CPU 席は投票できない（2人間の試合で phase を vote にしたもの）。
+  const { game: game2 } = gameInDiscussion();
+  game2.phase = "vote";
+  assert.equal(submitVote(game2, 5, 2), "not_a_player");
+  // 夜フェーズ・試合なしでは弾く。
+  assert.equal(submitVote(gameBothNeedInput(), 0, 2), "not_vote");
+  assert.equal(submitVote(null, 0, 2), "no_game");
+});
+
+test("votesComplete と markVoteAbstained：全員分・切断中の棄権で投票が揃う", () => {
+  const game = gameInVote();
+  assert.equal(votesComplete(game), false);
+  for (let id = 0; id < 7; id++) assert.equal(submitVote(game, id, 7), null);
+  assert.equal(votesComplete(game), false);
+  assert.equal(submitVote(game, 7, 6), null);
+  assert.equal(votesComplete(game), true);
+  // 二重集計にならないよう、完了のまま投票を受け付けても揃ったまま。
+  assert.equal(submitVote(game, 7, 5), null);
+  assert.equal(votesComplete(game), true);
+
+  // 切断中の人間は棄権扱いで、残りの投票だけで揃う（§7）。
+  const game2 = gameInVote();
+  markVoteAbstained(game2, 0);
+  assert.equal(votesComplete(game2), false);
+  for (let id = 1; id < 7; id++) assert.equal(submitVote(game2, id, 7), null);
+  assert.equal(submitVote(game2, 7, 6), null);
+  assert.equal(votesComplete(game2), true);
+  // 再接続したら棄権扱いが外れ、また投票できる。
+  clearVoteAbstained(game2, 0);
+  assert.equal(votesComplete(game2), false);
+  assert.equal(submitVote(game2, 0, 6), null);
+  assert.equal(votesComplete(game2), true);
+  // 投票済みの人間が切断しても票は残る（棄権にはならない）。
+  const game3 = gameInVote();
+  assert.equal(submitVote(game3, 0, 6), null);
+  markVoteAbstained(game3, 0);
+  assert.equal(game3.votes[0], 6);
+  // 夜フェーズでの棄権・解除は何もしない。
+  const night = gameBothNeedInput();
+  markVoteAbstained(night, 0);
+  clearVoteAbstained(night, 0);
+  assert.equal(night.voteAbstained.size, 0);
+  // 死亡した人間は数えない。
+  const game4 = gameInVote();
+  game4.players[1].alive = false;
+  for (const id of [0, 2, 4, 5, 6, 7]) assert.equal(submitVote(game4, id, 3), null);
+  assert.equal(submitVote(game4, 3, 4), null);
+  assert.equal(votesComplete(game4), true);
+  // フェーズ外・試合なしでは揃わない。
+  assert.equal(votesComplete(gameBothNeedInput()), false);
+  assert.equal(votesComplete(null), false);
+});
+
+test("resolveVote：同数なら追放なしで翌日の夜へ進む", () => {
+  const game = gameInVote();
+  // 票数がぶれないよう全員を村ガールにする（政治家の2票を避ける）。
+  // 7番だけインポスターにして、集計後も試合が続くようにする。
+  for (const p of game.players) p.roleKey = "villager";
+  game.players[7].roleKey = "fakeGirl";
+  // 4票ずつに分ける（8人全員が人間なので CPU の票は入らない）。
+  // 4番は 5 へ、5番は 4 へ入れる（自分への投票はできないため）。
+  for (const id of [0, 1, 2, 5]) assert.equal(submitVote(game, id, 4), null);
+  for (const id of [3, 4, 6, 7]) assert.equal(submitVote(game, id, 5), null);
+  const result = resolveVote(game, seededRandom(7));
+  assert.ok(result);
+  assert.equal(result.ended, false);
+  assert.equal(result.exiledId, null);
+  assert.equal(result.winText, null);
+  assert.ok(result.logs.some((l) => l.includes("同数")));
+  assert.equal(result.tally.length, 2);
+  assert.ok(result.tally.every((t) => t.votes === 4));
+  assert.equal(game.phase, "night");
+  assert.equal(game.day, 2);
+  assert.ok(game.players.every((p) => p.alive));
+  assert.ok(result.logs.some((l) => l.includes("2日目")));
+  // 二重集計はできない。
+  assert.equal(resolveVote(game, seededRandom(7)), null);
+  assert.equal(game.phase, "night");
+});
+
+test("resolveVote：最多票が追放され、役職が公開される", () => {
+  const game = gameInVote();
+  // 票数がぶれないよう全員を村ガールにする（政治家の2票を避ける）。
+  // 7番だけインポスターにして、6番の追放後も試合が続くようにする。
+  for (const p of game.players) p.roleKey = "villager";
+  game.players[7].roleKey = "fakeGirl";
+  for (let id = 0; id < 5; id++) assert.equal(submitVote(game, id, 6), null);
+  for (let id = 5; id < 7; id++) assert.equal(submitVote(game, id, 7), null);
+  assert.equal(submitVote(game, 7, 6), null);
+  const result = resolveVote(game, seededRandom(7));
+  assert.ok(result);
+  assert.equal(result.ended, false);
+  assert.equal(result.exiledId, 6);
+  const exiled = game.players[6];
+  assert.equal(exiled.alive, false);
+  assert.equal(exiled.deathCause, "追放");
+  assert.equal(exiled.deathDay, 1);
+  assert.notEqual(exiled.publicRoleKey, null);
+  assert.equal(exiled.publicRoleKey, getEffectiveRoleKey(exiled));
+  assert.ok(result.logs.some((l) => l.includes("追放(6票)")));
+  assert.ok(result.logs.some((l) => l.includes("役職:")));
+  assert.equal(result.tally[0].id, 6);
+  assert.equal(result.tally[0].votes, 6);
+  assert.equal(game.phase, "night");
+  assert.equal(game.day, 2);
+  // 席ごとの voteResolved：追放の公開情報だけ、秘匿漏れなし。
+  for (const id of [0, 1]) {
+    const msg = voteResolvedMessage(game, result, id);
+    assert.equal(msg.type, "voteResolved");
+    assert.equal(msg.view.phase, "night");
+    assert.equal(msg.view.day, 2);
+    assert.equal(msg.vote.exiledId, 6);
+    assert.equal(msg.vote.exiledName, exiled.name);
+    assert.equal(msg.vote.exiledPublicRoleKey, exiled.publicRoleKey);
+    assert.deepEqual(msg.vote.tally, result.tally);
+    const json = JSON.stringify(msg);
+    assert.equal(json.includes("baka"), false);
+    assert.equal(json.includes("clumsy"), false);
+    assert.equal(json.includes("token"), false);
+    assert.equal(json.includes("fakeDisplayRoleKey"), false);
+  }
+  assert.equal(voteResolvedMessage(game, null, 0), null);
+  assert.equal(voteResolvedMessage(game, result, 99), null);
+});
+
+test("resolveVote：政治家の票は2票分になる", () => {
+  const game = gameInVote();
+  game.players[0].roleKey = "politician";
+  // 他の席の政治家が混ざると票数がぶれるため全員を村ガールにする。
+  for (let id = 1; id < 8; id++) game.players[id].roleKey = "villager";
+  // 政治家だけが 6 へ、残りは 7 へ入れる（7番は 5 へ）。
+  assert.equal(submitVote(game, 0, 6), null);
+  for (let id = 1; id < 7; id++) assert.equal(submitVote(game, id, 7), null);
+  assert.equal(submitVote(game, 7, 5), null);
+  const result = resolveVote(game, seededRandom(7));
+  assert.ok(result);
+  assert.equal(result.exiledId, 7);
+  const six = result.tally.find((t) => t.id === 6);
+  assert.equal(six.votes, 2);
+  const seven = result.tally.find((t) => t.id === 7);
+  assert.equal(seven.votes, 6);
+});
+
+test("resolveVote：未入力の人間は CPU と同じ疑念ベースで選ぶ（切断中は投票しない）", () => {
+  const game = gameInVote();
+  // 票数がぶれないよう全員を村ガールにする（政治家の2票を避ける）。
+  for (const p of game.players) p.roleKey = "villager";
+  // 6人が 6 へ投票。7番目は切断中で棄権、6番目は繋がったまま未入力。
+  for (let id = 0; id < 6; id++) assert.equal(submitVote(game, id, 6), null);
+  markVoteAbstained(game, 7);
+  // 未入力の人間がいるのでまだ揃わない（タイムアウトで集計する流れ）。
+  assert.equal(votesComplete(game), false);
+  const result = resolveVote(game, seededRandom(7));
+  assert.ok(result);
+  assert.equal(result.exiledId, 6);
+  // 票の合計は 7 票（明示6票＋未入力の人間の CPU 扱い1票。棄権は0票）。
+  assert.equal(result.tally.reduce((sum, t) => sum + t.votes, 0), 7);
+});
+
+test("checkWin と endGame：勝敗の判定と試合終了", () => {
+  const game = gameInVote();
+  // 生存者全員をイノセントにすればイノセントの勝利。
+  for (const p of game.players) p.roleKey = "villager";
+  assert.equal(checkWin(game), "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
+  assert.equal(endGame(game, checkWin(game)), "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
+  assert.equal(game.phase, "end");
+  assert.equal(game.winText, "🎉 イノセント陣営の勝利！インポスターを全員追放したよ！");
+  // 二重終了はできない。
+  assert.equal(endGame(game, checkWin(game)), null);
+  assert.equal(checkWin(null), null);
+  assert.equal(endGame(null, "x"), null);
+  assert.equal(endGame(gameInVote(), null), null);
+  // インポスターが残っていれば続く。
+  const game2 = gameInVote();
+  game2.players[7].roleKey = "fakeGirl";
+  assert.equal(checkWin(game2), null);
+});
+
+test("resolveVote：最後のインポスター追放でイノセント勝利・試合終了と結果開示", () => {
+  const game = gameInVote();
+  // 7番目だけがインポスター、他はイノセント（2番目はバカで表示は村人）。
+  for (const p of game.players) p.roleKey = "villager";
+  game.players[7].roleKey = "fakeGirl";
+  game.players[2].roleKey = "baka";
+  game.players[2].fakeDisplayRoleKey = "villager";
+  game.players[2].clumsy = false;
+  // 0〜6番が 7 へ、7番は 0 へ入れる。
+  for (let id = 0; id < 7; id++) assert.equal(submitVote(game, id, 7), null);
+  assert.equal(submitVote(game, 7, 0), null);
+  const result = resolveVote(game, seededRandom(7));
+  assert.ok(result);
+  assert.equal(result.ended, true);
+  assert.equal(result.exiledId, 7);
+  assert.ok(result.winText.includes("イノセント陣営の勝利"));
+  assert.equal(game.phase, "end");
+  assert.equal(game.winText, result.winText);
+  // 結果開示：全員の実役職・陣営・脱落の記録が入る（試合終了後の開示）。
+  const msg = gameEndedMessage(game, 0);
+  assert.equal(msg.type, "gameEnded");
+  assert.equal(msg.view.phase, "end");
+  assert.equal(msg.result.winText, result.winText);
+  assert.equal(msg.result.winnerFaction, "イノセント");
+  assert.equal(msg.result.sub, "オンライン対戦（人間8人）で遊びました。");
+  assert.ok(Array.isArray(msg.result.highlights));
+  assert.equal(msg.result.rows.length, 8);
+  const impRow = msg.result.rows.find((r) => r.id === 7);
+  assert.equal(impRow.roleKey, "fakeGirl");
+  assert.equal(impRow.faction, "インポスター");
+  assert.equal(impRow.alive, false);
+  assert.equal(impRow.status, "1日目に脱落（追放）");
+  const bakaRow = msg.result.rows.find((r) => r.id === 2);
+  assert.equal(bakaRow.roleKey, "baka");
+  assert.equal(bakaRow.displayNote, "（表示：村ガール）");
+  // 試合終了前は gameEnded を作らない。
+  assert.equal(gameEndedMessage(gameInVote(), 0), null);
+  assert.equal(gameEndedMessage(game, 99), null);
+  assert.equal(VOTE_TIMEOUT_MS, 60000);
 });

@@ -1,4 +1,4 @@
-// Fake Bloom オンライン対戦 フェーズ1 第3歩：夜フェーズ。
+// Fake Bloom オンライン対戦 フェーズ1 第4歩：投票・勝敗・結果開示。
 // 試合の進行（夜・議論・投票）は後の歩で追加する。ここでは部屋の
 // プレイヤーへ 8 席分の役職を配り、席ごとに「見てよい情報だけ」を
 // 組み立てる。実役職・うっかり flag・他人の夜入力はサーバー内に留め、
@@ -15,6 +15,14 @@
 // 夜入力をそのまま扱え、インポスター人間の代表者の入力が襲撃先に
 // なるのも同じ仕組みだから。mode はサーバー内部の流用であって、
 // クライアントへ送るものではない。
+// 投票フェーズ：人間の投票（vote）を集め、全員分が揃うかタイムアウト
+// （夜と同じ目安60秒）で共有モジュールの resolveVoteTally で集計する。
+// 途中経過は見せず、政治家の票は2票分（現行ルール踏襲）。未入力の
+// 人間はパス＆プレイと同じく CPU と同じ疑念ベースで選ぶ。切断中の
+// 人間は §7 どおり「投票しない」扱い（棄権）で試合を止めない。
+// 追放したら共有モジュールの checkWinCondition で勝敗を見て、決着
+// なら試合終了（結果開示）、続くなら翌日の夜へ進む。夜の解決で
+// 決着したときも同じく試合終了になる（ソロの runNight と同じ）。
 // 試合ロジックは共有モジュール game-logic.js の dealRoles を使う。
 "use strict";
 
@@ -26,9 +34,15 @@ const {
   dealRoles,
   getEffectiveRoleKey,
   getPublicRoleKey,
+  formatActionLog,
   planNightActions,
   resolveNightActions,
   planDiscussionTalks,
+  resolveVoteTally,
+  checkWinCondition,
+  cpuVotePick,
+  buildHighlights,
+  buildResultSummary,
 } = require("../game-logic.js");
 
 const IMPOSTOR_ROLE_KEYS = ["fakeGirl", "mimic"];
@@ -36,6 +50,10 @@ const MIN_PLAYERS_TO_START = 2;
 // 夜の入力締め切り（設計メモ §6 の目安60秒）。createServer の
 // options.nightTimeoutMs で上書きできる（テスト用）。
 const NIGHT_TIMEOUT_MS = 60000;
+// 投票の締め切り（設計メモ §6 は「全員分が揃うかタイムアウトで集計」
+// とだけあり秒数はないため、夜と同じ目安60秒にする）。createServer の
+// options.voteTimeoutMs で上書きできる（テスト用）。
+const VOTE_TIMEOUT_MS = 60000;
 // 議論の定型文（設計メモ §9-1：定型文＋短い自由入力）。text の
 // {target} は対象の名前に置き換える。target を取る文言は対象が必須。
 const CANNED_TALKS = [
@@ -70,6 +88,9 @@ function createGame(code, roomPlayers, settings, random) {
       isCpu: !human,
       // 結果画面まで公開しない役職（脱落時の公開などは後の歩で立てる）。
       publicRoleKey: null,
+      // 脱落の記録（夜の解決・投票の追放が書く。結果開示で使う）。
+      deathCause: null,
+      deathDay: null,
       // 夜の解決（共有モジュール）が読む・書く状態。初期値はソロと同じ。
       suspicion: 0,
       lastTarget: null,
@@ -96,6 +117,15 @@ function createGame(code, roomPlayers, settings, random) {
     bombReport: null,
     // 議論フェーズ：議論を終えた（投票へ進んでよい）人間の席。
     discussionDone: new Set(),
+    // 投票フェーズ：人間の投票（{ 席: 対象の席 }）と、切断中で棄権扱い
+    // の人間の席（§7：切断中は「投票しない」）。送り直しは上書きする。
+    votes: {},
+    voteAbstained: new Set(),
+    // 勝敗・結果開示で使うカウンタと決着文言（夜の解決が書き込む）。
+    bombKills: 0,
+    revives: 0,
+    guardSaves: 0,
+    winText: null,
   };
 }
 
@@ -362,6 +392,190 @@ function discussionEndedMessage(game, playerId) {
   };
 }
 
+// 勝敗の判定（共有モジュールの checkWinCondition）。生存者の役職と
+// ボマーの爆弾による撃破数から決着文言を返す。決着していなければ null。
+// 夜の解決の直後と投票の集計の直後の両方で呼ぶ（ソロと同じ2か所）。
+function checkWin(game) {
+  if (!game) return null;
+  const aliveRoleKeys = game.players.filter((p) => p.alive).map((p) => p.roleKey);
+  return checkWinCondition(aliveRoleKeys, game.bombKills);
+}
+
+// 試合を終了させる。phase を "end" にし、決着文言を残す。すでに
+// 終わっている試合では null を返す。戻り値は決着文言。
+function endGame(game, winText) {
+  if (!game || game.phase === "end" || !winText) return null;
+  game.phase = "end";
+  game.winText = winText;
+  return winText;
+}
+
+// 人間の投票を受け付ける。成功したら null、ダメなら理由を返す。
+// 対象は生存中の他人だけ（自分への投票はパス＆プレイと同じく弾く）。
+// 同じ人間が送り直したら上書きする（集計までは気が変わってよい）。
+function submitVote(game, playerId, targetId) {
+  if (!game) return "no_game";
+  if (game.phase !== "vote") return "not_vote";
+  const p = game.players.find((x) => x.id === playerId);
+  if (!p || p.isCpu) return "not_a_player";
+  if (!p.alive) return "not_alive";
+  const target = game.players.find((x) => x.id === targetId);
+  if (!target || !target.alive || targetId === playerId) return "invalid_target";
+  game.votes[playerId] = targetId;
+  return null;
+}
+
+// 投票中に切断した人間を棄権扱いにする（§7：切断中は「投票しない」）。
+// 投票フェーズ以外・CPU 席・死亡した席では何もしない。冪等。
+function markVoteAbstained(game, playerId) {
+  if (!game || game.phase !== "vote") return;
+  const p = game.players.find((x) => x.id === playerId);
+  if (!p || p.isCpu || !p.alive) return;
+  game.voteAbstained.add(playerId);
+}
+
+// 再接続した人間の棄権扱いを外す（戻ってきたらまた投票できる）。
+// 投票フェーズ以外では何もしない。
+function clearVoteAbstained(game, playerId) {
+  if (!game || game.phase !== "vote") return;
+  game.voteAbstained.delete(playerId);
+}
+
+// 生存中の人間全員分の投票が揃ったか。投票済みか棄権扱い（切断中）の
+// どちらかなら揃ったとみなす。未入力のまま繋がっている人間がいると
+// 揃わない（タイムアウトで集計する）。
+function votesComplete(game) {
+  if (!game || game.phase !== "vote") return false;
+  return game.players.every(
+    (p) =>
+      !p.alive ||
+      p.isCpu ||
+      game.votes[p.id] !== undefined ||
+      game.voteAbstained.has(p.id)
+  );
+}
+
+// 投票を一括集計する。共有モジュールの resolveVoteTally で最多票を決める。
+// - 人間の票：入力があればそれを使う。未入力のまま繋がっている人間は
+//   パス＆プレイと同じく CPU と同じ疑念ベース（cpuVotePick）で選ぶ。
+//   切断中（棄権扱い）の人間は票を入れない（§7）。
+// - CPU 席：cpuVotePick で選ぶ。政治家の票は2票分（現行ルール踏襲。
+//   バカが政治家を表示していても実役職で見るため2票にはならない）。
+// 同数なら追放なし。最多票が1人なら追放し、公開役職を明かす。
+// 集計したら勝敗を見て、決着なら phase を "end" にし、続くなら
+// 翌日（day + 1）の夜へ進む（ソロの tallyVotes と同じ遷移。疑念は
+// 1ずつ下がり、投票・議論終了の記録は空になる）。
+// 投票フェーズ以外や二重集計では null を返す。戻り値は集計結果
+// （公開ログ・追放された席・票の内訳・決着したかどうか）。
+function resolveVote(game, random) {
+  if (!game || game.phase !== "vote") return null;
+  const alive = game.players.filter((p) => p.alive);
+  const difficulty = game.settings?.difficulty || "normal";
+  const votes = new Map();
+  const addVoteTo = (targetId, voter) => {
+    votes.set(targetId, (votes.get(targetId) || 0) + (voter?.roleKey === "politician" ? 2 : 1));
+  };
+  for (const p of alive) {
+    if (!p.isCpu && game.voteAbstained.has(p.id)) continue;
+    let targetId;
+    if (!p.isCpu && game.votes[p.id] !== undefined) {
+      targetId = game.votes[p.id];
+    } else {
+      targetId = cpuVotePick(p, alive, difficulty, random)?.id;
+    }
+    if (targetId !== undefined) addVoteTo(targetId, p);
+  }
+  const { winnerId, max } = resolveVoteTally(votes);
+  const tally = [...votes.entries()]
+    .map(([id, count]) => {
+      const target = game.players.find((p) => p.id === id);
+      return { id, name: target ? target.name : "不明", votes: count };
+    })
+    .sort((a, b) => b.votes - a.votes);
+  const logs = [];
+  let exiledId = null;
+  if (winnerId === null) {
+    logs.push(formatActionLog("voteTie", { label: "投票", votes: Math.max(0, max) }));
+  } else {
+    const ex = game.players[winnerId];
+    exiledId = ex.id;
+    ex.alive = false;
+    ex.deathCause = "追放";
+    ex.deathDay = game.day;
+    ex.publicRoleKey = getPublicRoleKey(ex);
+    logs.push(formatActionLog("voteEliminated", { label: "投票", target: ex.name, votes: max }));
+    logs.push(
+      formatActionLog("roleReveal", {
+        label: "投票",
+        target: ex.name,
+        role: ROLES[ex.publicRoleKey].name,
+        faction: ROLES[ex.publicRoleKey].faction,
+      })
+    );
+  }
+  const winText = checkWin(game);
+  if (winText) {
+    endGame(game, winText);
+    return { ended: true, winText, logs, exiledId, tally };
+  }
+  game.day += 1;
+  game.phase = "night";
+  game.players.forEach((p) => {
+    p.suspicion = Math.max(0, p.suspicion - 1);
+  });
+  game.votes = {};
+  game.voteAbstained = new Set();
+  game.discussionDone = new Set();
+  logs.push(formatActionLog("phaseNightStart", { day: game.day }));
+  return { ended: false, winText: null, logs, exiledId, tally };
+}
+
+// その席へ送る voteResolved メッセージ。票の内訳と追放の公開情報だけ
+// （誰が誰へ入れたかは出さない。途中経過は見せない設計のまま）。
+function voteResolvedMessage(game, result, playerId) {
+  const view = playerView(game, playerId);
+  if (!view || !result) return null;
+  const exiled = result.exiledId === null ? null : game.players.find((p) => p.id === result.exiledId);
+  return {
+    type: "voteResolved",
+    code: game.code,
+    view,
+    vote: {
+      logs: result.logs,
+      exiledId: result.exiledId,
+      exiledName: exiled ? exiled.name : null,
+      exiledPublicRoleKey: exiled ? exiled.publicRoleKey : null,
+      tally: result.tally,
+    },
+  };
+}
+
+// その席へ送る gameEnded メッセージ。試合が終わったので全員の実役職・
+// 陣営・脱落の記録を開示する（共有モジュールの buildResultSummary）。
+// ハイライトも buildHighlights で付ける。view の phase は "end"。
+function gameEndedMessage(game, playerId) {
+  const view = playerView(game, playerId);
+  if (!view || !game.winText) return null;
+  const summary = buildResultSummary(game.players, {
+    winText: game.winText,
+    mode: "pnp",
+    playerId,
+    humanCount: game.humanPlayerIds.length,
+  });
+  return {
+    type: "gameEnded",
+    code: game.code,
+    view,
+    result: {
+      winText: game.winText,
+      winnerFaction: summary.winnerFaction,
+      sub: `オンライン対戦（人間${game.humanPlayerIds.length}人）で遊びました。`,
+      highlights: buildHighlights(game.players, game),
+      rows: summary.rows,
+    },
+  };
+}
+
 module.exports = {
   createGame,
   validateStart,
@@ -378,9 +592,19 @@ module.exports = {
   discussionStartedMessage,
   talkBroadcast,
   discussionEndedMessage,
+  checkWin,
+  endGame,
+  submitVote,
+  markVoteAbstained,
+  clearVoteAbstained,
+  votesComplete,
+  resolveVote,
+  voteResolvedMessage,
+  gameEndedMessage,
   CANNED_TALKS,
   FREE_TALK_MAX_LENGTH,
   IMPOSTOR_ROLE_KEYS,
   MIN_PLAYERS_TO_START,
   NIGHT_TIMEOUT_MS,
+  VOTE_TIMEOUT_MS,
 };
