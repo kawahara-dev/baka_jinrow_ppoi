@@ -15,6 +15,15 @@ const {
   nightInputsComplete,
   resolveNight,
   nightResolvedMessage,
+  startDiscussion,
+  submitTalk,
+  markDiscussionDone,
+  discussionComplete,
+  discussionStartedMessage,
+  talkBroadcast,
+  discussionEndedMessage,
+  CANNED_TALKS,
+  FREE_TALK_MAX_LENGTH,
   MIN_PLAYERS_TO_START,
   NIGHT_TIMEOUT_MS,
 } = require("../game.js");
@@ -286,4 +295,159 @@ test("resolveNight：インポスター人間の入力が襲撃先になる", ()
   assert.equal(game.phase, "morning");
   // 人間インポスター（代表者）の入力がそのまま襲撃先になった。
   assert.equal(game.nightActions[impSeat.id], victim.id);
+});
+
+// 議論フェーズのヘルパー：夜を解決して議論を開始する。夜に人間が
+// 倒れていても議論のテスト用に両人間を生存に戻す（夜の解決の結果
+// 自体は resolveNight のテストで担保済み）。
+function gameInDiscussion(randomSeed = 100) {
+  const game = gameBothNeedInput();
+  assert.equal(submitNightAction(game, 0, 2), null);
+  assert.equal(submitNightAction(game, 1, 3), null);
+  const result = resolveNight(game, seededRandom(randomSeed));
+  assert.ok(result);
+  assert.equal(game.phase, "morning");
+  for (const id of [0, 1]) {
+    game.players[id].alive = true;
+    game.players[id].publicRoleKey = null;
+  }
+  const events = startDiscussion(game, seededRandom(randomSeed + 1));
+  assert.ok(events);
+  assert.equal(game.phase, "discussion");
+  return { game, events };
+}
+
+test("startDiscussion：朝から議論へ移り、CPU だけが発言する（人間2人なら最大4件）", () => {
+  const { game, events } = gameInDiscussion();
+  // パス＆プレイ流の上限：6 - 人間2人 = 4件。
+  assert.equal(events.length, 4);
+  for (const e of events) {
+    const speaker = game.players[e.speakerId];
+    assert.ok(speaker.isCpu, `speaker ${e.speakerId} must be CPU`);
+    assert.ok(speaker.id >= 2);
+    if (e.type === "talk") {
+      assert.equal(typeof e.text, "string");
+      assert.ok(e.text.length > 0);
+    } else if (e.type === "mouse") {
+      const target = game.players[e.targetId];
+      assert.ok(target);
+      assert.equal(e.publicRoleKey, getPublicRoleKey(target));
+    } else {
+      assert.fail(`unexpected event type ${e.type}`);
+    }
+  }
+  // 二重開始はできない。
+  assert.equal(startDiscussion(game, seededRandom(1)), null);
+  assert.equal(game.phase, "discussion");
+  // 夜フェーズの試合では開始できない。
+  const fresh = gameBothNeedInput();
+  assert.equal(startDiscussion(fresh, seededRandom(1)), null);
+  assert.equal(fresh.phase, "night");
+  assert.equal(startDiscussion(null, seededRandom(1)), null);
+});
+
+test("submitTalk：定型文・自由入力の検証（対象・長さ・両方指定・フェーズ・生死）", () => {
+  const { game } = gameInDiscussion();
+  // 定型文（対象なし）。
+  assert.deepEqual(submitTalk(game, 0, { phraseId: "agree" }), { speakerId: 0, text: "そう思う" });
+  // 定型文（対象あり。席2はユイ）。
+  assert.deepEqual(submitTalk(game, 0, { phraseId: "suspicious", targetId: 2 }), { speakerId: 0, text: "ユイ が怪しいと思う" });
+  // 対象を取る文言に対象がない・自分・死亡・存在しない席は弾く。
+  assert.equal(submitTalk(game, 0, { phraseId: "suspicious" }), "invalid_target");
+  assert.equal(submitTalk(game, 0, { phraseId: "suspicious", targetId: 0 }), "invalid_target");
+  assert.equal(submitTalk(game, 0, { phraseId: "suspicious", targetId: 99 }), "invalid_target");
+  game.players[3].alive = false;
+  assert.equal(submitTalk(game, 0, { phraseId: "suspicious", targetId: 3 }), "invalid_target");
+  game.players[3].alive = true;
+  // 知らない定型文・両方指定・どちらもなし・文字列でない自由入力は弾く。
+  assert.equal(submitTalk(game, 0, { phraseId: "noSuchPhrase" }), "bad_talk");
+  assert.equal(submitTalk(game, 0, { phraseId: "agree", text: "hello" }), "bad_talk");
+  assert.equal(submitTalk(game, 0, {}), "bad_talk");
+  assert.equal(submitTalk(game, 0, { text: 42 }), "bad_talk");
+  // 自由入力は前後の空白を除いて 1〜100 文字。
+  assert.deepEqual(submitTalk(game, 1, { text: "  ねえ  " }), { speakerId: 1, text: "ねえ" });
+  assert.equal(submitTalk(game, 1, { text: "" }), "bad_talk");
+  assert.equal(submitTalk(game, 1, { text: "   " }), "bad_talk");
+  assert.equal(submitTalk(game, 1, { text: "あ".repeat(101) }), "bad_talk");
+  assert.deepEqual(submitTalk(game, 1, { text: "あ".repeat(100) }), { speakerId: 1, text: "あ".repeat(100) });
+  // CPU 席・死亡した人間は発言できない。
+  assert.equal(submitTalk(game, 5, { phraseId: "agree" }), "not_a_player");
+  game.players[1].alive = false;
+  assert.equal(submitTalk(game, 1, { phraseId: "agree" }), "not_alive");
+  game.players[1].alive = true;
+  // 夜フェーズ・試合なしでは弾く。
+  assert.equal(submitTalk(gameBothNeedInput(), 0, { phraseId: "agree" }), "not_discussion");
+  assert.equal(submitTalk(null, 0, { phraseId: "agree" }), "no_game");
+  // 定型文の一覧と自由入力の上限が想定どおり。
+  assert.equal(CANNED_TALKS.length, 8);
+  assert.ok(CANNED_TALKS.every((c) => typeof c.id === "string" && typeof c.text === "string"));
+  assert.equal(FREE_TALK_MAX_LENGTH, 100);
+});
+
+test("markDiscussionDone と discussionComplete：生存中の人間全員分で議論が終わる", () => {
+  const { game } = gameInDiscussion();
+  assert.equal(discussionComplete(game), false);
+  assert.equal(markDiscussionDone(game, 0), null);
+  assert.equal(discussionComplete(game), false);
+  assert.equal(markDiscussionDone(game, 1), null);
+  assert.equal(discussionComplete(game), true);
+  // 2回目も null（冪等）で、完了のまま。
+  assert.equal(markDiscussionDone(game, 0), null);
+  assert.equal(discussionComplete(game), true);
+  // CPU 席は議論終了を送れない。
+  assert.equal(markDiscussionDone(game, 5), "not_a_player");
+  // 夜フェーズ・試合なしでは弾く。
+  assert.equal(markDiscussionDone(gameBothNeedInput(), 0), "not_discussion");
+  assert.equal(markDiscussionDone(null, 0), "no_game");
+  assert.equal(discussionComplete(gameBothNeedInput()), false);
+  assert.equal(discussionComplete(null), false);
+
+  // 夜に倒れた人間は数えない（生存中の人間1人だけで完了する）。
+  const { game: game2 } = gameInDiscussion(200);
+  game2.players[1].alive = false;
+  assert.equal(discussionComplete(game2), false);
+  assert.equal(markDiscussionDone(game2, 0), null);
+  assert.equal(discussionComplete(game2), true);
+  // 死亡した人間からの discussionDone は弾く。
+  assert.equal(markDiscussionDone(game2, 1), "not_alive");
+});
+
+test("discussionStartedMessage／talkBroadcast／discussionEndedMessage：席ごとの view と秘匿漏れなし", () => {
+  const { game, events } = gameInDiscussion();
+  for (const id of [0, 1]) {
+    const msg = discussionStartedMessage(game, events, id);
+    assert.equal(msg.type, "discussionStarted");
+    assert.equal(msg.view.phase, "discussion");
+    assert.equal(msg.view.me.id, id);
+    assert.deepEqual(msg.talks, events);
+    const json = JSON.stringify(msg);
+    assert.equal(json.includes("baka"), false);
+    assert.equal(json.includes("clumsy"), false);
+    assert.equal(json.includes("token"), false);
+    assert.equal(json.includes("fakeDisplayRoleKey"), false);
+  }
+  assert.equal(discussionStartedMessage(game, null, 0), null);
+  assert.equal(discussionStartedMessage(game, events, 99), null);
+  // 人間の発言の配信メッセージ（公開情報だけ）。
+  assert.deepEqual(talkBroadcast(game, { speakerId: 0, text: "そう思う" }), {
+    type: "talk",
+    code: "ABCD",
+    speakerId: 0,
+    speakerName: "ルナ",
+    text: "そう思う",
+  });
+  assert.equal(talkBroadcast(game, { speakerId: 99, text: "x" }), null);
+  // 議論終了のメッセージ（phase は vote）。
+  game.phase = "vote";
+  for (const id of [0, 1]) {
+    const msg = discussionEndedMessage(game, id);
+    assert.equal(msg.type, "discussionEnded");
+    assert.equal(msg.view.phase, "vote");
+    const json = JSON.stringify(msg);
+    assert.equal(json.includes("baka"), false);
+    assert.equal(json.includes("clumsy"), false);
+    assert.equal(json.includes("token"), false);
+    assert.equal(json.includes("fakeDisplayRoleKey"), false);
+  }
+  assert.equal(discussionEndedMessage(game, 99), null);
 });

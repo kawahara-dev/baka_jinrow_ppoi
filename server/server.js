@@ -4,7 +4,9 @@
 //   （フェーズ2でクライアントがここへ接続する準備）。server/ と .git は配らない。
 // - WebSocket（/ws）：部屋の作成/参加、セッショントークンでの再接続、
 //   配役とプレイヤー別ビューの配信、夜フェーズ（夜入力の収集・
-//   タイムアウト・夜の解決と結果配信）。朝・議論・投票の進行は後の歩で追加する。
+//   タイムアウト・夜の解決と結果配信）、議論フェーズ（CPU の発言・
+//   人間の定型文＋自由入力・議論の終了と投票への遷移）。投票の
+//   受け付けと勝敗・結果開示は後の歩で追加する。
 // 試験運用は VM 内だけ。外部公開しない。待ち受けは 127.0.0.1 に固定する。
 "use strict";
 
@@ -20,6 +22,13 @@ const {
   nightInputsComplete,
   resolveNight,
   nightResolvedMessage,
+  startDiscussion,
+  submitTalk,
+  markDiscussionDone,
+  discussionComplete,
+  discussionStartedMessage,
+  talkBroadcast,
+  discussionEndedMessage,
   NIGHT_TIMEOUT_MS,
 } = require("./game.js");
 const { computeAcceptKey, encodeTextFrame, encodeFrame, decodeFrames } = require("./ws.js");
@@ -41,12 +50,17 @@ function createServer(options = {}) {
   const rooms = options.rooms || createRoomStore();
   const random = options.random || Math.random;
   const nightTimeoutMs = options.nightTimeoutMs || NIGHT_TIMEOUT_MS;
+  // 議論タイマーの上書き（テスト用）。未指定なら設定の discussTimer
+  // （秒。DEFAULT_SETTINGS は "0"＝タイマーなし）を使う。
+  const discussTimeoutMs = options.discussTimeoutMs;
   // 部屋コード → その部屋に繋がっているソケットの集合。
   const roomSockets = new Map();
   const sockets = new Set();
   // 部屋コード → 夜の締め切りタイマー。unref しておく（テストで
   // サーバーを閉じたあと、残ったタイマーがプロセスを止めないため）。
   const nightTimers = new Map();
+  // 部屋コード → 議論の締め切りタイマー（夜と同じく unref 付き）。
+  const discussionTimers = new Map();
 
   function sendJson(socket, obj) {
     try {
@@ -123,6 +137,7 @@ function createServer(options = {}) {
 
   // 夜を解決し、結果を部屋の各ソケットへ席ごとに送る（個人ログは
   // その席の分だけ。gameStarted と同じく全員への同一配信は使わない）。
+  // 送り終えたらすぐ議論を開始する（朝の報告を読んでから議論へ）。
   function resolveNightForRoom(room) {
     clearNightTimer(room.code);
     if (!room.game || room.game.phase !== "night") return;
@@ -134,6 +149,66 @@ function createServer(options = {}) {
       const player = room.players.find((p) => p.token === socket._token);
       if (!player) continue;
       const msg = nightResolvedMessage(room.game, result, player.id);
+      if (msg) sendJson(socket, msg);
+    }
+    startDiscussionForRoom(room);
+  }
+
+  function clearDiscussionTimer(roomCode) {
+    const timer = discussionTimers.get(roomCode);
+    if (timer) {
+      clearTimeout(timer);
+      discussionTimers.delete(roomCode);
+    }
+  }
+
+  // 議論の締め切り（設定の discussTimer 秒。テスト用の上書きがあれば
+  // そちらを優先する。0 ならタイマーなしで、全員の discussionDone
+  // を待つ）。タイマーが回るのは議論が始まったときだけ。
+  function scheduleDiscussionTimer(room) {
+    clearDiscussionTimer(room.code);
+    const ms =
+      discussTimeoutMs !== undefined
+        ? discussTimeoutMs
+        : (Number(room.game.settings?.discussTimer) || 0) * 1000;
+    if (ms <= 0) return;
+    const timer = setTimeout(() => {
+      discussionTimers.delete(room.code);
+      endDiscussionForRoom(room);
+    }, ms);
+    timer.unref();
+    discussionTimers.set(room.code, timer);
+  }
+
+  // 議論を開始し、CPU の発言イベントを部屋の各ソケットへ席ごとに送る
+  // （view が席ごとに違うため broadcast は使わない。発言イベント自体は
+  // 公開情報で全席共通）。タイマーもここで回す。
+  function startDiscussionForRoom(room) {
+    if (!room.game || room.game.phase !== "morning") return;
+    const events = startDiscussion(room.game, random);
+    if (!events) return;
+    const set = roomSockets.get(room.code);
+    if (!set) return;
+    for (const socket of set) {
+      const player = room.players.find((p) => p.token === socket._token);
+      if (!player) continue;
+      const msg = discussionStartedMessage(room.game, events, player.id);
+      if (msg) sendJson(socket, msg);
+    }
+    scheduleDiscussionTimer(room);
+  }
+
+  // 議論を終え、投票フェーズへ移す。view を席ごとに送る。
+  function endDiscussionForRoom(room) {
+    clearDiscussionTimer(room.code);
+    if (!room.game || room.game.phase !== "discussion") return;
+    room.game.phase = "vote";
+    const set = roomSockets.get(room.code);
+    if (!set) return;
+    for (const socket of set) {
+      const player = room.players.find((p) => p.token === socket._token);
+      if (!player) continue;
+      const msg = discussionEndedMessage(room.game, player.id);
       if (msg) sendJson(socket, msg);
     }
   }
@@ -239,6 +314,43 @@ function createServer(options = {}) {
       if (nightInputsComplete(room.game)) resolveNightForRoom(room);
       return;
     }
+    if (msg.type === "talk") {
+      if (!socket._roomCode) {
+        sendJson(socket, { type: "error", error: "not_in_room" });
+        return;
+      }
+      const room = rooms.getRoom(socket._roomCode);
+      const player = room && room.players.find((p) => p.token === socket._token);
+      const talk = submitTalk(room && room.game, player ? player.id : -1, {
+        phraseId: msg.phraseId,
+        targetId: msg.targetId,
+        text: msg.text,
+      });
+      if (typeof talk === "string") {
+        sendJson(socket, { type: "error", error: talk });
+        return;
+      }
+      // 発言は公開情報なので部屋の全員へ同じものを配信する。
+      const out = talkBroadcast(room.game, talk);
+      if (out) broadcast(room.code, out);
+      return;
+    }
+    if (msg.type === "discussionDone") {
+      if (!socket._roomCode) {
+        sendJson(socket, { type: "error", error: "not_in_room" });
+        return;
+      }
+      const room = rooms.getRoom(socket._roomCode);
+      const player = room && room.players.find((p) => p.token === socket._token);
+      const error = markDiscussionDone(room && room.game, player ? player.id : -1);
+      if (error) {
+        sendJson(socket, { type: "error", error });
+        return;
+      }
+      sendJson(socket, { type: "discussionDoneAccepted" });
+      if (discussionComplete(room.game)) endDiscussionForRoom(room);
+      return;
+    }
     sendJson(socket, { type: "error", error: "unknown_type" });
   }
 
@@ -295,7 +407,19 @@ function createServer(options = {}) {
       if (socket._roomCode && socket._token) {
         rooms.disconnect(socket._roomCode, socket._token);
         const room = rooms.getRoom(socket._roomCode);
-        if (room) broadcast(socket._roomCode, roomUpdate(room));
+        if (room) {
+          // 切断中の人間は「未入力＝行動しない」扱い（§7）。議論中なら
+          // その席を議論済みにして、タイマーなしでも議論が止まらない
+          // ようにする。戻ってきたら reconnect で現在の view を再送する。
+          if (room.game && room.game.phase === "discussion") {
+            const player = room.players.find((p) => p.token === socket._token);
+            if (player) {
+              markDiscussionDone(room.game, player.id);
+              if (discussionComplete(room.game)) endDiscussionForRoom(room);
+            }
+          }
+          broadcast(socket._roomCode, roomUpdate(room));
+        }
       }
       detachFromRoom(socket);
     });

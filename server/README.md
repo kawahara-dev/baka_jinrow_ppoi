@@ -26,6 +26,9 @@ FB_PORT=9000 node server/server.js
   サーバー内に留め、player view には含めない。人間のいない席は CPU 席。
   夜フェーズもここで扱う：人間の夜入力の収集と検証、共有モジュールの
   `planNightActions`／`resolveNightActions` による一括解決、席ごとの夜結果の組み立て。
+  議論フェーズもここで扱う：共有モジュールの `planDiscussionTalks` による
+  CPU の発言、定型文（`CANNED_TALKS`）と短い自由入力（100文字まで）の検証、
+  全員の議論終了またはタイマーでの投票への遷移。
 
 ## プロトコル（JSON テキストフレーム）
 
@@ -39,6 +42,13 @@ FB_PORT=9000 node server/server.js
 - `{ "type": "nightAction", "targetId": 2 }` — 夜の対象を選ぶ。夜フェーズ中に、
   夜行動のある生存中の人間の席だけが送れる。解決までは送り直して変更できる。
   インポスターの人間は襲撃先（代表者）または能力先（代表者以外）を選ぶ
+- `{ "type": "talk", "phraseId": "agree" }` / `{ "type": "talk", "phraseId": "suspicious", "targetId": 2 }` /
+  `{ "type": "talk", "text": "ちょっと待って" }` — 議論の発言。議論フェーズ中に、
+  生存中の人間の席だけが送れる。定型文（`phraseId`）か短い自由入力（`text`、100文字まで）の
+  どちらか片方だけ。対象を取る定型文は生存中の他人を `targetId` で指定する
+- `{ "type": "discussionDone" }` — 議論を終えた合図。生存中の人間全員分が揃うか、
+  議論タイマー（設定の `discussTimer` 秒。既定はタイマーなし）が切れると投票へ進む。
+  切断した人間は自動で議論済み扱いになる
 
 サーバー → クライアント：
 
@@ -55,12 +65,23 @@ FB_PORT=9000 node server/server.js
   （ない席は `null`）、`report` は夜の報告（`{ type: "eliminated" | "blocked" | "none" | "revived", victimId }`）、
   `bombReport` は爆弾の報告。夜入力が必要な人間全員分が揃うか、開始から
   60秒のタイムアウト（未入力は「行動しない」扱い）で解決する。誰も夜入力が
-  いらない配役では開始直後に解決する
-- `{ "type": "error", "error": "room_not_found" | "room_full" | "bad_token" | "bad_json" | "unknown_type" | "bad_message" | "not_in_room" | "not_host" | "not_enough_players" | "game_already_started" | "no_game" | "not_night" | "not_a_player" | "not_alive" | "no_night_action" | "invalid_target" }`
+  いらない配役では開始直後に解決する。夜の解決直後に議論が始まる
+- `{ "type": "discussionStarted", "code", "view", "talks" }` — 議論の開始時に
+  席ごとに1通ずつ配信。`view` はその席だけの player view（`phase` は
+  `"discussion"`）。`talks` は CPU の発言イベントの配列で全席共通：
+  `{ "type": "talk", "speakerId", "text" }`（セリフ）か
+  `{ "type": "mouse", "speakerId", "targetId", "publicRoleKey" }`（マウス公開。
+  公開される役職は全員に見える公開情報）
+- `{ "type": "talk", "code", "speakerId", "speakerName", "text" }` — 人間の
+  議論の発言を部屋の全員へ配信する（公開情報だけ）
+- `{ "type": "discussionDoneAccepted" }` — 議論終了の合図を受け付けた返信
+- `{ "type": "discussionEnded", "code", "view" }` — 議論の終了時に席ごとに
+  1通ずつ配信。`view` はその席だけの player view（`phase` は `"vote"`）
+- `{ "type": "error", "error": "room_not_found" | "room_full" | "bad_token" | "bad_json" | "unknown_type" | "bad_message" | "not_in_room" | "not_host" | "not_enough_players" | "game_already_started" | "no_game" | "not_night" | "not_a_player" | "not_alive" | "no_night_action" | "invalid_target" | "not_discussion" | "bad_talk" }`
 
 `players` は公開情報のみ（`id` / `name` / `icon` / `connected`）。トークンは含まない。
 試合中の再接続では `reconnected` に現在の player view（`view`）が付く。
-議論・投票の進行は後の歩で追加する。
+投票の受け付けと勝敗・結果開示は後の歩で追加する。
 
 ## テスト
 
