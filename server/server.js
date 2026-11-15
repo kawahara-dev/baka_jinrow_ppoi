@@ -3,7 +3,8 @@
 // - 静的ファイル配信：リポジトリ直下の index.html / game-logic.js 等を配る
 //   （フェーズ2でクライアントがここへ接続する準備）。server/ と .git は配らない。
 // - WebSocket（/ws）：部屋の作成/参加、セッショントークンでの再接続、
-//   配役とプレイヤー別ビューの配信。夜・議論・投票の進行は後の歩で追加する。
+//   配役とプレイヤー別ビューの配信、夜フェーズ（夜入力の収集・
+//   タイムアウト・夜の解決と結果配信）。朝・議論・投票の進行は後の歩で追加する。
 // 試験運用は VM 内だけ。外部公開しない。待ち受けは 127.0.0.1 に固定する。
 "use strict";
 
@@ -11,7 +12,16 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createRoomStore } = require("./rooms.js");
-const { createGame, validateStart, playerView } = require("./game.js");
+const {
+  createGame,
+  validateStart,
+  playerView,
+  submitNightAction,
+  nightInputsComplete,
+  resolveNight,
+  nightResolvedMessage,
+  NIGHT_TIMEOUT_MS,
+} = require("./game.js");
 const { computeAcceptKey, encodeTextFrame, encodeFrame, decodeFrames } = require("./ws.js");
 
 const CONTENT_TYPES = {
@@ -30,9 +40,13 @@ function createServer(options = {}) {
   const root = options.root || path.resolve(__dirname, "..");
   const rooms = options.rooms || createRoomStore();
   const random = options.random || Math.random;
+  const nightTimeoutMs = options.nightTimeoutMs || NIGHT_TIMEOUT_MS;
   // 部屋コード → その部屋に繋がっているソケットの集合。
   const roomSockets = new Map();
   const sockets = new Set();
+  // 部屋コード → 夜の締め切りタイマー。unref しておく（テストで
+  // サーバーを閉じたあと、残ったタイマーがプロセスを止めないため）。
+  const nightTimers = new Map();
 
   function sendJson(socket, obj) {
     try {
@@ -86,6 +100,41 @@ function createServer(options = {}) {
         code: room.code,
         view: playerView(room.game, player.id),
       });
+    }
+  }
+
+  function clearNightTimer(roomCode) {
+    const timer = nightTimers.get(roomCode);
+    if (timer) {
+      clearTimeout(timer);
+      nightTimers.delete(roomCode);
+    }
+  }
+
+  function scheduleNightTimer(room) {
+    clearNightTimer(room.code);
+    const timer = setTimeout(() => {
+      nightTimers.delete(room.code);
+      resolveNightForRoom(room);
+    }, nightTimeoutMs);
+    timer.unref();
+    nightTimers.set(room.code, timer);
+  }
+
+  // 夜を解決し、結果を部屋の各ソケットへ席ごとに送る（個人ログは
+  // その席の分だけ。gameStarted と同じく全員への同一配信は使わない）。
+  function resolveNightForRoom(room) {
+    clearNightTimer(room.code);
+    if (!room.game || room.game.phase !== "night") return;
+    const result = resolveNight(room.game, random);
+    if (!result) return;
+    const set = roomSockets.get(room.code);
+    if (!set) return;
+    for (const socket of set) {
+      const player = room.players.find((p) => p.token === socket._token);
+      if (!player) continue;
+      const msg = nightResolvedMessage(room.game, result, player.id);
+      if (msg) sendJson(socket, msg);
     }
   }
 
@@ -168,6 +217,26 @@ function createServer(options = {}) {
       }
       room.game = createGame(room.code, room.players, undefined, random);
       sendGameStarted(room);
+      // 夜の締め切りタイマーを回す。誰も夜入力がいらない配役なら
+      // すぐ解決する（待っても誰も送ってこないため）。
+      scheduleNightTimer(room);
+      if (nightInputsComplete(room.game)) resolveNightForRoom(room);
+      return;
+    }
+    if (msg.type === "nightAction") {
+      if (!socket._roomCode) {
+        sendJson(socket, { type: "error", error: "not_in_room" });
+        return;
+      }
+      const room = rooms.getRoom(socket._roomCode);
+      const player = room && room.players.find((p) => p.token === socket._token);
+      const error = submitNightAction(room && room.game, player ? player.id : -1, msg.targetId);
+      if (error) {
+        sendJson(socket, { type: "error", error });
+        return;
+      }
+      sendJson(socket, { type: "nightActionAccepted", targetId: msg.targetId });
+      if (nightInputsComplete(room.game)) resolveNightForRoom(room);
       return;
     }
     sendJson(socket, { type: "error", error: "unknown_type" });
