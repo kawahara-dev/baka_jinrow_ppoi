@@ -5,8 +5,9 @@
 // - WebSocket（/ws）：部屋の作成/参加、セッショントークンでの再接続、
 //   配役とプレイヤー別ビューの配信、夜フェーズ（夜入力の収集・
 //   タイムアウト・夜の解決と結果配信）、議論フェーズ（CPU の発言・
-//   人間の定型文＋自由入力・議論の終了と投票への遷移）。投票の
-//   受け付けと勝敗・結果開示は後の歩で追加する。
+//   人間の定型文＋自由入力・議論の終了と投票への遷移）、投票フェーズ
+//   （投票の収集・タイムアウト・集計と追放・勝敗・結果開示）。
+//   夜の解決でも決着すればそのまま試合終了になる。
 // 試験運用は VM 内だけ。外部公開しない。待ち受けは 127.0.0.1 に固定する。
 "use strict";
 
@@ -29,7 +30,17 @@ const {
   discussionStartedMessage,
   talkBroadcast,
   discussionEndedMessage,
+  checkWin,
+  endGame,
+  submitVote,
+  markVoteAbstained,
+  clearVoteAbstained,
+  votesComplete,
+  resolveVote,
+  voteResolvedMessage,
+  gameEndedMessage,
   NIGHT_TIMEOUT_MS,
+  VOTE_TIMEOUT_MS,
 } = require("./game.js");
 const { computeAcceptKey, encodeTextFrame, encodeFrame, decodeFrames } = require("./ws.js");
 
@@ -50,6 +61,8 @@ function createServer(options = {}) {
   const rooms = options.rooms || createRoomStore();
   const random = options.random || Math.random;
   const nightTimeoutMs = options.nightTimeoutMs || NIGHT_TIMEOUT_MS;
+  // 投票タイマーの上書き（テスト用）。未指定なら夜と同じ目安60秒。
+  const voteTimeoutMs = options.voteTimeoutMs || VOTE_TIMEOUT_MS;
   // 議論タイマーの上書き（テスト用）。未指定なら設定の discussTimer
   // （秒。DEFAULT_SETTINGS は "0"＝タイマーなし）を使う。
   const discussTimeoutMs = options.discussTimeoutMs;
@@ -59,6 +72,8 @@ function createServer(options = {}) {
   // 部屋コード → 夜の締め切りタイマー。unref しておく（テストで
   // サーバーを閉じたあと、残ったタイマーがプロセスを止めないため）。
   const nightTimers = new Map();
+  // 部屋コード → 投票の締め切りタイマー（夜と同じく unref 付き）。
+  const voteTimers = new Map();
   // 部屋コード → 議論の締め切りタイマー（夜と同じく unref 付き）。
   const discussionTimers = new Map();
 
@@ -137,12 +152,17 @@ function createServer(options = {}) {
 
   // 夜を解決し、結果を部屋の各ソケットへ席ごとに送る（個人ログは
   // その席の分だけ。gameStarted と同じく全員への同一配信は使わない）。
-  // 送り終えたらすぐ議論を開始する（朝の報告を読んでから議論へ）。
+  // 夜の解決で決着したら試合終了（結果開示）になり、続くならすぐ
+  // 議論を開始する（朝の報告を読んでから議論へ）。
   function resolveNightForRoom(room) {
     clearNightTimer(room.code);
     if (!room.game || room.game.phase !== "night") return;
     const result = resolveNight(room.game, random);
     if (!result) return;
+    // 夜の解決で決着したら先に試合終了にしておく（nightResolved の
+    // view も phase "end" になる）。続くなら議論を開始する。
+    const winText = checkWin(room.game);
+    if (winText) endGame(room.game, winText);
     const set = roomSockets.get(room.code);
     if (!set) return;
     for (const socket of set) {
@@ -151,7 +171,65 @@ function createServer(options = {}) {
       const msg = nightResolvedMessage(room.game, result, player.id);
       if (msg) sendJson(socket, msg);
     }
+    if (winText) {
+      sendGameEnded(room);
+      return;
+    }
     startDiscussionForRoom(room);
+  }
+
+  // 試合終了を部屋の各ソケットへ席ごとに送る（結果は席ごとに違う
+  // view と同じく、gameEndedMessage が席ごとに組み立てる）。
+  function sendGameEnded(room) {
+    const set = roomSockets.get(room.code);
+    if (!set) return;
+    for (const socket of set) {
+      const player = room.players.find((p) => p.token === socket._token);
+      if (!player) continue;
+      const msg = gameEndedMessage(room.game, player.id);
+      if (msg) sendJson(socket, msg);
+    }
+  }
+
+  function clearVoteTimer(roomCode) {
+    const timer = voteTimers.get(roomCode);
+    if (timer) {
+      clearTimeout(timer);
+      voteTimers.delete(roomCode);
+    }
+  }
+
+  function scheduleVoteTimer(room) {
+    clearVoteTimer(room.code);
+    const timer = setTimeout(() => {
+      voteTimers.delete(room.code);
+      resolveVoteForRoom(room);
+    }, voteTimeoutMs);
+    timer.unref();
+    voteTimers.set(room.code, timer);
+  }
+
+  // 投票を集計し、結果を部屋の各ソケットへ席ごとに送る。
+  // 決着したら試合終了（結果開示）になり、続くなら翌日の夜へ進む
+  // （夜の締め切りタイマーを回し、誰も夜入力がいらなければすぐ解決）。
+  function resolveVoteForRoom(room) {
+    clearVoteTimer(room.code);
+    if (!room.game || room.game.phase !== "vote") return;
+    const result = resolveVote(room.game, random);
+    if (!result) return;
+    const set = roomSockets.get(room.code);
+    if (!set) return;
+    for (const socket of set) {
+      const player = room.players.find((p) => p.token === socket._token);
+      if (!player) continue;
+      const msg = result.ended
+        ? gameEndedMessage(room.game, player.id)
+        : voteResolvedMessage(room.game, result, player.id);
+      if (msg) sendJson(socket, msg);
+    }
+    if (result.ended) return;
+    scheduleNightTimer(room);
+    if (nightInputsComplete(room.game)) resolveNightForRoom(room);
   }
 
   function clearDiscussionTimer(roomCode) {
@@ -199,6 +277,7 @@ function createServer(options = {}) {
   }
 
   // 議論を終え、投票フェーズへ移す。view を席ごとに送る。
+  // 投票の締め切りタイマーもここで回す。
   function endDiscussionForRoom(room) {
     clearDiscussionTimer(room.code);
     if (!room.game || room.game.phase !== "discussion") return;
@@ -211,6 +290,7 @@ function createServer(options = {}) {
       const msg = discussionEndedMessage(room.game, player.id);
       if (msg) sendJson(socket, msg);
     }
+    scheduleVoteTimer(room);
   }
 
   function handleMessage(socket, msg) {
@@ -272,6 +352,10 @@ function createServer(options = {}) {
         icon: player.icon,
         players: rooms.publicPlayers(room),
       };
+      // 投票中の再接続では棄権扱いを外し、戻ってきたらまた投票できる。
+      if (room.game && room.game.phase === "vote") {
+        clearVoteAbstained(room.game, player.id);
+      }
       // 試合中の再接続には現在の player view を再送して復帰させる（§7）。
       if (room.game) reply.view = playerView(room.game, player.id);
       sendJson(socket, reply);
@@ -351,6 +435,22 @@ function createServer(options = {}) {
       if (discussionComplete(room.game)) endDiscussionForRoom(room);
       return;
     }
+    if (msg.type === "vote") {
+      if (!socket._roomCode) {
+        sendJson(socket, { type: "error", error: "not_in_room" });
+        return;
+      }
+      const room = rooms.getRoom(socket._roomCode);
+      const player = room && room.players.find((p) => p.token === socket._token);
+      const error = submitVote(room && room.game, player ? player.id : -1, msg.targetId);
+      if (error) {
+        sendJson(socket, { type: "error", error });
+        return;
+      }
+      sendJson(socket, { type: "voteAccepted", targetId: msg.targetId });
+      if (votesComplete(room.game)) resolveVoteForRoom(room);
+      return;
+    }
     sendJson(socket, { type: "error", error: "unknown_type" });
   }
 
@@ -410,12 +510,21 @@ function createServer(options = {}) {
         if (room) {
           // 切断中の人間は「未入力＝行動しない」扱い（§7）。議論中なら
           // その席を議論済みにして、タイマーなしでも議論が止まらない
-          // ようにする。戻ってきたら reconnect で現在の view を再送する。
+          // ようにする。投票中ならその席を棄権扱いにして、残りの投票
+          // で集計が進むようにする。戻ってきたら reconnect で現在の
+          // view を再送する（投票中なら棄権扱いを外してまた投票できる）。
           if (room.game && room.game.phase === "discussion") {
             const player = room.players.find((p) => p.token === socket._token);
             if (player) {
               markDiscussionDone(room.game, player.id);
               if (discussionComplete(room.game)) endDiscussionForRoom(room);
+            }
+          }
+          if (room.game && room.game.phase === "vote") {
+            const player = room.players.find((p) => p.token === socket._token);
+            if (player) {
+              markVoteAbstained(room.game, player.id);
+              if (votesComplete(room.game)) resolveVoteForRoom(room);
             }
           }
           broadcast(socket._roomCode, roomUpdate(room));

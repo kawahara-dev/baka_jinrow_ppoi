@@ -28,7 +28,12 @@ FB_PORT=9000 node server/server.js
   `planNightActions`／`resolveNightActions` による一括解決、席ごとの夜結果の組み立て。
   議論フェーズもここで扱う：共有モジュールの `planDiscussionTalks` による
   CPU の発言、定型文（`CANNED_TALKS`）と短い自由入力（100文字まで）の検証、
-  全員の議論終了またはタイマーでの投票への遷移。
+  全員の議論終了またはタイマーでの投票への遷移。投票フェーズもここで扱う：
+  人間の投票の収集と検証、共有モジュールの `resolveVoteTally` による集計
+  （政治家の票は2票分、未入力の人間は CPU と同じ疑念ベース、切断中は棄権）、
+  追放と共有モジュールの `checkWinCondition` による勝敗、決着時の結果開示
+  （`buildResultSummary`／`buildHighlights`）。夜の解決で決着したときも同じく
+  試合終了になる。
 
 ## プロトコル（JSON テキストフレーム）
 
@@ -49,6 +54,11 @@ FB_PORT=9000 node server/server.js
 - `{ "type": "discussionDone" }` — 議論を終えた合図。生存中の人間全員分が揃うか、
   議論タイマー（設定の `discussTimer` 秒。既定はタイマーなし）が切れると投票へ進む。
   切断した人間は自動で議論済み扱いになる
+- `{ "type": "vote", "targetId": 2 }` — 投票先を選ぶ。投票フェーズ中に、
+  生存中の人間の席だけが送れる。対象は生存中の他人だけ（自分への投票は不可）。
+  集計までは送り直して変更できる。生存中の人間全員分が揃うか、開始から
+  60秒のタイムアウトで集計する。未入力のまま繋がっている人間は CPU と同じ
+  疑念ベースで選ばれ、切断中の人間は棄権扱い（投票しない）になる
 
 サーバー → クライアント：
 
@@ -76,12 +86,25 @@ FB_PORT=9000 node server/server.js
   議論の発言を部屋の全員へ配信する（公開情報だけ）
 - `{ "type": "discussionDoneAccepted" }` — 議論終了の合図を受け付けた返信
 - `{ "type": "discussionEnded", "code", "view" }` — 議論の終了時に席ごとに
-  1通ずつ配信。`view` はその席だけの player view（`phase` は `"vote"`）
-- `{ "type": "error", "error": "room_not_found" | "room_full" | "bad_token" | "bad_json" | "unknown_type" | "bad_message" | "not_in_room" | "not_host" | "not_enough_players" | "game_already_started" | "no_game" | "not_night" | "not_a_player" | "not_alive" | "no_night_action" | "invalid_target" | "not_discussion" | "bad_talk" }`
+  1通ずつ配信。`view` はその席だけの player view（`phase` は `"vote"`）。
+  投票の締め切りタイマー（60秒）もここから回る
+- `{ "type": "voteAccepted", "targetId": 2 }` — 投票を受け付けた合図
+- `{ "type": "voteResolved", "code", "view", "vote": { "logs", "exiledId", "exiledName", "exiledPublicRoleKey", "tally" } }` —
+  投票の集計時に席ごとに1通ずつ配信。`view` は集計後の player view（続くなら
+  `phase` は `"night"`、`day` は翌日）。`logs` は投票結果の公開ログ（同数なら
+  追放なし、最多票なら追放と役職の公開）、`tally` は対象ごとの票数の内訳
+  （誰が誰へ入れたかは出さない）。集計後に翌日の夜が始まる
+- `{ "type": "gameEnded", "code", "view", "result": { "winText", "winnerFaction", "sub", "highlights", "rows" } }` —
+  試合の終了時に席ごとに1通ずつ配信。`view` はその席だけの player view（`phase` は
+  `"end"`）。`result` は結果開示：決着文言・勝利陣営・ハイライト・全員の行
+  （実役職・陣営・脱落の記録。試合終了後の開示なのでバカの実役職も含む）。
+  投票の集計で決着したときと、夜の解決で決着したとき（その場合は
+  `nightResolved` の view も `phase` は `"end"`）の両方で送られる
+- `{ "type": "error", "error": "room_not_found" | "room_full" | "bad_token" | "bad_json" | "unknown_type" | "bad_message" | "not_in_room" | "not_host" | "not_enough_players" | "game_already_started" | "no_game" | "not_night" | "not_a_player" | "not_alive" | "no_night_action" | "invalid_target" | "not_discussion" | "bad_talk" | "not_vote" }`
 
 `players` は公開情報のみ（`id` / `name` / `icon` / `connected`）。トークンは含まない。
 試合中の再接続では `reconnected` に現在の player view（`view`）が付く。
-投票の受け付けと勝敗・結果開示は後の歩で追加する。
+投票中の再接続では棄権扱いが外れ、戻ってきたらまた投票できる。
 
 ## テスト
 
