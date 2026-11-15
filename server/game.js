@@ -28,6 +28,7 @@ const {
   getPublicRoleKey,
   planNightActions,
   resolveNightActions,
+  planDiscussionTalks,
 } = require("../game-logic.js");
 
 const IMPOSTOR_ROLE_KEYS = ["fakeGirl", "mimic"];
@@ -35,6 +36,20 @@ const MIN_PLAYERS_TO_START = 2;
 // 夜の入力締め切り（設計メモ §6 の目安60秒）。createServer の
 // options.nightTimeoutMs で上書きできる（テスト用）。
 const NIGHT_TIMEOUT_MS = 60000;
+// 議論の定型文（設計メモ §9-1：定型文＋短い自由入力）。text の
+// {target} は対象の名前に置き換える。target を取る文言は対象が必須。
+const CANNED_TALKS = [
+  { id: "suspicious", text: "{target} が怪しいと思う", needsTarget: true },
+  { id: "innocent", text: "{target} は白だと思う", needsTarget: true },
+  { id: "ask", text: "{target}、昨夜なにしてた？", needsTarget: true },
+  { id: "agree", text: "そう思う", needsTarget: false },
+  { id: "disagree", text: "そうは思わない", needsTarget: false },
+  { id: "wait", text: "まだ様子見したい", needsTarget: false },
+  { id: "unite", text: "票を合わせよう", needsTarget: false },
+  { id: "noInfo", text: "情報が足りないな", needsTarget: false },
+];
+// 自由入力の上限（短い自由入力。設計メモ §9-1）。
+const FREE_TALK_MAX_LENGTH = 100;
 
 // 役職を配り、サーバー内だけが持つ試合状態を作る。
 // roomPlayers: 部屋の players（id / name / icon）。8 席に満たない分は
@@ -79,6 +94,8 @@ function createGame(code, roomPlayers, settings, random) {
     loneFakeAbility: null,
     nightReport: null,
     bombReport: null,
+    // 議論フェーズ：議論を終えた（投票へ進んでよい）人間の席。
+    discussionDone: new Set(),
   };
 }
 
@@ -235,6 +252,116 @@ function nightResolvedMessage(game, result, playerId) {
   };
 }
 
+// 議論を開始する。phase を "morning" から "discussion" にし、
+// 共有モジュールの planDiscussionTalks で CPU の発言イベントを作る
+// （人間の席は発言しない。人数が多いほど CPU の発言は減る）。
+// マウス公開のイベントには公開される役職（publicRoleKey）を付ける
+// （マウスの公開は全員に見える公開情報）。朝以外では null を返す。
+// 戻り値はイベントの配列：{ type: "talk", speakerId, text } /
+// { type: "mouse", speakerId, targetId, publicRoleKey }。
+function startDiscussion(game, random) {
+  if (!game || game.phase !== "morning") return null;
+  game.phase = "discussion";
+  game.discussionDone = new Set();
+  const alive = game.players.filter((p) => p.alive);
+  const events = planDiscussionTalks(game, alive, { random });
+  return events.map((e) => {
+    if (e.type === "mouse") {
+      const target = game.players.find((p) => p.id === e.targetId);
+      return { type: "mouse", speakerId: e.speakerId, targetId: e.targetId, publicRoleKey: target ? getPublicRoleKey(target) : null };
+    }
+    return { type: "talk", speakerId: e.speakerId, text: e.text };
+  });
+}
+
+// 人間の議論の発言を受け付ける。成功したら { speakerId, text }、
+// ダメなら理由を返す。input は { phraseId, targetId }（定型文）か
+// { text }（短い自由入力）のどちらか片方だけ。
+// - 定型文：CANNED_TALKS にある id だけ。{target} を含む文言は
+//   生存中の他人を対象に指定する（自分・死亡・存在しない席は弾く）。
+// - 自由入力：前後の空白を除いて 1〜FREE_TALK_MAX_LENGTH 文字。
+function submitTalk(game, playerId, input) {
+  if (!game) return "no_game";
+  if (game.phase !== "discussion") return "not_discussion";
+  const p = game.players.find((x) => x.id === playerId);
+  if (!p || p.isCpu) return "not_a_player";
+  if (!p.alive) return "not_alive";
+  const phraseId = input && input.phraseId;
+  const text = input && input.text;
+  if ((phraseId == null) === (text == null)) return "bad_talk";
+  if (phraseId != null) {
+    const phrase = CANNED_TALKS.find((c) => c.id === phraseId);
+    if (!phrase) return "bad_talk";
+    if (!phrase.needsTarget) return { speakerId: playerId, text: phrase.text };
+    const target = game.players.find((x) => x.id === input.targetId);
+    if (!target || !target.alive || target.id === playerId) return "invalid_target";
+    return { speakerId: playerId, text: phrase.text.replaceAll("{target}", target.name) };
+  }
+  if (typeof text !== "string") return "bad_talk";
+  const trimmed = text.trim();
+  if (trimmed.length === 0 || trimmed.length > FREE_TALK_MAX_LENGTH) return "bad_talk";
+  return { speakerId: playerId, text: trimmed };
+}
+
+// その席の人間が議論を終えたと記録する。成功したら null、
+// ダメなら理由を返す。2回目も null（冪等）。
+function markDiscussionDone(game, playerId) {
+  if (!game) return "no_game";
+  if (game.phase !== "discussion") return "not_discussion";
+  const p = game.players.find((x) => x.id === playerId);
+  if (!p || p.isCpu) return "not_a_player";
+  if (!p.alive) return "not_alive";
+  game.discussionDone.add(playerId);
+  return null;
+}
+
+// 生存中の人間全員が議論を終えたか。切断中の人間はサーバー側で
+// 切断時に discussionDone へ入れるため、ここでは数えない（§7）。
+function discussionComplete(game) {
+  if (!game || game.phase !== "discussion") return false;
+  return game.players.every(
+    (p) => !p.alive || p.isCpu || game.discussionDone.has(p.id)
+  );
+}
+
+// その席へ送る discussionStarted メッセージ。CPU の発言イベントは
+// 公開情報だけ（発言者・文言・マウス公開の役職）なので全席で同じ。
+function discussionStartedMessage(game, events, playerId) {
+  const view = playerView(game, playerId);
+  if (!view || !events) return null;
+  return {
+    type: "discussionStarted",
+    code: game.code,
+    view,
+    talks: events,
+  };
+}
+
+// 人間の発言を全員へ配信するメッセージ（公開情報だけ）。
+function talkBroadcast(game, talk) {
+  const speaker = game.players.find((p) => p.id === talk.speakerId);
+  if (!speaker) return null;
+  return {
+    type: "talk",
+    code: game.code,
+    speakerId: talk.speakerId,
+    speakerName: speaker.name,
+    text: talk.text,
+  };
+}
+
+// その席へ送る discussionEnded メッセージ。view の phase は "vote"
+// （投票の受け付けは次の歩で追加する）。
+function discussionEndedMessage(game, playerId) {
+  const view = playerView(game, playerId);
+  if (!view) return null;
+  return {
+    type: "discussionEnded",
+    code: game.code,
+    view,
+  };
+}
+
 module.exports = {
   createGame,
   validateStart,
@@ -244,6 +371,15 @@ module.exports = {
   nightInputsComplete,
   resolveNight,
   nightResolvedMessage,
+  startDiscussion,
+  submitTalk,
+  markDiscussionDone,
+  discussionComplete,
+  discussionStartedMessage,
+  talkBroadcast,
+  discussionEndedMessage,
+  CANNED_TALKS,
+  FREE_TALK_MAX_LENGTH,
   IMPOSTOR_ROLE_KEYS,
   MIN_PLAYERS_TO_START,
   NIGHT_TIMEOUT_MS,

@@ -479,6 +479,9 @@ test("夜入力の検証：部屋なし・試合なし・行動なし・対象�
       assert.equal((await hq.next()).type, "nightActionAccepted");
       assert.equal((await withTimeout(hq.next(), 2000, "host nightResolved")).view.phase, "morning");
       assert.equal((await withTimeout(gq.next(), 2000, "guest nightResolved")).view.phase, "morning");
+      // 夜の解決直後に議論が始まる（discussionStarted を読み捨てる）。
+      assert.equal((await withTimeout(hq.next(), 2000, "host discussionStarted")).type, "discussionStarted");
+      assert.equal((await withTimeout(gq.next(), 2000, "guest discussionStarted")).type, "discussionStarted");
       // 夜が明けたら夜入力は受け付けない。
       host.send(JSON.stringify({ type: "nightAction", targetId: 2 }));
       assert.equal((await hq.next()).error, "not_night");
@@ -487,6 +490,139 @@ test("夜入力の検証：部屋なし・試合なし・行動なし・対象�
       guest.close();
     }
   }, { random: seededRandom(1), nightTimeoutMs: 5000 });
+});
+
+test("議論：夜明け後に discussionStarted が届き、発言と議論終了で discussionEnded へ進む", async () => {
+  // seed 8：人間は見張り役（id 0）と守り手（id 1）。両方とも夜入力が
+  // 必要で、夜明け後も両方とも生存する（通しで確認済み）。
+  await withServer(async (port) => {
+    const { host, guest, hq, gq } = await startTwoPlayerGame(port);
+    try {
+      host.send(JSON.stringify({ type: "nightAction", targetId: 2 }));
+      assert.equal((await hq.next()).type, "nightActionAccepted");
+      guest.send(JSON.stringify({ type: "nightAction", targetId: 3 }));
+      assert.equal((await gq.next()).type, "nightActionAccepted");
+
+      const hostResolved = await withTimeout(hq.next(), 2000, "host nightResolved");
+      const guestResolved = await withTimeout(gq.next(), 2000, "guest nightResolved");
+      assert.equal(hostResolved.type, "nightResolved");
+      assert.equal(guestResolved.type, "nightResolved");
+      // 夜の解決直後に議論が始まる。
+      const hostStarted = await withTimeout(hq.next(), 2000, "host discussionStarted");
+      const guestStarted = await withTimeout(gq.next(), 2000, "guest discussionStarted");
+      for (const msg of [hostStarted, guestStarted]) {
+        assert.equal(msg.type, "discussionStarted");
+        assert.equal(msg.view.phase, "discussion");
+        assert.equal(msg.view.day, 1);
+        assert.ok(Array.isArray(msg.talks));
+        // 人間2人なら CPU の発言は最大4件で、発言者は全員 CPU 席。
+        assert.ok(msg.talks.length >= 1 && msg.talks.length <= 4);
+        for (const e of msg.talks) {
+          assert.ok(msg.view.players[e.speakerId].isCpu);
+          if (e.type === "mouse") assert.equal(typeof e.publicRoleKey, "string");
+        }
+        const json = JSON.stringify(msg);
+        assert.equal(json.includes("baka"), false);
+        assert.equal(json.includes("clumsy"), false);
+        assert.equal(json.includes("token"), false);
+        assert.equal(json.includes("fakeDisplayRoleKey"), false);
+      }
+
+      // ホストの定型文は両方へ配信される。
+      host.send(JSON.stringify({ type: "talk", phraseId: "agree" }));
+      assert.deepEqual(await hq.next(), {
+        type: "talk",
+        code: hostStarted.code,
+        speakerId: 0,
+        speakerName: "ルナ",
+        text: "そう思う",
+      });
+      assert.deepEqual(await gq.next(), {
+        type: "talk",
+        code: hostStarted.code,
+        speakerId: 0,
+        speakerName: "ルナ",
+        text: "そう思う",
+      });
+      // ゲストの自由入力も両方へ配信される。
+      guest.send(JSON.stringify({ type: "talk", text: "ちょっと待って" }));
+      assert.deepEqual(await gq.next(), {
+        type: "talk",
+        code: hostStarted.code,
+        speakerId: 1,
+        speakerName: "ミオ",
+        text: "ちょっと待って",
+      });
+      assert.deepEqual(await hq.next(), {
+        type: "talk",
+        code: hostStarted.code,
+        speakerId: 1,
+        speakerName: "ミオ",
+        text: "ちょっと待って",
+      });
+
+      // 1人だけではまだ終わらない。
+      host.send(JSON.stringify({ type: "discussionDone" }));
+      assert.equal((await hq.next()).type, "discussionDoneAccepted");
+      // 2人分が揃うと discussionEnded が両方へ届く。
+      guest.send(JSON.stringify({ type: "discussionDone" }));
+      assert.equal((await gq.next()).type, "discussionDoneAccepted");
+      const hostEnded = await withTimeout(hq.next(), 2000, "host discussionEnded");
+      const guestEnded = await withTimeout(gq.next(), 2000, "guest discussionEnded");
+      assert.equal(hostEnded.type, "discussionEnded");
+      assert.equal(guestEnded.type, "discussionEnded");
+      assert.equal(hostEnded.view.phase, "vote");
+      assert.equal(guestEnded.view.phase, "vote");
+      // 投票フェーズでは発言できない。
+      host.send(JSON.stringify({ type: "talk", phraseId: "agree" }));
+      assert.equal((await hq.next()).error, "not_discussion");
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, { random: seededRandom(8), nightTimeoutMs: 5000, discussTimeoutMs: 5000 });
+});
+
+test("議論：タイマーが切れると全員の discussionDone なしで投票へ進む", async () => {
+  // seed 3：人間は政治家（id 0）とネズミ（id 1）。夜は開始直後に解決する。
+  await withServer(async (port) => {
+    const { host, guest, hq, gq } = await startTwoPlayerGame(port);
+    try {
+      assert.equal((await withTimeout(hq.next(), 2000, "host nightResolved")).type, "nightResolved");
+      assert.equal((await withTimeout(gq.next(), 2000, "guest nightResolved")).type, "nightResolved");
+      assert.equal((await withTimeout(hq.next(), 2000, "host discussionStarted")).type, "discussionStarted");
+      assert.equal((await withTimeout(gq.next(), 2000, "guest discussionStarted")).type, "discussionStarted");
+      // 誰も discussionDone を送らないまま 150ms のタイマーで終わる。
+      const hostEnded = await withTimeout(hq.next(), 3000, "host discussionEnded");
+      const guestEnded = await withTimeout(gq.next(), 3000, "guest discussionEnded");
+      assert.equal(hostEnded.type, "discussionEnded");
+      assert.equal(guestEnded.type, "discussionEnded");
+      assert.equal(hostEnded.view.phase, "vote");
+      assert.equal(guestEnded.view.phase, "vote");
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, { random: seededRandom(3), nightTimeoutMs: 5000, discussTimeoutMs: 150 });
+});
+
+test("議論の検証：夜フェーズ中の talk・discussionDone は not_discussion になる", async () => {
+  // seed 1：人間は守り手（id 0）と政治家（id 1）。
+  await withServer(async (port) => {
+    const { host, guest, hq, gq } = await startTwoPlayerGame(port);
+    try {
+      host.send(JSON.stringify({ type: "talk", phraseId: "agree" }));
+      assert.equal((await hq.next()).error, "not_discussion");
+      host.send(JSON.stringify({ type: "discussionDone" }));
+      assert.equal((await hq.next()).error, "not_discussion");
+      // 知らない定型文も議論フェーズでなければ not_discussion が先。
+      guest.send(JSON.stringify({ type: "talk", phraseId: "noSuchPhrase" }));
+      assert.equal((await gq.next()).error, "not_discussion");
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, { random: seededRandom(1), nightTimeoutMs: 5000, discussTimeoutMs: 5000 });
 });
 
 test("不正な JSON と未知の type は error になる（接続は維持される）", async () => {
