@@ -1179,6 +1179,56 @@ test("パス＆プレイ フェーズ2: 夜行動の順番入力で人間の対�
   assert.fail("10回試しても妨害されない夜を引けなかった");
 });
 
+test("パス＆プレイ: 人間のボマーは夜の順番入力で爆弾の対象を選べる", () => {
+  // 設計メモ §6 の未決事項「人間のボマーの爆弾入力も夜行動の順番入力に
+  // 含める想定でよいか」の答え：含める。ボマーには夜行動 plant があり、
+  // buildPnpNightActionView は能力あり（null）を返して対象選択画面へ進む。
+  // 単独インポスターの妨害でボマーがブロックされる回があるため、
+  // 爆弾が設置された回で検証する。
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "on" } });
+    FB.setupGame();
+    const s = FB.state;
+    const humans = s.humanPlayerIds.map((id) => s.players[id]);
+    const cpus = s.players.filter((p) => !s.humanPlayerIds.includes(p.id));
+    s.players.forEach((p) => { p.roleKey = "villager"; p.fakeDisplayRoleKey = null; p.clumsy = false; });
+    humans[0].roleKey = "bomber";
+    cpus[0].roleKey = "fakeGirl";
+    // 守り手も入れておく：単独インポスターの妨害は夜行動を持つ者から選ばれるため、
+    // ボマーだけだと毎回ボマーが妨害されて爆弾が設置されない。
+    cpus[1].roleKey = "guardian";
+    // 受け渡しを全員分進める（最後の確認で夜入力が始まる）
+    for (let i = 0; i < 2; i++) {
+      elements.get("pnpRevealBtn").onclick();
+      elements.get("pnpConfirmBtn").onclick();
+    }
+    assert.equal(s.pnpStep, "nightCover");
+    assert.equal(s.phase, "night");
+    // P1（ボマー）の番：カバー→対象選択画面へ（能力なし画面ではない）
+    elements.get("pnpRevealBtn").onclick();
+    assert.equal(s.pnpStep, "nightAction");
+    assert.equal(FB.pnpNightCurrentPlayer().id, humans[0].id);
+    assert.match(elements.get("pnpTurnBanner").textContent, /ボマー/);
+    const target = cpus[2];
+    s.selectedId = target.id;
+    elements.get("actionBtn").onclick();
+    assert.equal(s.pnpNightInputs[humans[0].id], target.id);
+    // P2（村ガール）の番：能力なし画面で確認だけ
+    assert.equal(s.pnpStep, "nightCover");
+    elements.get("pnpRevealBtn").onclick();
+    assert.equal(s.pnpStep, "nightNoAction");
+    const dayAtNight = s.day;
+    elements.get("pnpConfirmBtn").onclick();
+    // 夜が解決される
+    assert.equal(s.phase, "morning");
+    const planted = (s.bombs || []).find((b) => b.targetId === target.id);
+    if (!planted) continue; // ボマーが妨害された回はやり直し
+    assert.equal(planted.explodeDay, dayAtNight + 1);
+    return;
+  }
+  assert.fail("10回試しても爆弾が設置される夜を引けなかった");
+});
+
 test("パス＆プレイ フェーズ2: 夜結果は次の夜の番で本人だけに表示され、他人には見えない", () => {
   const { FB, elements } = loadGame({ seedSettings: { ...BASE_SETTINGS, mode: "pnp", humanCount: "2", bomber: "off" } });
   FB.setupGame();
