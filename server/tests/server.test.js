@@ -154,13 +154,128 @@ test("切断後にセッショントークンで同じ席へ再接続できる",
   });
 });
 
+test("ホストが startGame すると両方に gameStarted が届き、秘匿情報は含まれない", async () => {
+  await withServer(async (port) => {
+    const host = await connectWs(port);
+    const guest = await connectWs(port);
+    try {
+      host.send(JSON.stringify({ type: "createRoom" }));
+      const created = await nextMessage(host);
+      const hostUpdate = nextMessage(host);
+      guest.send(JSON.stringify({ type: "joinRoom", code: created.code }));
+      await nextMessage(guest);
+      await hostUpdate;
+
+      const hostStarted = nextMessage(host);
+      const guestStarted = nextMessage(guest);
+      host.send(JSON.stringify({ type: "startGame" }));
+      const hostMsg = await hostStarted;
+      const guestMsg = await guestStarted;
+      assert.equal(hostMsg.type, "gameStarted");
+      assert.equal(guestMsg.type, "gameStarted");
+      assert.equal(hostMsg.view.me.id, 0);
+      assert.equal(guestMsg.view.me.id, 1);
+      assert.equal(hostMsg.view.players.length, 8);
+      assert.equal(guestMsg.view.players.length, 8);
+      // 8 席のうち 6 席は CPU 席。
+      assert.equal(hostMsg.view.players.filter((p) => p.isCpu).length, 6);
+      // 秘匿：実役職バカ・うっかり flag・トークンが view に漏れていない。
+      for (const msg of [hostMsg, guestMsg]) {
+        const json = JSON.stringify(msg.view);
+        assert.equal(json.includes("baka"), false);
+        assert.equal(json.includes("clumsy"), false);
+        assert.equal(json.includes("token"), false);
+        assert.equal(json.includes("fakeDisplayRoleKey"), false);
+        assert.equal(typeof msg.view.me.roleKey, "string");
+        assert.equal(msg.view.me.roleKey.length > 0, true);
+      }
+      // 2 回目の開始はエラー。
+      host.send(JSON.stringify({ type: "startGame" }));
+      assert.equal((await nextMessage(host)).error, "game_already_started");
+    } finally {
+      host.close();
+      guest.close();
+    }
+  });
+});
+
+test("startGame：ホスト以外は not_host、1人では not_enough_players、部屋なしは not_in_room", async () => {
+  await withServer(async (port) => {
+    const lone = await connectWs(port);
+    try {
+      lone.send(JSON.stringify({ type: "startGame" }));
+      assert.equal((await nextMessage(lone)).error, "not_in_room");
+    } finally {
+      lone.close();
+    }
+
+    const host = await connectWs(port);
+    const guest = await connectWs(port);
+    try {
+      host.send(JSON.stringify({ type: "createRoom" }));
+      const created = await nextMessage(host);
+      host.send(JSON.stringify({ type: "startGame" }));
+      assert.equal((await nextMessage(host)).error, "not_enough_players");
+
+      const hostUpdate = nextMessage(host);
+      guest.send(JSON.stringify({ type: "joinRoom", code: created.code }));
+      await nextMessage(guest);
+      await hostUpdate;
+      guest.send(JSON.stringify({ type: "startGame" }));
+      assert.equal((await nextMessage(guest)).error, "not_host");
+    } finally {
+      host.close();
+      guest.close();
+    }
+  });
+});
+
+test("試合中の再接続では reconnected に現在の player view が付く", async () => {
+  await withServer(async (port) => {
+    const host = await connectWs(port);
+    const guest = await connectWs(port);
+    try {
+      host.send(JSON.stringify({ type: "createRoom" }));
+      const created = await nextMessage(host);
+      const hostUpdate = nextMessage(host);
+      guest.send(JSON.stringify({ type: "joinRoom", code: created.code }));
+      const joined = await nextMessage(guest);
+      await hostUpdate;
+
+      const hostStarted = nextMessage(host);
+      const guestStarted = nextMessage(guest);
+      host.send(JSON.stringify({ type: "startGame" }));
+      await hostStarted;
+      await guestStarted;
+      guest.close();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const again = await connectWs(port);
+      try {
+        again.send(JSON.stringify({ type: "reconnect", code: created.code, token: joined.token }));
+        const msg = await nextMessage(again);
+        assert.equal(msg.type, "reconnected");
+        assert.equal(msg.playerId, 1);
+        assert.equal(msg.view.me.id, 1);
+        assert.equal(msg.view.players.length, 8);
+        assert.equal(JSON.stringify(msg.view).includes("baka"), false);
+      } finally {
+        again.close();
+      }
+    } finally {
+      host.close();
+      guest.close();
+    }
+  });
+});
+
 test("不正な JSON と未知の type は error になる（接続は維持される）", async () => {
   await withServer(async (port) => {
     const ws = await connectWs(port);
     try {
       ws.send("not json");
       assert.equal((await nextMessage(ws)).error, "bad_json");
-      ws.send(JSON.stringify({ type: "startGame" }));
+      ws.send(JSON.stringify({ type: "noSuchType" }));
       assert.equal((await nextMessage(ws)).error, "unknown_type");
       ws.send(JSON.stringify({ type: "createRoom" }));
       const msg = await nextMessage(ws);

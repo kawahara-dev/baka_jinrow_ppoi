@@ -2,8 +2,8 @@
 // Node 標準のみ（http / fs / path / crypto）。依存パッケージなし。
 // - 静的ファイル配信：リポジトリ直下の index.html / game-logic.js 等を配る
 //   （フェーズ2でクライアントがここへ接続する準備）。server/ と .git は配らない。
-// - WebSocket（/ws）：部屋の作成/参加、セッショントークンでの再接続。
-//   1試合の進行（配役・夜・議論・投票）は後の歩で追加する。
+// - WebSocket（/ws）：部屋の作成/参加、セッショントークンでの再接続、
+//   配役とプレイヤー別ビューの配信。夜・議論・投票の進行は後の歩で追加する。
 // 試験運用は VM 内だけ。外部公開しない。待ち受けは 127.0.0.1 に固定する。
 "use strict";
 
@@ -11,6 +11,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createRoomStore } = require("./rooms.js");
+const { createGame, validateStart, playerView } = require("./game.js");
 const { computeAcceptKey, encodeTextFrame, encodeFrame, decodeFrames } = require("./ws.js");
 
 const CONTENT_TYPES = {
@@ -28,6 +29,7 @@ const CONTENT_TYPES = {
 function createServer(options = {}) {
   const root = options.root || path.resolve(__dirname, "..");
   const rooms = options.rooms || createRoomStore();
+  const random = options.random || Math.random;
   // 部屋コード → その部屋に繋がっているソケットの集合。
   const roomSockets = new Map();
   const sockets = new Set();
@@ -69,6 +71,22 @@ function createServer(options = {}) {
 
   function roomUpdate(room) {
     return { type: "roomUpdate", code: room.code, players: rooms.publicPlayers(room) };
+  }
+
+  // 試合開始を部屋の各ソケットへ送る。送るのは席ごとの player view
+  // だけ（全員へ同じものを送る broadcast は使わない。秘匿のため）。
+  function sendGameStarted(room) {
+    const set = roomSockets.get(room.code);
+    if (!set) return;
+    for (const socket of set) {
+      const player = room.players.find((p) => p.token === socket._token);
+      if (!player) continue;
+      sendJson(socket, {
+        type: "gameStarted",
+        code: room.code,
+        view: playerView(room.game, player.id),
+      });
+    }
   }
 
   function handleMessage(socket, msg) {
@@ -121,7 +139,7 @@ function createServer(options = {}) {
       const { room, player } = result;
       attachToRoom(socket, room.code);
       socket._token = player.token;
-      sendJson(socket, {
+      const reply = {
         type: "reconnected",
         code: room.code,
         token: player.token,
@@ -129,8 +147,27 @@ function createServer(options = {}) {
         name: player.name,
         icon: player.icon,
         players: rooms.publicPlayers(room),
-      });
+      };
+      // 試合中の再接続には現在の player view を再送して復帰させる（§7）。
+      if (room.game) reply.view = playerView(room.game, player.id);
+      sendJson(socket, reply);
       broadcast(room.code, roomUpdate(room));
+      return;
+    }
+    if (msg.type === "startGame") {
+      if (!socket._roomCode) {
+        sendJson(socket, { type: "error", error: "not_in_room" });
+        return;
+      }
+      const room = rooms.getRoom(socket._roomCode);
+      const player = room && room.players.find((p) => p.token === socket._token);
+      const error = validateStart(room, player ? player.id : -1);
+      if (error) {
+        sendJson(socket, { type: "error", error });
+        return;
+      }
+      room.game = createGame(room.code, room.players, undefined, random);
+      sendGameStarted(room);
       return;
     }
     sendJson(socket, { type: "error", error: "unknown_type" });

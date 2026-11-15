@@ -62,7 +62,7 @@ function createRoomStore(deps = {}) {
   }
 
   function createRoom() {
-    const room = { code: makeCode(), createdAt: now(), players: [] };
+    const room = { code: makeCode(), createdAt: now(), players: [], game: null };
     rooms.set(room.code, room);
     const player = addPlayer(room);
     return { room, player };
