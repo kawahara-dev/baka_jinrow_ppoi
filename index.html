@@ -1263,7 +1263,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeRoomSettings: normalizeRoomSettingsLogic, isOnlineAvailable: isOnlineAvailableLogic, buildOnlineLobbyView: buildOnlineLobbyViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeRoomSettings: normalizeRoomSettingsLogic, isOnlineAvailable: isOnlineAvailableLogic, buildOnlineLobbyView: buildOnlineLobbyViewLogic, buildOnlineGameView: buildOnlineGameViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2928,9 +2928,12 @@
   };
   // オンラインの接続状態。サーバーから届いた roomCreated / roomUpdate 等の
   // 公開情報だけを持つ（実役職などの秘匿情報はここには入らない）。
+  // view は試合開始後に届く player view（自分の役職は表示役職だけ）。
+  // selectedId は夜・投票で選んだ対象、nightSentId は送り済みの夜入力。
   let online = {
     socket: null, code: null, token: null, playerId: null,
     players: [], settings: null, gameStarted: false, connected: false,
+    view: null, selectedId: null, nightSentId: null,
   };
   function isOnlineHost() { return online.playerId === 0; }
   function onlineHostname() {
@@ -2997,6 +3000,131 @@
     const startBtn = el("onlineStartBtn");
     if (startBtn) startBtn.disabled = view.startDisabled;
   }
+  // ---- online game screen (フェーズ2 第2歩：試合画面の接続) ----
+  // 試合画面はソロと同じ要素（日数・フェーズ・役職カード・カード・
+  // ステージ・ログ・ボタン）を使い回すが、状態の出所はローカルの
+  // state ではなくサーバーから届いた player view だけにする。
+  // ソロ／パス＆プレイの state には触らない（draw() は呼ばない）。
+  function renderOnlineGame() {
+    const view = buildOnlineGameViewLogic(online.view, { selectedId: online.selectedId, iconImgs: ICON_IMGS });
+    if (!view) return;
+    if (document.body && document.body.dataset) document.body.dataset.phase = view.phase;
+    el("dayText").textContent = view.dayText;
+    el("phaseText").textContent = view.phaseText;
+    el("factionText").textContent = view.meFaction;
+    // 役職カード（updateInGameRoleCard と同じ要素へ代入する）。
+    if (view.roleCard) {
+      el("roleCardIcon").innerHTML = view.roleCard.iconButtonHtml;
+      el("roleCardName").textContent = view.roleCard.roleName;
+      el("roleCardFaction").textContent = view.roleCard.faction;
+      el("roleCardPhaseHint").textContent = view.roleCard.phaseHint;
+      el("roleCardRisk").textContent = view.roleCard.riskNote;
+      const alliesRow = el("roleCardAllies").closest("div");
+      el("roleCardAllies").textContent = view.roleCard.alliesText;
+      alliesRow.classList.toggle("hidden", !view.roleCard.alliesText);
+    }
+    el("inGameRoleCard").classList.remove("hidden");
+
+    const cards = el("cards"); cards.innerHTML = "";
+    for (const card of view.cards) {
+      const p = view.players.find(x => x.id === card.id);
+      const div = document.createElement("div");
+      div.style.animationDelay = card.animationDelay;
+      div.className = card.className;
+      // Speech bubbles find their speaker's card by this id.
+      div.setAttribute("data-player", String(card.id));
+      div.onclick = () => selectOnlineTarget(card.id);
+      div.setAttribute("role", "button");
+      div.setAttribute("aria-label", card.ariaLabel);
+      if (p && p.alive) {
+        div.tabIndex = 0;
+        div.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectOnlineTarget(card.id); }
+        });
+      } else {
+        div.tabIndex = -1;
+        div.setAttribute("aria-disabled", "true");
+      }
+      div.innerHTML = card.innerHtml;
+      cards.appendChild(div);
+    }
+
+    const stage = el("stage");
+    if (stage) {
+      stage.innerHTML = view.stage.map(w => w.html).join("");
+      hydrateWalkImages(stage);
+    }
+    // ボタンはこの歩では夜だけ。投票・次へ・マウスは議論・投票の
+    // 接続（第2歩の後半）で扱うため、オンライン中は出さない。
+    const nightActive = view.phase === "night" && view.meAlive && view.hasNightAction;
+    el("actionBtn").textContent = online.nightSentId != null ? "夜行動を変更する" : "夜行動を実行";
+    el("actionBtn").classList.toggle("hidden", !nightActive);
+    el("voteBtn").classList.add("hidden");
+    el("nextBtn").classList.add("hidden");
+    el("mouseBtn").classList.add("hidden");
+    const pnpBanner = el("pnpTurnBanner");
+    if (pnpBanner) pnpBanner.classList.add("hidden");
+    reattachSpeechBubble();
+  }
+  function showOnlineGame() {
+    el("titleScreen").classList.add("hidden");
+    el("roleScreen").classList.add("hidden");
+    el("pnpScreen").classList.add("hidden");
+    el("onlineScreen").classList.add("hidden");
+    el("gameScreen").classList.remove("hidden");
+    el("resultPanel").classList.add("hidden");
+    el("retryBtn").classList.add("hidden");
+    el("titleBtn").classList.add("hidden");
+    el("dialogueLog").innerHTML = "";
+    el("actionLog").innerHTML = "";
+    renderOnlineGame();
+    actionLog("オンライン対戦が始まったよ！夜行動からスタートだよ。");
+    focusEl("phaseText");
+  }
+  // オンラインの夜の対象選択（この歩では夜だけ。投票は後半で扱う）。
+  // 選べるのは生存中の他人。自分は夜行動が自分可の役職のときだけ。
+  function selectOnlineTarget(id) {
+    if (!online.view) return;
+    const target = (online.view.players || []).find(p => p.id === id);
+    if (!target || !target.alive) return;
+    sfx("tick");
+    if (online.view.phase === "night") {
+      const meRole = ROLES[online.view.me.roleKey];
+      if (id === online.view.me.id && !meRole?.nightAction?.allowSelf) return;
+      online.selectedId = id;
+      renderOnlineGame();
+    }
+  }
+  // 夜行動をサーバーへ送る（解決までは送り直して変更できる）。
+  function confirmOnlineNightAction() {
+    if (online.selectedId == null) { alert("対象を選んでね！"); return; }
+    if (!sendOnline({ type: "nightAction", targetId: online.selectedId })) {
+      actionLog("サーバーに送信できなかったよ。接続を確認してね。");
+    }
+  }
+  // 夜の解決をログへ反映する。公開ログはそのまま、個人ログは
+  // 「あなた：」付きで行動ログへ。夜の報告と爆弾の報告も文面化する。
+  function applyOnlineNightResolved(night) {
+    for (const msg of night.publicLogs || []) actionLog(msg);
+    if (night.privateLog) actionLog(`あなた：${night.privateLog}`);
+    const report = night.report;
+    if (report) {
+      const victim = (online.view.players || []).find(p => p.id === report.victimId);
+      if (report.type === "eliminated" && victim) actionLog(`${victim.name} が夜に倒れた…`);
+      else if (report.type === "blocked") actionLog("夜の襲撃は防がれた。");
+      else if (report.type === "revived" && victim) actionLog(`${victim.name} は診察で生き返った。`);
+      else if (report.type === "none") actionLog("夜は静かに過ぎた。");
+    }
+    const bomb = night.bombReport;
+    if (bomb && Array.isArray(bomb.explodedVictims) && bomb.explodedVictims.length) {
+      for (const id of bomb.explodedVictims) {
+        const v = (online.view.players || []).find(p => p.id === id);
+        if (v) actionLog(`💣 ${v.name} のところで爆弾が爆発した！`);
+      }
+    }
+    if (bomb && bomb.fizzled) actionLog("💣 爆弾は不発だった。");
+  }
+
   function showOnlineEntry() {
     el("onlineLobby").classList.add("hidden");
     el("onlineEntry").classList.remove("hidden");
@@ -3021,7 +3149,10 @@
     online = {
       socket: null, code: null, token: null, playerId: null,
       players: [], settings: null, gameStarted: false, connected: false,
+      view: null, selectedId: null, nightSentId: null,
     };
+    // 試合中に抜けるときは試合画面も隠す（タイトルへは呼び出し側が戻す）。
+    el("gameScreen").classList.add("hidden");
     showOnlineEntry();
   }
   // サーバーからのメッセージを処理する。roomCreated / roomJoined /
@@ -3043,16 +3174,36 @@
       if (msg.code && msg.code !== online.code) return;
       online.players = Array.isArray(msg.players) ? msg.players : online.players;
       if (msg.settings) online.settings = msg.settings;
-      if (online.code) renderOnlineLobby();
+      if (online.code && !online.gameStarted) renderOnlineLobby();
       return;
     }
     if (msg.type === "gameStarted") {
       online.gameStarted = true;
-      if (online.code) renderOnlineLobby();
+      online.view = msg.view || null;
+      online.selectedId = null;
+      online.nightSentId = null;
+      if (online.view) showOnlineGame();
+      return;
+    }
+    if (msg.type === "nightActionAccepted") {
+      online.nightSentId = msg.targetId;
+      if (online.view) renderOnlineGame();
+      return;
+    }
+    if (msg.type === "nightResolved") {
+      if (!msg.view) return;
+      online.view = msg.view;
+      online.selectedId = null;
+      online.nightSentId = null;
+      if (msg.night) applyOnlineNightResolved(msg.night);
+      renderOnlineGame();
       return;
     }
     if (msg.type === "error") {
-      showOnlineError(ONLINE_ERROR_TEXT[msg.error] || "通信エラーが発生しました。");
+      const text = ONLINE_ERROR_TEXT[msg.error] || "通信エラーが発生しました。";
+      // 試合中はロビー／入口のエラー欄が見えないため、行動ログへ出す。
+      if (online.view) actionLog(`オンラインのエラー：${text}`);
+      else showOnlineError(text);
       return;
     }
   }
@@ -3257,6 +3408,8 @@
     }
   };
   el("actionBtn").onclick = () => {
+    // オンライン対戦中は夜行動をサーバーへ送る（ソロ／パス＆プレイは従来通り）。
+    if (online.view) { confirmOnlineNightAction(); return; }
     // パス＆プレイの夜入力中は、その人の対象を記録して次へ進む。
     if (state.mode === "pnp" && state.pnpNightInputPending != null) confirmPnpNightAction();
     else runNight();

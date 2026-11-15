@@ -3939,7 +3939,7 @@ test("buildOnlineLobbyView：切断中の参加者にバッジが付き、試合
   });
   assert.ok(view.playersHtml.includes("切断中"));
   assert.equal(view.startDisabled, true);
-  assert.equal(view.startNote, "試合が始まりました。試合画面の接続は次のステップで対応します。");
+  assert.equal(view.startNote, "試合が始まりました。試合画面へ移動します。");
   assert.equal(view.settingsDisabled, true);
   assert.equal(view.gameStarted, true);
 });
@@ -3955,4 +3955,104 @@ test("buildOnlineLobbyView：設定が不正でも既定値で描き、入力を
   assert.equal(view.segments.find(s => s.key === "difficulty").buttons.find(b => b.active).value, "hard");
   assert.equal(view.codeText, "ABCD");
   assert.equal(view.playersHtml, "");
+});
+
+// オンライン対戦の player view のテスト用フィクスチャ。me は表示役職
+// （バカなら表示役職）だけで、他人の実役職は出ないサーバー側の形。
+function onlineGameViewFixture(overrides = {}) {
+  const players = [
+    { id: 0, name: "ルナ", icon: "🌸", alive: true, isCpu: false, publicRoleKey: null },
+    { id: 1, name: "ミオ", icon: "🪄", alive: true, isCpu: false, publicRoleKey: null },
+    { id: 2, name: "ユイ", icon: "🧁", alive: true, isCpu: true, publicRoleKey: null },
+    { id: 3, name: "カノン", icon: "🎀", alive: true, isCpu: true, publicRoleKey: null },
+    { id: 4, name: "スズ", icon: "💫", alive: true, isCpu: true, publicRoleKey: null },
+    { id: 5, name: "リリ", icon: "🫧", alive: true, isCpu: true, publicRoleKey: null },
+    { id: 6, name: "ノア", icon: "🍬", alive: true, isCpu: true, publicRoleKey: null },
+    { id: 7, name: "エマ", icon: "🌙", alive: true, isCpu: true, publicRoleKey: null },
+  ];
+  return {
+    code: "ABCD", phase: "night", day: 1,
+    me: { id: 0, name: "ルナ", icon: "🌸", roleKey: "apprenticeSeer", roleName: "見習い占い師", faction: "イノセント", allies: [] },
+    players,
+    ...overrides,
+  };
+}
+
+test("buildOnlineGameView：夜の占い師は日数・役職カード・8枚のカード・8人のステージが出る", () => {
+  const view = Logic.buildOnlineGameView(onlineGameViewFixture(), { selectedId: 2 });
+  assert.equal(view.dayText, "1");
+  assert.equal(view.phaseText, "夜行動");
+  assert.equal(view.meId, 0);
+  assert.equal(view.meAlive, true);
+  assert.equal(view.meRoleName, "見習い占い師");
+  assert.equal(view.meFaction, "イノセント");
+  assert.equal(view.hasNightAction, true);
+  assert.equal(view.canSelectSelf, false, "占いは自分を選べない");
+  assert.equal(view.roleCard.roleName, "見習い占い師");
+  assert.equal(view.roleCard.phaseHint, "怪しい相手を1人選んで調査しよ。");
+  assert.equal(view.cards.length, 8);
+  // 生存中の他人は役職が分からないので「？」だけ（実役職は出ない）。
+  assert.equal(view.cards[1].revealedRole, "？");
+  assert.ok(view.cards[1].metaHtml.includes("？"));
+  // 自分のカードだけ「あなた」バッジが付く。
+  assert.ok(view.cards[0].innerHtml.includes("あなた"));
+  assert.ok(!view.cards[1].innerHtml.includes("あなた"));
+  // 選んだ対象だけ selected クラスが付く。
+  assert.ok(view.cards[2].className.includes("selected"));
+  assert.ok(!view.cards[3].className.includes("selected"));
+  assert.equal(view.stage.length, 8);
+  assert.ok(view.stage[0].html.includes("▼"), "自分の歩行者だけ ▼ マーカー");
+  assert.ok(!view.stage[1].html.includes("▼"));
+});
+
+test("buildOnlineGameView：インポスターはサーバーが送る仲間の名前が役職カードに出る", () => {
+  const view = Logic.buildOnlineGameView(onlineGameViewFixture({
+    me: { id: 0, name: "ルナ", icon: "🌸", roleKey: "fakeGirl", roleName: "フェイクガール", faction: "インポスター", allies: [{ id: 5, name: "リリ", icon: "🫧" }] },
+  }));
+  assert.equal(view.meFaction, "インポスター");
+  assert.equal(view.roleCard.alliesText, "リリ");
+  assert.equal(view.hasNightAction, true);
+  assert.equal(view.canSelectSelf, false, "襲撃は自分を選べない");
+});
+
+test("buildOnlineGameView：夜行動のない役職（村ガール）は hasNightAction が false", () => {
+  const view = Logic.buildOnlineGameView(onlineGameViewFixture({
+    me: { id: 0, name: "ルナ", icon: "🌸", roleKey: "villager", roleName: "村ガール", faction: "イノセント", allies: [] },
+  }));
+  assert.equal(view.hasNightAction, false);
+  assert.equal(view.canSelectSelf, false);
+  // 守り手は自分を選べる。
+  const guard = Logic.buildOnlineGameView(onlineGameViewFixture({
+    me: { id: 0, name: "ルナ", icon: "🌸", roleKey: "guardian", roleName: "守り手", faction: "イノセント", allies: [] },
+  }));
+  assert.equal(guard.hasNightAction, true);
+  assert.equal(guard.canSelectSelf, true);
+});
+
+test("buildOnlineGameView：脱落者は公開役職だけが出て、ステージからは外れる", () => {
+  const fixture = onlineGameViewFixture({ phase: "morning", day: 2 });
+  fixture.players[3] = { id: 3, name: "カノン", icon: "🎀", alive: false, isCpu: true, publicRoleKey: "fakeGirl" };
+  const view = Logic.buildOnlineGameView(fixture);
+  assert.equal(view.phaseText, "朝の報告");
+  assert.equal(view.dayText, "2");
+  // 脱落カードは表示役職（フェイクガール）だけが明かされる。
+  assert.equal(view.cards[3].revealedRole, "フェイクガール");
+  assert.ok(view.cards[3].className.includes("dead"));
+  // ステージの歩行者は生存者だけ。
+  assert.equal(view.stage.length, 7);
+  assert.ok(!view.stage.some(w => w.id === 3));
+  // 他人の実役職は出ていない（生存者は村人で代用、脱落者は公開役職だけ）。
+  assert.ok(view.players.filter(p => p.id !== 0 && p.alive).every(p => p.roleKey === "villager"));
+  assert.equal(view.players[3].roleKey, "fakeGirl");
+  assert.ok(!view.players.some(p => p.roleKey === "baka"), "実役職のバカは出ない");
+});
+
+test("buildOnlineGameView：不正な入力は null・入力を変更しない", () => {
+  assert.equal(Logic.buildOnlineGameView(null), null);
+  assert.equal(Logic.buildOnlineGameView({}), null);
+  assert.equal(Logic.buildOnlineGameView({ me: { id: 0 }, players: [] }), null);
+  const fixture = onlineGameViewFixture();
+  const before = JSON.stringify(fixture);
+  Logic.buildOnlineGameView(fixture, { selectedId: 1 });
+  assert.equal(JSON.stringify(fixture), before);
 });

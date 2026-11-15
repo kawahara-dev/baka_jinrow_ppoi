@@ -1798,7 +1798,7 @@
     }));
     const startDisabled = !host || list.length < 2 || started;
     let startNote = "";
-    if (started) startNote = "試合が始まりました。試合画面の接続は次のステップで対応します。";
+    if (started) startNote = "試合が始まりました。試合画面へ移動します。";
     else if (!host) startNote = "ホストが試合を開始するのを待っています。";
     else if (list.length < 2) startNote = "開始するにはあと1人必要です（2人以上で開始できます）。";
     else startNote = "準備ができたら「試合開始」を押してください。";
@@ -1812,6 +1812,61 @@
       startDisabled,
       startNote,
       gameStarted: started,
+    };
+  }
+
+  // オンライン対戦の試合画面の表示データ（フェーズ2 第2歩）。
+  // サーバーの player view（公開情報だけ）から、既存の表示生成
+  // （buildRoleCardView / buildCardsView / buildStageView）へ渡せる
+  // 形へ変換する。実役職は view には出ないので、生存中の他人は
+  // カードに「？」が出るよう roleKey を村人で代用する（仲間表示の
+  // 計算で ROLES[roleKey] を読むため、有効なキーが必要）。
+  // 脱落者は publicRoleKey（表示役職）が公開済みなのでそれを使う。
+  // 自分の役職はサーバーが送る表示役職そのまま（バカも表示役職）。
+  // opts: { selectedId, iconImgs }。view が欠けていれば null。
+  function buildOnlineGameView(view, opts) {
+    if (!view || !view.me || !Array.isArray(view.players) || !view.players.length) return null;
+    const me = view.me;
+    const selectedId = opts && typeof opts.selectedId === "number" ? opts.selectedId : null;
+    const iconImgs = (opts && opts.iconImgs) || {};
+    const phase = view.phase;
+    const meta = PHASE_META[phase] || {};
+    const players = view.players.map(p => {
+      const isMe = p.id === me.id;
+      const shownRoleKey = isMe ? me.roleKey : (p.publicRoleKey || null);
+      const roleKey = shownRoleKey || "villager";
+      return {
+        id: p.id, name: p.name, icon: p.icon, alive: !!p.alive, isCpu: !!p.isCpu,
+        roleKey, clumsy: false, mouseUsed: false,
+        voted: false, suspicion: 0, lastTarget: null,
+        publicRoleKey: p.publicRoleKey || null, deathCause: null, deathDay: null,
+      };
+    });
+    const roleCard = buildRoleCardView(players, me.id, { phase });
+    if (roleCard) {
+      // インポスター仲間はサーバーが送る名前だけが正しい（CPU 席の
+      // 実役職は view に出ないため、共有の計算では「なし」になる）。
+      if (Array.isArray(me.allies) && me.allies.length) {
+        roleCard.alliesText = me.allies.map(a => a.name).join("、");
+      }
+    }
+    const mePlayer = players.find(p => p.id === me.id);
+    return {
+      phase, day: view.day,
+      dayText: String(view.day),
+      phaseText: meta.label || "",
+      meId: me.id,
+      meAlive: mePlayer ? mePlayer.alive : false,
+      meRoleName: me.roleName || ROLES[me.roleKey]?.name || "",
+      meFaction: me.faction || ROLES[me.roleKey]?.faction || "",
+      // 夜行動の有無は表示役職で見る（バカがインポスター表示のときは
+      // ボタンを出してもサーバーが no_night_action で弾く。権威はサーバー）。
+      hasNightAction: !!ROLES[me.roleKey]?.nightAction,
+      canSelectSelf: !!ROLES[me.roleKey]?.nightAction?.allowSelf,
+      roleCard,
+      cards: buildCardsView(players, { selectedId, iconImgs, playerId: me.id }),
+      stage: buildStageView(players, { playerId: me.id }),
+      players,
     };
   }
 
@@ -2255,6 +2310,7 @@
     normalizeRoomSettings,
     isOnlineAvailable,
     buildOnlineLobbyView,
+    buildOnlineGameView,
     LOG_FOLD_DEFAULT,
     LOG_FOLD_DEFS,
     normalizeLogFold,

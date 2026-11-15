@@ -2804,7 +2804,24 @@ test("オンラインロビー：roomCreated でロビーが開き、コード�
   assert.ok(!elements.get("onlinePlayersList").innerHTML.includes("ユイ"));
 });
 
-test("オンラインロビー：存在しないコードのエラーが出て、gameStarted で開始済みになる", () => {
+// gameStarted / nightResolved のテスト用 view（サーバーが送る形）。
+// me は表示役職だけで、他人の実役職は出ない。phase / day / players は
+// 呼び出し側で差し替えられるよう、都度新しいオブジェクトを返す。
+function onlineGameViewMessage(meId = 0, roleKey = "apprenticeSeer") {
+  const roleNames = { apprenticeSeer: "見習い占い師", villager: "村ガール", fakeGirl: "フェイクガール" };
+  const factions = { apprenticeSeer: "イノセント", villager: "イノセント", fakeGirl: "インポスター" };
+  const names = ["ルナ", "ミオ", "ユイ", "カノン", "スズ", "リリ", "ノア", "エマ"];
+  const icons = ["🌸", "🪄", "🧁", "🎀", "💫", "🫧", "🍬", "🌙"];
+  return {
+    code: "WXYZ", phase: "night", day: 1,
+    me: { id: meId, name: names[meId], icon: icons[meId], roleKey, roleName: roleNames[roleKey], faction: factions[roleKey], allies: [] },
+    players: names.map((name, id) => ({
+      id, name, icon: icons[id], alive: true, isCpu: id >= 2, publicRoleKey: null,
+    })),
+  };
+}
+
+test("オンラインロビー：存在しないコードのエラーが出て、gameStarted で試合画面へ移る", () => {
   const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
   FB.handleOnlineMessage({ type: "error", error: "room_not_found" });
   assert.equal(elements.get("onlineEntryError").textContent, "部屋が見つかりませんでした。コードを確認してください。");
@@ -2819,13 +2836,133 @@ test("オンラインロビー：存在しないコードのエラーが出て�
   assert.equal(elements.get("onlineEntryError").textContent, "");
   assert.equal(elements.get("onlineStartBtn").disabled, true, "ゲストは開始できない");
   assert.equal(elements.get("onlineStartNote").textContent, "ホストが試合を開始するのを待っています。");
-  FB.handleOnlineMessage({ type: "gameStarted", code: "WXYZ", view: {} });
-  assert.equal(elements.get("onlineStartNote").textContent, "試合が始まりました。試合画面の接続は次のステップで対応します。");
-  assert.equal(elements.get("onlineStartBtn").disabled, true);
+  FB.handleOnlineMessage({ type: "gameStarted", code: "WXYZ", view: onlineGameViewMessage(1) });
+  // ロビーから試合画面へ移り、自分の役職カードと8枚のカードが出る。
+  assert.ok(elements.get("onlineScreen").classList.contains("hidden"));
+  assert.ok(!elements.get("gameScreen").classList.contains("hidden"));
+  assert.equal(elements.get("dayText").textContent, "1");
+  assert.equal(elements.get("phaseText").textContent, "夜行動");
+  assert.equal(elements.get("roleCardName").textContent, "見習い占い師");
+  assert.equal(elements.get("factionText").textContent, "イノセント");
+  assert.equal(elements.get("cards").children.length, 8);
+  assert.equal(elements.get("stage").innerHTML.includes("walker"), true);
+  // 占い師は夜行動があるのでボタンが出る。
+  assert.ok(!elements.get("actionBtn").classList.contains("hidden"));
+  // 試合開始後の roomUpdate でロビーへ戻らない。
+  FB.handleOnlineMessage({
+    type: "roomUpdate", code: "WXYZ",
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  assert.ok(!elements.get("gameScreen").classList.contains("hidden"));
   // 部屋を出ると入口に戻り、セッションも消える。
   FB.leaveOnlineRoom();
   assert.ok(!elements.get("onlineEntry").classList.contains("hidden"));
   assert.ok(elements.get("onlineLobby").classList.contains("hidden"));
+  assert.ok(elements.get("gameScreen").classList.contains("hidden"));
   assert.equal(FB.online.code, null);
   assert.equal(FB.online.token, null);
+  assert.equal(FB.online.view, null);
+});
+
+test("オンライン試合画面：夜にカードを選んで夜行動ボタンを押すと nightAction が送られる", () => {
+  const { FB, elements, alerts } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.handleOnlineMessage({
+    type: "roomCreated", code: "ABCD", token: "token-1", playerId: 0,
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  // 送信先は差し替えのフェイクソケット（WebSocket のないハーネス用）。
+  const sent = [];
+  FB.online.socket = { readyState: 1, send(msg) { sent.push(msg); } };
+  FB.handleOnlineMessage({ type: "gameStarted", code: "ABCD", view: onlineGameViewMessage(0) });
+  // 対象を選ばずに押すとアラートが出て送られない。
+  elements.get("actionBtn").onclick();
+  assert.deepEqual(alerts, ["対象を選んでね！"]);
+  assert.equal(sent.length, 0);
+  // カード（ユイ=2）を選ぶと selected が付き、ボタンで送られる。
+  elements.get("cards").children[2].onclick();
+  assert.equal(FB.online.selectedId, 2);
+  assert.ok(elements.get("cards").children[2].className.includes("selected"));
+  elements.get("actionBtn").onclick();
+  assert.equal(sent.length, 1);
+  assert.deepEqual(JSON.parse(sent[0]), { type: "nightAction", targetId: 2 });
+  // 受け付けの返信でボタン文言が「変更する」になる（送り直し可）。
+  FB.handleOnlineMessage({ type: "nightActionAccepted", targetId: 2 });
+  assert.equal(FB.online.nightSentId, 2);
+  assert.equal(elements.get("actionBtn").textContent, "夜行動を変更する");
+  // 自分（占い）は選べない。
+  elements.get("cards").children[0].onclick();
+  assert.equal(FB.online.selectedId, 2, "自分は選べないので選択は変わらない");
+});
+
+test("オンライン試合画面：夜行動のない役職では夜行動ボタンが出ない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.handleOnlineMessage({
+    type: "roomCreated", code: "ABCD", token: "token-1", playerId: 0,
+    players: [{ id: 0, name: "ルナ", icon: "🌸", connected: true }],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  FB.handleOnlineMessage({ type: "gameStarted", code: "ABCD", view: onlineGameViewMessage(0, "villager") });
+  assert.equal(elements.get("roleCardName").textContent, "村ガール");
+  assert.ok(elements.get("actionBtn").classList.contains("hidden"));
+});
+
+test("オンライン試合画面：nightResolved で朝の報告とログが出て、倒れた者の役職が明かされる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.handleOnlineMessage({
+    type: "roomCreated", code: "ABCD", token: "token-1", playerId: 0,
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  FB.handleOnlineMessage({ type: "gameStarted", code: "ABCD", view: onlineGameViewMessage(0) });
+  FB.selectOnlineTarget(2);
+  const morning = onlineGameViewMessage(0);
+  morning.phase = "morning";
+  morning.players[3] = { id: 3, name: "カノン", icon: "🎀", alive: false, isCpu: true, publicRoleKey: "fakeGirl" };
+  FB.handleOnlineMessage({
+    type: "nightResolved", code: "ABCD", view: morning,
+    night: {
+      publicLogs: ["インポスター陣営 → カノン → 脱落"],
+      privateLog: "ミオはイノセントだった",
+      report: { type: "eliminated", victimId: 3 },
+      bombReport: { explodedVictims: [], fizzled: false },
+    },
+  });
+  assert.equal(elements.get("phaseText").textContent, "朝の報告");
+  assert.ok(elements.get("actionBtn").classList.contains("hidden"), "朝は夜行動ボタンが出ない");
+  assert.equal(FB.online.selectedId, null, "夜の選択はリセットされる");
+  assert.equal(FB.online.nightSentId, null);
+  // 倒れた者のカードは脱落扱いで、表示役職（フェイクガール）だけが明かされる。
+  assert.ok(elements.get("cards").children[3].className.includes("dead"));
+  assert.ok(elements.get("cards").children[3].getAttribute("aria-label").includes("フェイクガール"));
+  const lines = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(lines.some(t => t.includes("オンライン対戦が始まったよ")));
+  assert.ok(lines.some(t => t.includes("インポスター陣営 → カノン → 脱落")));
+  assert.ok(lines.some(t => t.includes("あなた：ミオはイノセントだった")));
+  assert.ok(lines.some(t => t.includes("カノン が夜に倒れた")));
+});
+
+test("オンライン試合画面：試合中のエラーは行動ログへ出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.handleOnlineMessage({
+    type: "roomCreated", code: "ABCD", token: "token-1", playerId: 0,
+    players: [{ id: 0, name: "ルナ", icon: "🌸", connected: true }],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  FB.handleOnlineMessage({ type: "gameStarted", code: "ABCD", view: onlineGameViewMessage(0) });
+  FB.handleOnlineMessage({ type: "error", error: "no_night_action" });
+  const lines = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(lines.some(t => t.includes("この役職に夜行動はありません")));
+  // ロビーのエラー欄には出ない。
+  assert.equal(elements.get("onlineLobbyError").textContent, "");
 });
