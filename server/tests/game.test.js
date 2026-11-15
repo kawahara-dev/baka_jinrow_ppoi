@@ -10,8 +10,15 @@ const {
   createGame,
   validateStart,
   playerView,
+  needsNightInput,
+  submitNightAction,
+  nightInputsComplete,
+  resolveNight,
+  nightResolvedMessage,
   MIN_PLAYERS_TO_START,
+  NIGHT_TIMEOUT_MS,
 } = require("../game.js");
+const { ROLES, getEffectiveRoleKey } = require("../../game-logic.js");
 
 // 決定的な乱数源（mulberry32）。seed を変えて何通りかの配役を試す。
 function seededRandom(seed) {
@@ -152,4 +159,131 @@ test("validateStart：ホスト以外・人数不足・開始済みはエラー�
   assert.equal(validateStart({ code: "ABCD", players: twoHumans(), game: {} }, 0), "game_already_started");
   assert.equal(validateStart(null, 0), "room_not_found");
   assert.equal(MIN_PLAYERS_TO_START, 2);
+});
+
+// seed 2：人間は占い師（id 0）と罠師（id 1）で、両方とも夜入力が必要。
+function gameBothNeedInput() {
+  const game = createGame("ABCD", twoHumans(), undefined, seededRandom(2));
+  assert.equal(game.players[0].roleKey, "apprenticeSeer");
+  assert.equal(game.players[1].roleKey, "trapper");
+  return game;
+}
+
+// seed 3：人間は政治家（id 0）とネズミ（id 1）で、どちらも夜入力は不要。
+function gameNobodyNeedsInput() {
+  const game = createGame("ABCD", twoHumans(), undefined, seededRandom(3));
+  assert.equal(game.players[0].roleKey, "politician");
+  assert.equal(game.players[1].roleKey, "mouse");
+  return game;
+}
+
+test("needsNightInput：夜行動のある人間の席だけが true（CPU・能力なし・死亡は false）", () => {
+  for (let seed = 1; seed <= 50; seed++) {
+    const game = createGame("ABCD", twoHumans(), undefined, seededRandom(seed));
+    for (const p of game.players) {
+      const expected =
+        !p.isCpu &&
+        p.alive &&
+        (["fakeGirl", "mimic"].includes(p.roleKey) ||
+          (!["fakeGirl", "mimic"].includes(getEffectiveRoleKey(p)) &&
+            !!ROLES[getEffectiveRoleKey(p)]?.nightAction));
+      assert.equal(needsNightInput(game, p.id), expected, `seed ${seed} seat ${p.id} (${p.roleKey})`);
+    }
+    // 死亡した席は入力不要になる。
+    game.players[0].alive = false;
+    assert.equal(needsNightInput(game, 0), false);
+  }
+  assert.equal(needsNightInput(gameBothNeedInput(), 99), false);
+});
+
+test("submitNightAction：対象の検証と上書き、夜行動なし・CPU・試合なしはエラー", () => {
+  const game = gameBothNeedInput();
+  // 占い師は自分を選べない。
+  assert.equal(submitNightAction(game, 0, 0), "invalid_target");
+  assert.equal(submitNightAction(game, 0, 99), "invalid_target");
+  assert.equal(submitNightAction(game, 0, 2), null);
+  assert.equal(game.pnpNightInputs[0], 2);
+  // 送り直すと上書きされる。
+  assert.equal(submitNightAction(game, 0, 3), null);
+  assert.equal(game.pnpNightInputs[0], 3);
+  // 罠師は自分を選べる（allowSelf: true）。
+  assert.equal(submitNightAction(game, 1, 1), null);
+  // CPU 席は夜入力を送れない。
+  assert.equal(submitNightAction(game, 5, 2), "not_a_player");
+  // 夜行動のない人間は送れない。
+  const calm = gameNobodyNeedsInput();
+  assert.equal(submitNightAction(calm, 0, 2), "no_night_action");
+  assert.equal(submitNightAction(calm, 1, 2), "no_night_action");
+  // 試合なし。
+  assert.equal(submitNightAction(null, 0, 2), "no_game");
+});
+
+test("nightInputsComplete と resolveNight：全員分が揃うと夜が解決して朝になる", () => {
+  const game = gameBothNeedInput();
+  assert.equal(nightInputsComplete(game), false);
+  assert.equal(submitNightAction(game, 0, 2), null);
+  assert.equal(nightInputsComplete(game), false);
+  assert.equal(submitNightAction(game, 1, 3), null);
+  assert.equal(nightInputsComplete(game), true);
+
+  const result = resolveNight(game, seededRandom(100));
+  assert.ok(result);
+  assert.equal(game.phase, "morning");
+  assert.ok(["eliminated", "blocked", "none", "revived"].includes(result.report.type));
+  assert.ok(Array.isArray(result.publicLogs));
+  // 個人ログは人間の席にだけ付く（CPU の夜結果はサーバー内に留まる）。
+  assert.equal(Object.keys(result.privateLogs).every((id) => ["0", "1"].includes(id)), true);
+  // 二重解決はできない。
+  assert.equal(resolveNight(game, seededRandom(100)), null);
+  assert.equal(game.phase, "morning");
+  // 夜が明けたら夜入力は受け付けない。
+  assert.equal(submitNightAction(game, 0, 2), "not_night");
+  // 夜に倒れた者の役職は view で公開される。
+  for (const p of game.players) {
+    if (!p.alive) assert.notEqual(p.publicRoleKey, null);
+  }
+  // 席ごとの nightResolved：個人ログはその席の分だけ、秘匿漏れなし。
+  for (const id of [0, 1]) {
+    const msg = nightResolvedMessage(game, result, id);
+    assert.equal(msg.type, "nightResolved");
+    assert.equal(msg.view.phase, "morning");
+    assert.equal(msg.night.privateLog, result.privateLogs[id] || null);
+    const json = JSON.stringify(msg);
+    assert.equal(json.includes("baka"), false);
+    assert.equal(json.includes("clumsy"), false);
+    assert.equal(json.includes("token"), false);
+    assert.equal(json.includes("fakeDisplayRoleKey"), false);
+    // 他人の個人ログが混ざっていない（違う文言のときだけ判定できる）。
+    const other = result.privateLogs[id === 0 ? 1 : 0];
+    if (other && other !== result.privateLogs[id]) {
+      assert.equal(JSON.stringify(msg.night).includes(other), false);
+    }
+  }
+  assert.equal(nightResolvedMessage(game, result, 99), null);
+  assert.equal(NIGHT_TIMEOUT_MS, 60000);
+});
+
+test("resolveNight：誰も夜入力がいらない配役でも解ける（開始直後の即解決）", () => {
+  const game = gameNobodyNeedsInput();
+  assert.equal(nightInputsComplete(game), true);
+  const result = resolveNight(game, seededRandom(100));
+  assert.ok(result);
+  assert.equal(game.phase, "morning");
+  assert.ok(["eliminated", "blocked", "none", "revived"].includes(result.report.type));
+});
+
+test("resolveNight：インポスター人間の入力が襲撃先になる", () => {
+  const { game, impSeat } = gameWithHumanImpostor();
+  const otherHuman = game.players.find((p) => p.id < 2 && p.id !== impSeat.id);
+  assert.ok(otherHuman, "second human seat expected");
+  const victim = game.players.find(
+    (p) => p.alive && p.id !== impSeat.id && !["fakeGirl", "mimic"].includes(p.roleKey)
+  );
+  assert.ok(victim, "a living non-impostor victim is expected");
+  assert.equal(submitNightAction(game, impSeat.id, victim.id), null);
+  const result = resolveNight(game, seededRandom(77));
+  assert.ok(result);
+  assert.equal(game.phase, "morning");
+  // 人間インポスター（代表者）の入力がそのまま襲撃先になった。
+  assert.equal(game.nightActions[impSeat.id], victim.id);
 });
