@@ -886,3 +886,135 @@ test("投票の検証：夜フェーズ中の vote・自分への投票・死亡
     }
   }, { random: seededRandom(8), nightTimeoutMs: 5000, discussTimeoutMs: 5000, voteTimeoutMs: 5000 });
 });
+
+test("部屋作成時にホストの初期設定が使われ、roomCreated と roomUpdate に設定が付く", async () => {
+  await withServer(async (port) => {
+    const host = await connectWs(port);
+    const guest = await connectWs(port);
+    try {
+      host.send(JSON.stringify({
+        type: "createRoom",
+        settings: { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" },
+      }));
+      const created = await nextMessage(host);
+      assert.equal(created.type, "roomCreated");
+      assert.deepEqual(created.settings, { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" });
+
+      const hostUpdate = nextMessage(host);
+      guest.send(JSON.stringify({ type: "joinRoom", code: created.code }));
+      const joined = await nextMessage(guest);
+      assert.equal(joined.type, "roomJoined");
+      assert.deepEqual(joined.settings, { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" });
+      const update = await hostUpdate;
+      assert.equal(update.type, "roomUpdate");
+      assert.deepEqual(update.settings, { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" });
+    } finally {
+      host.close();
+      guest.close();
+    }
+  });
+});
+
+test("部屋作成時の設定が不正なら既定値に戻る", async () => {
+  await withServer(async (port) => {
+    const ws = await connectWs(port);
+    try {
+      ws.send(JSON.stringify({
+        type: "createRoom",
+        settings: { fakeCount: "3", bomber: "maybe", difficulty: "extreme", discussTimer: "90" },
+      }));
+      const msg = await nextMessage(ws);
+      assert.equal(msg.type, "roomCreated");
+      assert.deepEqual(msg.settings, { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" });
+    } finally {
+      ws.close();
+    }
+  });
+});
+
+test("setSettings：ホストだけが変えられ、両方に設定付き roomUpdate が届く", async () => {
+  await withServer(async (port) => {
+    const host = await connectWs(port);
+    const guest = await connectWs(port);
+    const hq = messageQueue(host);
+    const gq = messageQueue(guest);
+    try {
+      host.send(JSON.stringify({
+        type: "createRoom",
+        settings: { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" },
+      }));
+      const created = await hq.next();
+      assert.deepEqual(created.settings, { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" });
+      guest.send(JSON.stringify({ type: "joinRoom", code: created.code }));
+      assert.equal((await gq.next()).type, "roomJoined");
+      assert.equal((await gq.next()).type, "roomUpdate");
+      assert.equal((await hq.next()).type, "roomUpdate");
+
+      // ゲストの変更は not_host で拒否される。
+      guest.send(JSON.stringify({ type: "setSettings", settings: { fakeCount: "1" } }));
+      assert.equal((await gq.next()).error, "not_host");
+
+      // ホストの変更は両方へ配信される。指定のないキーは今のまま
+      // （一部のキーだけ変えても、他のキーが既定値に戻らない）。
+      const hostUpdate = hq.next();
+      const guestUpdate = gq.next();
+      host.send(JSON.stringify({ type: "setSettings", settings: { fakeCount: "2" } }));
+      const hu = await hostUpdate;
+      const gu = await guestUpdate;
+      assert.equal(hu.type, "roomUpdate");
+      assert.deepEqual(hu.settings, { fakeCount: "2", bomber: "off", difficulty: "hard", discussTimer: "120" });
+      assert.deepEqual(gu.settings, hu.settings);
+    } finally {
+      host.close();
+      guest.close();
+    }
+  });
+});
+
+test("setSettings：試合開始後は game_already_started になる", async () => {
+  await withServer(async (port) => {
+    const { host, guest } = await startTwoPlayerGame(port);
+    try {
+      host.send(JSON.stringify({ type: "setSettings", settings: { fakeCount: "1" } }));
+      // 夜が即解決して nightResolved が先に届く場合もあるので読み飛ばす。
+      assert.equal((await nextError(host, "game_already_started")).error, "game_already_started");
+    } finally {
+      host.close();
+      guest.close();
+    }
+  });
+});
+
+test("startGame は部屋設定で配役する（fakeCount・bomber が game に残る）", async () => {
+  const { createRoomStore } = require("../rooms.js");
+  const rooms = createRoomStore();
+  await withServer(async (port) => {
+    const host = await connectWs(port);
+    const guest = await connectWs(port);
+    try {
+      host.send(JSON.stringify({
+        type: "createRoom",
+        settings: { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" },
+      }));
+      const created = await nextMessage(host);
+      const hostUpdate = nextMessage(host);
+      guest.send(JSON.stringify({ type: "joinRoom", code: created.code }));
+      await nextMessage(guest);
+      await hostUpdate;
+      const hostStarted = nextMessage(host);
+      const guestStarted = nextMessage(guest);
+      host.send(JSON.stringify({ type: "startGame" }));
+      await hostStarted;
+      await guestStarted;
+      const game = rooms.getRoom(created.code).game;
+      assert.deepEqual(game.settings, { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" });
+      // fakeCount 1 ならインポスターは1人だけ。
+      assert.equal(game.players.filter((p) => ["fakeGirl", "mimic"].includes(p.roleKey)).length, 1);
+      // bomber off ならボマーはいない。
+      assert.equal(game.players.some((p) => p.roleKey === "bomber"), false);
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, { rooms });
+});

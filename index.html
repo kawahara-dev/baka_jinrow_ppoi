@@ -741,6 +741,26 @@
       .lobby-roster { order: -1; }
     }
 
+    /* オンライン対戦 フェーズ2 第1歩：オンライン入口＋ロビー画面。
+       入口ボタンはサーバー配信のときだけ JS が表示する（Pages 版では
+       hidden のまま）。ロビーの設定はタイトル画面の .seg ではなく
+       .online-seg を使い、タイトル側の paintSettings と干渉しないようにする。 */
+    .online-code { font-size: 2rem; font-weight: 900; letter-spacing: 0.35em; color: var(--gold); }
+    .online-join { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
+    .online-join input {
+      width: 7em; min-height: 48px; text-align: center; text-transform: uppercase;
+      font-size: 1.3rem; font-weight: 900; letter-spacing: 0.3em;
+      border: 2px solid var(--line); border-radius: 12px; background: #fff; color: var(--text);
+    }
+    .online-error { min-height: 1.2em; margin: 8px 0 0; font-size: 0.9rem; font-weight: 800; color: var(--danger); }
+    .online-player-badge { font-size: 0.75rem; font-weight: 800; color: var(--gold); }
+    .online-seg { display: inline-flex; background: #fff; border: 2px solid var(--line); border-radius: 999px; padding: 3px; gap: 3px; }
+    .online-seg button { border: 0; background: transparent; border-radius: 999px; padding: 7px 14px;
+      font-weight: 800; font-size: 0.9rem; color: var(--muted); cursor: pointer; min-height: 38px; }
+    .online-seg button.active { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff;
+      box-shadow: 0 4px 12px rgba(122, 95, 208, 0.35); }
+    .online-seg button:disabled { opacity: 0.45; cursor: default; }
+
     /* Feign風UI第2弾（その4）：ログパネルをチャット／ノート風に。
        見出しはチャットのヘッダー風（濃紺の帯＋ゴールド文字＋アイコン）、
        セリフの各行は吹き出し風、行動ログの各行はノート風（左に紫の罫）。
@@ -1083,6 +1103,7 @@
     <div class="btn-row">
       <button id="startBtn" class="primary">START</button>
       <button id="howBtn" class="secondary">遊び方</button>
+      <button id="onlineBtn" class="secondary hidden">オンラインで遊ぶ</button>
     </div>
     <div class="parade" id="parade" aria-hidden="true"></div>
     <div id="howTo" class="screen hidden" style="max-width:720px;text-align:left;">
@@ -1096,6 +1117,43 @@
       <p>・インポスターが1人だけのときは、襲撃に加えて役職の能力（妨害／盗み見）も使える本気モードになる。</p>
       <p>・占い師には結果がズレる個体が混ざることがある（本人にも分からない）。</p>
       <p>・パス＆プレイでは2〜8人で1台の端末を回して遊べます。役職は受け渡し画面で順番に確認し、夜行動と投票も順番に入力します。議論は口頭で行い、タイマー（設定で なし／1分／2分／3分）で時間を計れます。戦績はソロと別に記録されます。</p>
+    </div>
+  </section>
+
+  <!-- オンライン対戦 フェーズ2 第1歩：オンライン入口＋ロビー画面。
+       サーバー配信のときだけタイトル画面の入口ボタンから開く。
+       Pages 版では入口ボタン自体が出ないのでこの画面には辿り着けない。 -->
+  <section id="onlineScreen" class="screen hidden">
+    <h2 id="onlineTitle" tabindex="-1">オンライン対戦</h2>
+    <p class="lobby-note">友だちと各自の端末から遊ぶモードです。部屋コードは4文字です。</p>
+    <div id="onlineEntry">
+      <div class="btn-row">
+        <button id="onlineCreateBtn" class="primary">部屋を作る</button>
+      </div>
+      <div class="online-join">
+        <input id="onlineJoinCode" type="text" inputmode="text" maxlength="4" placeholder="ABCD" autocomplete="off" aria-label="部屋コード">
+        <button id="onlineJoinBtn" class="secondary">コードで参加</button>
+      </div>
+      <p id="onlineEntryError" class="online-error" role="alert"></p>
+    </div>
+    <div id="onlineLobby" class="hidden">
+      <p>部屋コード：<strong id="onlineRoomCode" class="online-code"></strong></p>
+      <div class="lobby-roster" role="group" aria-label="参加者">
+        <div class="lobby-head">👥 参加者</div>
+        <ul id="onlinePlayersList" class="lobby-roster-list"></ul>
+        <p class="lobby-note">8人で対戦します。足りない分はCPUが埋めます。2人以上で開始できます。</p>
+      </div>
+      <div class="settings-panel" id="onlineSettingsPanel" role="group" aria-label="部屋設定"></div>
+      <p id="onlineSettingsNote" class="lobby-note"></p>
+      <p id="onlineStartNote" class="lobby-note"></p>
+      <div class="btn-row">
+        <button id="onlineStartBtn" class="primary">試合開始</button>
+        <button id="onlineLeaveBtn" class="secondary">部屋を出る</button>
+      </div>
+      <p id="onlineLobbyError" class="online-error" role="alert"></p>
+    </div>
+    <div class="btn-row">
+      <button id="onlineBackBtn" class="secondary">タイトルに戻る</button>
     </div>
   </section>
 
@@ -1205,7 +1263,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeRoomSettings: normalizeRoomSettingsLogic, isOnlineAvailable: isOnlineAvailableLogic, buildOnlineLobbyView: buildOnlineLobbyViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2840,6 +2898,271 @@
   });
   paintSettings();
 
+  // ---- online (フェーズ2 第1歩：オンライン入口＋ロビー画面) ----
+  // オンラインはサーバー配信のときだけ有効にする。Pages 版では入口ボタン
+  // 自体を出さないので、ソロ／パス＆プレイの通常プレイは壊れない。
+  // サーバーとの通信は WebSocket（/ws）で、送るのは入力だけ。
+  // セッショントークンは新しいキー fakeBloomOnlineSession にだけ保存し、
+  // 既存の保存形式（fakeBloomSettings 等）には触らない。
+  const ONLINE_SESSION_KEY = "fakeBloomOnlineSession";
+  const ONLINE_ERROR_TEXT = {
+    room_not_found: "部屋が見つかりませんでした。コードを確認してください。",
+    room_full: "部屋が満員です。",
+    bad_token: "セッションが無効です。もう一度コードで参加してください。",
+    bad_json: "通信エラーが発生しました。",
+    unknown_type: "通信エラーが発生しました。",
+    bad_message: "通信エラーが発生しました。",
+    not_in_room: "部屋に入っていません。",
+    not_host: "ホストだけが変更できます。",
+    not_enough_players: "開始するにはあと1人必要です。",
+    game_already_started: "試合はすでに始まっています。",
+    no_game: "試合はまだ始まっていません。",
+    not_night: "いまは夜フェーズではありません。",
+    not_a_player: "参加者ではありません。",
+    not_alive: "脱落しているため操作できません。",
+    no_night_action: "この役職に夜行動はありません。",
+    invalid_target: "選べない対象です。",
+    not_discussion: "いまは議論フェーズではありません。",
+    bad_talk: "送れない発言です。",
+    not_vote: "いまは投票フェーズではありません。",
+  };
+  // オンラインの接続状態。サーバーから届いた roomCreated / roomUpdate 等の
+  // 公開情報だけを持つ（実役職などの秘匿情報はここには入らない）。
+  let online = {
+    socket: null, code: null, token: null, playerId: null,
+    players: [], settings: null, gameStarted: false, connected: false,
+  };
+  function isOnlineHost() { return online.playerId === 0; }
+  function onlineHostname() {
+    return (typeof location !== "undefined" && location) ? location.hostname : "";
+  }
+  function onlineWsUrl() {
+    if (typeof location === "undefined" || !location || !location.host) return null;
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${location.host}/ws`;
+  }
+  function saveOnlineSession() {
+    try {
+      if (typeof localStorage === "undefined") return;
+      if (online.code && online.token) {
+        localStorage.setItem(ONLINE_SESSION_KEY, JSON.stringify({ code: online.code, token: online.token }));
+      }
+    } catch { /* storage unavailable: reconnect token just won't persist */ }
+  }
+  function clearOnlineSession() {
+    try {
+      if (typeof localStorage !== "undefined") localStorage.removeItem(ONLINE_SESSION_KEY);
+    } catch { /* ignore */ }
+  }
+  function showOnlineError(text) {
+    const entry = el("onlineEntryError");
+    const lobby = el("onlineLobbyError");
+    if (entry) entry.textContent = "";
+    if (lobby) lobby.textContent = "";
+    // 部屋に入っている（ロビー表示中）かどうかは state で見る。
+    // DOM の hidden クラスはテスト用スタブでは初期値が再現されないため使わない。
+    const target = online.code ? lobby : entry;
+    if (target) target.textContent = text || "";
+  }
+  // ロビーの描画。表示データは共有モジュール（buildOnlineLobbyViewLogic）
+  // が作り、ここでは DOM への代入だけを行う。
+  function renderOnlineLobby() {
+    const view = buildOnlineLobbyViewLogic({
+      code: online.code,
+      players: online.players,
+      settings: online.settings,
+      isHost: isOnlineHost(),
+      myPlayerId: online.playerId,
+      gameStarted: online.gameStarted,
+    });
+    const codeEl = el("onlineRoomCode");
+    if (codeEl) codeEl.textContent = view.codeText;
+    const list = el("onlinePlayersList");
+    if (list) list.innerHTML = view.playersHtml;
+    const panel = el("onlineSettingsPanel");
+    if (panel) {
+      panel.innerHTML = view.segments.map(seg =>
+        `<div class="settings-row"><span class="settings-label">${seg.label}</span>` +
+        `<div class="online-seg" data-setting="${seg.key}" role="group" aria-label="${seg.label}">` +
+        seg.buttons.map(b =>
+          `<button type="button" data-value="${b.value}"${b.active ? " class=\"active\"" : ""}${b.disabled ? " disabled" : ""} aria-pressed="${b.active}">${b.label}</button>`
+        ).join("") +
+        `</div></div>`
+      ).join("");
+    }
+    const settingsNote = el("onlineSettingsNote");
+    if (settingsNote) settingsNote.textContent = view.settingsNote;
+    const startNote = el("onlineStartNote");
+    if (startNote) startNote.textContent = view.startNote;
+    const startBtn = el("onlineStartBtn");
+    if (startBtn) startBtn.disabled = view.startDisabled;
+  }
+  function showOnlineEntry() {
+    el("onlineLobby").classList.add("hidden");
+    el("onlineEntry").classList.remove("hidden");
+    showOnlineError("");
+  }
+  function showOnlineLobby() {
+    el("onlineEntry").classList.add("hidden");
+    el("onlineLobby").classList.remove("hidden");
+    showOnlineError("");
+    renderOnlineLobby();
+  }
+  function closeOnlineSocket() {
+    if (online.socket) {
+      try { online.socket.close(); } catch { /* already closed */ }
+    }
+    online.socket = null;
+    online.connected = false;
+  }
+  function leaveOnlineRoom() {
+    closeOnlineSocket();
+    clearOnlineSession();
+    online = {
+      socket: null, code: null, token: null, playerId: null,
+      players: [], settings: null, gameStarted: false, connected: false,
+    };
+    showOnlineEntry();
+  }
+  // サーバーからのメッセージを処理する。roomCreated / roomJoined /
+  // roomUpdate は公開情報だけを state へ反映する。
+  function handleOnlineMessage(msg) {
+    if (!msg || typeof msg.type !== "string") return;
+    if (msg.type === "roomCreated" || msg.type === "roomJoined") {
+      online.code = msg.code;
+      online.token = msg.token;
+      online.playerId = msg.playerId;
+      online.players = Array.isArray(msg.players) ? msg.players : [];
+      online.settings = msg.settings || null;
+      online.gameStarted = false;
+      saveOnlineSession();
+      showOnlineLobby();
+      return;
+    }
+    if (msg.type === "roomUpdate") {
+      if (msg.code && msg.code !== online.code) return;
+      online.players = Array.isArray(msg.players) ? msg.players : online.players;
+      if (msg.settings) online.settings = msg.settings;
+      if (online.code) renderOnlineLobby();
+      return;
+    }
+    if (msg.type === "gameStarted") {
+      online.gameStarted = true;
+      if (online.code) renderOnlineLobby();
+      return;
+    }
+    if (msg.type === "error") {
+      showOnlineError(ONLINE_ERROR_TEXT[msg.error] || "通信エラーが発生しました。");
+      return;
+    }
+  }
+  function sendOnline(msg) {
+    if (!online.socket || online.socket.readyState !== 1) return false;
+    try {
+      online.socket.send(JSON.stringify(msg));
+      return true;
+    } catch { return false; }
+  }
+  // 開く前・接続中に送ったメッセージは、開いたときに順番に送る。
+  // 2回押しても部屋を2つ作らないよう、open リスナーは1つだけ付ける。
+  function sendOnlineWhenOpen(msg) {
+    if (!online.socket) return false;
+    if (online.socket.readyState === 1) return sendOnline(msg);
+    online._sendQueue = online._sendQueue || [];
+    online._sendQueue.push(msg);
+    if (!online._sendQueueAttached) {
+      online._sendQueueAttached = true;
+      online.socket.addEventListener("open", () => {
+        online._sendQueueAttached = false;
+        const queued = online._sendQueue || [];
+        online._sendQueue = [];
+        for (const m of queued) sendOnline(m);
+      }, { once: true });
+    }
+    return true;
+  }
+  // WebSocket を開く。テスト環境（WebSocket なし）や Pages 版では
+  // 開かずに false を返す。開けたら受信ハンドラを付けて true を返す。
+  function connectOnline() {
+    if (typeof WebSocket === "undefined") return false;
+    const url = onlineWsUrl();
+    if (!url) return false;
+    if (online.socket) return true;
+    let socket;
+    try {
+      socket = new WebSocket(url);
+    } catch { return false; }
+    online.socket = socket;
+    socket.addEventListener("open", () => { online.connected = true; });
+    socket.addEventListener("message", (event) => {
+      try { handleOnlineMessage(JSON.parse(event.data)); }
+      catch { /* broken frame: ignore */ }
+    });
+    socket.addEventListener("close", () => {
+      online.socket = null;
+      online.connected = false;
+      if (online.code && !online.gameStarted) {
+        showOnlineError("サーバーとの接続が切れました。");
+      }
+    });
+    return true;
+  }
+  // ホストの初期設定はタイトル画面の設定を引き継ぐ（部屋設定の4キーだけ）。
+  function onlineInitialSettings() {
+    return normalizeRoomSettingsLogic({
+      fakeCount: gameSettings.fakeCount,
+      bomber: gameSettings.bomber,
+      difficulty: gameSettings.difficulty,
+      discussTimer: gameSettings.discussTimer,
+    });
+  }
+  el("onlineCreateBtn").onclick = () => {
+    if (!connectOnline()) {
+      showOnlineError("サーバーに接続できませんでした。");
+      return;
+    }
+    sendOnlineWhenOpen({ type: "createRoom", settings: onlineInitialSettings() });
+  };
+  el("onlineJoinBtn").onclick = () => {
+    const code = String(el("onlineJoinCode").value || "").trim().toUpperCase();
+    if (code.length !== 4) {
+      showOnlineError("部屋コードは4文字です。");
+      return;
+    }
+    if (!connectOnline()) {
+      showOnlineError("サーバーに接続できませんでした。");
+      return;
+    }
+    sendOnlineWhenOpen({ type: "joinRoom", code });
+  };
+  // ロビーの設定変更は委譲で受ける（設定パネルは roomUpdate のたびに
+  // 描き直すため）。ホスト以外・試合開始後はボタンが無効なので届かない。
+  el("onlineSettingsPanel").addEventListener("click", (event) => {
+    const btn = event.target && event.target.closest ? event.target.closest("button[data-value]") : null;
+    if (!btn || btn.disabled) return;
+    const seg = btn.parentElement;
+    const key = seg && seg.dataset ? seg.dataset.setting : null;
+    if (!key) return;
+    const next = normalizeRoomSettingsLogic({ ...(online.settings || {}), [key]: btn.dataset.value });
+    sendOnline({ type: "setSettings", settings: next });
+  });
+  el("onlineStartBtn").onclick = () => { sendOnline({ type: "startGame" }); };
+  el("onlineLeaveBtn").onclick = () => { leaveOnlineRoom(); };
+  el("onlineBackBtn").onclick = () => {
+    leaveOnlineRoom();
+    el("onlineScreen").classList.add("hidden");
+    el("titleScreen").classList.remove("hidden");
+    focusEl("startBtn");
+  };
+  el("onlineBtn").onclick = () => {
+    el("titleScreen").classList.add("hidden");
+    el("onlineScreen").classList.remove("hidden");
+    showOnlineEntry();
+    focusEl("onlineTitle");
+  };
+  // サーバー配信のときだけオンライン入口を出す。Pages 版では hidden のまま。
+  if (isOnlineAvailableLogic(onlineHostname())) el("onlineBtn").classList.remove("hidden");
+
   // ---- log folding (セリフ／行動ログの折りたたみ) ----
   // 折りたたみ状態は独立キー fakeBloomLogFold に保存し、既存の保存形式
   // には触らない。保存がなければ両方とも折りたたんだ状態で始める
@@ -2965,6 +3288,7 @@
     el("gameScreen").classList.add("hidden");
     el("roleScreen").classList.add("hidden");
     el("pnpScreen").classList.add("hidden");
+    el("onlineScreen").classList.add("hidden");
     renderStats();
     el("titleScreen").classList.remove("hidden");
     focusEl("startBtn");

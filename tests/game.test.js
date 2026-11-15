@@ -2743,3 +2743,89 @@ test("役職説明ポップオーバー: document のキャプチャ委譲でア
   });
   assert.ok(elements.get("roleInfoBackdrop").classList.contains("hidden"), "アイコン以外では開かない");
 });
+
+test("オンライン入口：ハーネス環境（location なし）では入口ボタンは hidden のまま", () => {
+  const { FB } = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.equal(FB.isOnlineAvailableLogic(""), false);
+  assert.equal(FB.connectOnline(), false, "WebSocket がない環境では接続しない");
+  // 入口ボタンは HTML で hidden 付きで置き、サーバー配信のときだけ
+  // JS が外す（Pages 版では hidden のまま。ハーネスのスタブは初期
+  // クラスを再現しないため、ここでは HTML の原文で確認する）。
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  assert.match(html, /<button id="onlineBtn" class="secondary hidden">オンラインで遊ぶ<\/button>/);
+});
+
+test("オンライン入口：WebSocket がない環境で部屋作成・参加を押すと接続エラーを出す", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  elements.get("onlineCreateBtn").onclick();
+  assert.equal(elements.get("onlineEntryError").textContent, "サーバーに接続できませんでした。");
+  // コードが4文字未満なら接続前に弾く。
+  elements.get("onlineJoinBtn").onclick();
+  assert.equal(elements.get("onlineEntryError").textContent, "部屋コードは4文字です。");
+});
+
+test("オンラインロビー：roomCreated でロビーが開き、コード・参加者・設定が描かれる", () => {
+  const { FB, elements, localStorage } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.handleOnlineMessage({
+    type: "roomCreated", code: "ABCD", token: "token-1", playerId: 0,
+    name: "ルナ", icon: "🌸",
+    players: [{ id: 0, name: "ルナ", icon: "🌸", connected: true }],
+    settings: { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "60" },
+  });
+  assert.ok(elements.get("onlineEntry").classList.contains("hidden"));
+  assert.ok(!elements.get("onlineLobby").classList.contains("hidden"));
+  assert.equal(elements.get("onlineRoomCode").textContent, "ABCD");
+  assert.ok(elements.get("onlinePlayersList").innerHTML.includes("ルナ"));
+  assert.ok(elements.get("onlinePlayersList").innerHTML.includes("ホスト"));
+  assert.ok(elements.get("onlineSettingsPanel").innerHTML.includes("インポスター人数"));
+  assert.ok(elements.get("onlineSettingsPanel").innerHTML.includes("1人"));
+  assert.equal(elements.get("onlineStartBtn").disabled, true, "1人では開始できない");
+  assert.equal(elements.get("onlineStartNote").textContent, "開始するにはあと1人必要です（2人以上で開始できます）。");
+  // セッショントークンは新しいキーにだけ保存される（既存キーは触らない）。
+  assert.equal(localStorage.getItem(FB.ONLINE_SESSION_KEY), JSON.stringify({ code: "ABCD", token: "token-1" }));
+  assert.equal(localStorage.getItem("fakeBloomSettings"), JSON.stringify(BASE_SETTINGS));
+  // 2人目が roomUpdate で入ると開始できるようになる。
+  FB.handleOnlineMessage({
+    type: "roomUpdate", code: "ABCD",
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "60" },
+  });
+  assert.equal(elements.get("onlineStartBtn").disabled, false);
+  assert.ok(elements.get("onlinePlayersList").innerHTML.includes("ミオ"));
+  // 違う部屋の roomUpdate は無視する。
+  FB.handleOnlineMessage({
+    type: "roomUpdate", code: "ZZZZ",
+    players: [{ id: 0, name: "ユイ", icon: "🧁", connected: true }],
+    settings: { fakeCount: "2", bomber: "on", difficulty: "easy", discussTimer: "0" },
+  });
+  assert.ok(!elements.get("onlinePlayersList").innerHTML.includes("ユイ"));
+});
+
+test("オンラインロビー：存在しないコードのエラーが出て、gameStarted で開始済みになる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.handleOnlineMessage({ type: "error", error: "room_not_found" });
+  assert.equal(elements.get("onlineEntryError").textContent, "部屋が見つかりませんでした。コードを確認してください。");
+  FB.handleOnlineMessage({
+    type: "roomJoined", code: "WXYZ", token: "token-9", playerId: 1,
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  assert.equal(elements.get("onlineEntryError").textContent, "");
+  assert.equal(elements.get("onlineStartBtn").disabled, true, "ゲストは開始できない");
+  assert.equal(elements.get("onlineStartNote").textContent, "ホストが試合を開始するのを待っています。");
+  FB.handleOnlineMessage({ type: "gameStarted", code: "WXYZ", view: {} });
+  assert.equal(elements.get("onlineStartNote").textContent, "試合が始まりました。試合画面の接続は次のステップで対応します。");
+  assert.equal(elements.get("onlineStartBtn").disabled, true);
+  // 部屋を出ると入口に戻り、セッションも消える。
+  FB.leaveOnlineRoom();
+  assert.ok(!elements.get("onlineEntry").classList.contains("hidden"));
+  assert.ok(elements.get("onlineLobby").classList.contains("hidden"));
+  assert.equal(FB.online.code, null);
+  assert.equal(FB.online.token, null);
+});

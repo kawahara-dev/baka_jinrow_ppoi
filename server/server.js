@@ -113,7 +113,12 @@ function createServer(options = {}) {
   }
 
   function roomUpdate(room) {
-    return { type: "roomUpdate", code: room.code, players: rooms.publicPlayers(room) };
+    return {
+      type: "roomUpdate",
+      code: room.code,
+      players: rooms.publicPlayers(room),
+      settings: room.settings,
+    };
   }
 
   // 試合開始を部屋の各ソケットへ送る。送るのは席ごとの player view
@@ -306,7 +311,7 @@ function createServer(options = {}) {
       return;
     }
     if (msg.type === "createRoom") {
-      const { room, player } = rooms.createRoom();
+      const { room, player } = rooms.createRoom(msg.settings);
       attachToRoom(socket, room.code);
       socket._token = player.token;
       sendJson(socket, {
@@ -317,6 +322,7 @@ function createServer(options = {}) {
         name: player.name,
         icon: player.icon,
         players: rooms.publicPlayers(room),
+        settings: room.settings,
       });
       return;
     }
@@ -337,6 +343,7 @@ function createServer(options = {}) {
         name: player.name,
         icon: player.icon,
         players: rooms.publicPlayers(room),
+        settings: room.settings,
       });
       broadcast(room.code, roomUpdate(room));
       return;
@@ -358,6 +365,7 @@ function createServer(options = {}) {
         name: player.name,
         icon: player.icon,
         players: rooms.publicPlayers(room),
+        settings: room.settings,
       };
       // 投票中の再接続では棄権扱いを外し、戻ってきたらまた投票できる。
       if (room.game && room.game.phase === "vote") {
@@ -366,6 +374,32 @@ function createServer(options = {}) {
       // 試合中の再接続には現在の player view を再送して復帰させる（§7）。
       if (room.game) reply.view = playerView(room.game, player.id);
       sendJson(socket, reply);
+      broadcast(room.code, roomUpdate(room));
+      return;
+    }
+    // 部屋設定の同期（フェーズ2 第1歩）。ホストだけが、試合開始前に
+    // 変えられる。値は検証して許容外は既定値に戻し、部屋の全員へ
+    // 設定付きの roomUpdate を配信する。
+    if (msg.type === "setSettings") {
+      if (!socket._roomCode) {
+        sendJson(socket, { type: "error", error: "not_in_room" });
+        return;
+      }
+      const room = rooms.getRoom(socket._roomCode);
+      const player = room && room.players.find((p) => p.token === socket._token);
+      if (!player) {
+        sendJson(socket, { type: "error", error: "not_in_room" });
+        return;
+      }
+      if (room.game) {
+        sendJson(socket, { type: "error", error: "game_already_started" });
+        return;
+      }
+      if (player.id !== 0) {
+        sendJson(socket, { type: "error", error: "not_host" });
+        return;
+      }
+      rooms.setRoomSettings(room, msg.settings);
       broadcast(room.code, roomUpdate(room));
       return;
     }
@@ -381,7 +415,9 @@ function createServer(options = {}) {
         sendJson(socket, { type: "error", error });
         return;
       }
-      room.game = createGame(room.code, room.players, undefined, random);
+      // 部屋設定（ホストが決めたもの）で配役する。未指定の部屋は
+      // createRoom 時に既定値が入っている。
+      room.game = createGame(room.code, room.players, room.settings, random);
       sendGameStarted(room);
       // 夜の締め切りタイマーを回す。誰も夜入力がいらない配役なら
       // すぐ解決する（待っても誰も送ってこないため）。

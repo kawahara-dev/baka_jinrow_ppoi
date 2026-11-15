@@ -20,7 +20,8 @@ FB_PORT=9000 node server/server.js
 - `ws.js` — WebSocket の最小実装（RFC 6455：ハンドシェイク、テキストフレームの送受信、
   ping/pong、close）。クライアントフレームはマスク必須。
 - `rooms.js` — 部屋とセッションの管理。部屋コード（4文字）、セッショントークン、
-  キャラの自動割当（入室順にルナ・ミオ・ユイ…）。
+  キャラの自動割当（入室順にルナ・ミオ・ユイ…）、部屋設定（ホストの初期設定と
+  `setSettings` での同期。検証は共有モジュールの `normalizeRoomSettings`）。
 - `game.js` — 配役とプレイヤー別ビュー。共有モジュール `dealRoles` で 8 席に役職を配り、
   席ごとに「見てよい情報だけ」を組み立てる。実役職・うっかり flag・トークンは
   サーバー内に留め、player view には含めない。人間のいない席は CPU 席。
@@ -39,9 +40,10 @@ FB_PORT=9000 node server/server.js
 
 クライアント → サーバー：
 
-- `{ "type": "createRoom" }` — 部屋を作る
+- `{ "type": "createRoom", "settings"?: { "fakeCount": "random", "bomber": "random", "difficulty": "normal", "discussTimer": "0" } }` — 部屋を作る。`settings` があればホストの初期設定として使う（フェーズ2 第1歩。なければ部屋の既定値）
 - `{ "type": "joinRoom", "code": "ABCD" }` — コードで参加する
 - `{ "type": "reconnect", "code": "ABCD", "token": "<セッショントークン>" }` — 切断後に同じ席へ戻る
+- `{ "type": "setSettings", "settings": { "fakeCount": "random", "bomber": "random", "difficulty": "normal", "discussTimer": "0" } }` — 部屋設定の同期（フェーズ2 第1歩）。ホストだけが、試合開始前に変えられる。値は検証して許容外は既定値に戻し、指定のないキーは今の部屋設定のままにして、部屋の全員へ設定付きの `roomUpdate` を配信する。ホスト以外は `not_host`、試合開始後は `game_already_started` のエラーになる。開始時はこの設定で配役（`fakeCount` / `bomber`）と CPU の難易度・議論タイマーが決まる
 - `{ "type": "startGame" }` — 試合を開始する（作成者＝ホストだけ。2人以上必要。
   人間のいない席は CPU 席として役職を配る）
 - `{ "type": "nightAction", "targetId": 2 }` — 夜の対象を選ぶ。夜フェーズ中に、
@@ -64,8 +66,8 @@ FB_PORT=9000 node server/server.js
 
 サーバー → クライアント：
 
-- `{ "type": "roomCreated" | "roomJoined" | "reconnected", "code", "token", "playerId", "name", "icon", "players" }`
-- `{ "type": "roomUpdate", "code", "players" }` — 参加・切断・再接続時に全員へ配信
+- `{ "type": "roomCreated" | "roomJoined" | "reconnected", "code", "token", "playerId", "name", "icon", "players", "settings" }` — `settings` は部屋設定（ホストの既定値で始まり、`setSettings` で変わる）
+- `{ "type": "roomUpdate", "code", "players", "settings" }` — 参加・切断・再接続・設定変更時に全員へ配信
 - `{ "type": "gameStarted", "code", "view" }` — 試合開始時に席ごとに1通ずつ配信。
   `view` はその席だけの player view（自分の役職・インポスター仲間の名前・公開情報）。
   他人の実役職・うっかり flag・トークンは含まない。バカには表示役職だけが送られる

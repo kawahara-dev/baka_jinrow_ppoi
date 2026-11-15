@@ -97,3 +97,24 @@ test("2つの部屋のトークンは重ならない", () => {
   assert.notEqual(a.player.token, b.player.token);
   assert.notEqual(a.room.code, b.room.code);
 });
+
+test("部屋作成時にホストの初期設定が使われ、不正な値は既定値に戻る", () => {
+  const store = deterministicStore();
+  const { room } = store.createRoom({ fakeCount: "1", bomber: "on", difficulty: "hard", discussTimer: "120" });
+  assert.deepEqual(room.settings, { fakeCount: "1", bomber: "on", difficulty: "hard", discussTimer: "120" });
+  const { room: room2 } = store.createRoom({ fakeCount: "3", bomber: "maybe", difficulty: "extreme", discussTimer: "90", sound: "off" });
+  assert.deepEqual(room2.settings, { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" });
+  const { room: room3 } = store.createRoom();
+  assert.deepEqual(room3.settings, { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" });
+});
+
+test("setRoomSettings は部屋設定を検証して反映する。指定のないキーは今のまま", () => {
+  const store = deterministicStore();
+  const { room } = store.createRoom({ fakeCount: "1", bomber: "off", difficulty: "hard", discussTimer: "120" });
+  const next = store.setRoomSettings(room, { fakeCount: "2" });
+  assert.deepEqual(next, { fakeCount: "2", bomber: "off", difficulty: "hard", discussTimer: "120" });
+  assert.deepEqual(room.settings, next);
+  // 許容外の値はそのキーだけ既定値に戻る（README どおり）。
+  const next2 = store.setRoomSettings(room, { fakeCount: "3", difficulty: "easy" });
+  assert.deepEqual(next2, { fakeCount: "random", bomber: "off", difficulty: "easy", discussTimer: "120" });
+});
