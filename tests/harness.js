@@ -237,6 +237,8 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   showRoleInfo, closeRoleInfo, renderRoleGuide, renderParade,
   renderLobbyRoster,
   handleOnlineMessage, renderOnlineLobby, connectOnline, leaveOnlineRoom, showOnlineEntry,
+  renderOnlineGame, showOnlineGame, selectOnlineTarget, confirmOnlineNightAction,
+  buildOnlineGameViewLogic,
   ONLINE_SESSION_KEY,
   get online() { return online; },
   renderStats, renderAchievements, CLUMSY_SEER_RATE, showResults, buildHighlights, gameSettings,
