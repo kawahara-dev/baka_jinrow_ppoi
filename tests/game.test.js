@@ -1,5 +1,5 @@
 // Fake Bloom の自動テスト。依存なし（Node 18+ の node:test を使用）。
-// 実行方法: リポジトリのルートで `node --test tests/`
+// 実行方法: リポジトリのルートで `node --test tests/game.test.js`
 "use strict";
 
 const test = require("node:test");
