@@ -307,6 +307,77 @@ test("resolveNight：インポスター人間の入力が襲撃先になる", ()
   assert.equal(game.nightActions[impSeat.id], victim.id);
 });
 
+// 罠・蘇生のテスト用：役割を固定した試合を作る（人間は村人で夜行動なし）。
+// createGame の配役は固定シードで作り、席ごとの roleKey だけを上書きする。
+function gameWithFixedRoles(roles) {
+  const game = createGame("ABCD", twoHumans(), undefined, seededRandom(2));
+  game.players.forEach((p, i) => { p.roleKey = roles[i]; });
+  return game;
+}
+
+test("resolveNight：何も起きない夜でも trapReport／doctorReport のキーがある（null）", () => {
+  const game = gameBothNeedInput();
+  assert.equal(submitNightAction(game, 0, 2), null);
+  assert.equal(submitNightAction(game, 1, 3), null);
+  const result = resolveNight(game, seededRandom(100));
+  assert.ok(result);
+  assert.equal("trapReport" in result, true);
+  assert.equal("doctorReport" in result, true);
+  const msg = nightResolvedMessage(game, result, 0);
+  assert.equal("trapReport" in msg.night, true);
+  assert.equal("doctorReport" in msg.night, true);
+  assert.equal(msg.night.trapReport, result.trapReport);
+  assert.equal(msg.night.doctorReport, result.doctorReport);
+});
+
+test("resolveNight：罠が作動した夜は trapReport に襲撃者と被害者が入る", () => {
+  // 人間の罠師（seed 2 の席1）が 3 番の家に罠を仕掛け、解決の乱数を
+  // 変えて襲撃先が罠の家になる回を探す。
+  let found = null;
+  for (let seed = 1; seed <= 200 && !found; seed++) {
+    const game = gameBothNeedInput();
+    assert.equal(submitNightAction(game, 0, 2), null);
+    assert.equal(submitNightAction(game, 1, 3), null);
+    const result = resolveNight(game, seededRandom(seed));
+    if (result && result.trapReport) found = { game, result };
+  }
+  assert.ok(found, "200 seeds で罠の作動が見つかること");
+  const { game, result } = found;
+  assert.equal(result.trapReport.victimId, 3, "罠の家が襲撃された");
+  const attacker = game.players[result.trapReport.attackerId];
+  assert.ok(["fakeGirl", "mimic"].includes(attacker.roleKey), "襲撃者が罠で倒れる");
+  assert.equal(attacker.alive, false);
+  assert.equal(attacker.deathCause, "罠");
+  // nightResolved でも同じ報告が送られる。
+  const msg = nightResolvedMessage(game, result, 0);
+  assert.deepEqual(msg.night.trapReport, result.trapReport);
+});
+
+test("resolveNight：診察で蘇生した夜は doctorReport に被害者と原因が入る", () => {
+  // 役割を固定（診察役・インポスター2人・護衛・追跡役）し、解決の乱数を
+  // 変えて診察役の患者がその夜の犠牲者になる回を探す。
+  let found = null;
+  for (let seed = 1; seed <= 300 && !found; seed++) {
+    const game = gameWithFixedRoles(
+      ["villager", "villager", "doctor", "fakeGirl", "mimic", "guardian", "tracker", "villager"]
+    );
+    const result = resolveNight(game, seededRandom(seed));
+    if (result && result.doctorReport) found = { game, result };
+  }
+  assert.ok(found, "300 seeds で蘇生が見つかること");
+  const { game, result } = found;
+  assert.equal(typeof result.doctorReport.victimId, "number");
+  assert.ok(["attack", "bomb"].includes(result.doctorReport.cause));
+  assert.equal(game.players[result.doctorReport.victimId].alive, true, "蘇生した人は生きている");
+  if (result.doctorReport.cause === "attack") {
+    assert.equal(result.report.type, "revived");
+    assert.equal(result.report.victimId, result.doctorReport.victimId);
+  }
+  // nightResolved でも同じ報告が送られる。
+  const msg = nightResolvedMessage(game, result, 0);
+  assert.deepEqual(msg.night.doctorReport, result.doctorReport);
+});
+
 // 議論フェーズのヘルパー：夜を解決して議論を開始する。夜に人間が
 // 倒れていても議論のテスト用に両人間を生存に戻す（夜の解決の結果
 // 自体は resolveNight のテストで担保済み）。

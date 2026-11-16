@@ -3140,3 +3140,148 @@ test("オンライン結果：gameEnded で結果画面が出て、自分の行�
   assert.equal(localStorage.getItem("fakeBloomStats"), null);
   assert.equal(localStorage.getItem("fakeBloomPnpStats"), null);
 });
+
+test("オンライン演出：nightResolved で自分の夜行動・襲撃・爆弾のカットインが出て、幽霊歩行者と赤フラッシュが付く", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const sent = [];
+  FB.online.socket = { readyState: 1, send(msg) { sent.push(msg); } };
+  // 占い師がユイ（2）へ夜行動を送る。
+  elements.get("cards").children[2].onclick();
+  elements.get("actionBtn").onclick();
+  assert.deepEqual(JSON.parse(sent[0]), { type: "nightAction", targetId: 2 });
+  FB.handleOnlineMessage({ type: "nightActionAccepted", targetId: 2 });
+  assert.equal(FB.online.nightSentId, 2);
+  // 夜の解決：カノン（3）が襲撃で倒れ、リリ（5）が爆弾に巻き込まれる。
+  const morning = onlineGameViewMessage(0);
+  morning.phase = "morning";
+  morning.players[3] = { id: 3, name: "カノン", icon: "🎀", alive: false, isCpu: true, publicRoleKey: "fakeGirl" };
+  morning.players[5] = { id: 5, name: "リリ", icon: "🫧", alive: false, isCpu: true, publicRoleKey: "bomber" };
+  FB.handleOnlineMessage({
+    type: "nightResolved", code: "ABCD", view: morning,
+    night: {
+      publicLogs: ["インポスター陣営 → カノン → 脱落"],
+      privateLog: "ユイはイノセントだった",
+      report: { type: "eliminated", victimId: 3 },
+      bombReport: { explodedVictims: [5], fizzled: false },
+      trapReport: null, doctorReport: null,
+    },
+  });
+  // 先頭は自分の夜行動カットイン、残りがキューに並ぶ。
+  // （キューは vm 内の配列なので、レルムをまたぐ deepEqual を避けて JSON で比べる。）
+  assert.equal(elements.get("cutinTitle").textContent, "🔍 調査");
+  assert.equal(JSON.stringify(FB.cutinQueue.map((i) => i.title)), JSON.stringify(["🌙 夜の襲撃", "💣 爆弾が爆発！"]));
+  // 個人カットインを送ると襲撃カットインが出て、幽霊歩行者と赤フラッシュが付く。
+  const stage = elements.get("stage");
+  const before = stage.children.length;
+  elements.get("cutin").onclick();
+  assert.equal(elements.get("cutinTitle").textContent, "🌙 夜の襲撃");
+  assert.equal(stage.children.length, before + 1, "幽霊歩行者が増える");
+  assert.match(stage.children[stage.children.length - 1].className, /motion-flinch/);
+  assert.equal(stage.classList.contains("flash-red"), true, "赤フラッシュが付く");
+  // もう1回送ると爆弾カットインが出る。
+  elements.get("cutin").onclick();
+  assert.equal(elements.get("cutinTitle").textContent, "💣 爆弾が爆発！");
+});
+
+test("オンライン演出：voteResolved で追放のカットインと幽霊歩行者が出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const vote = onlineGameViewMessage(0);
+  vote.phase = "vote";
+  FB.handleOnlineMessage({ type: "discussionEnded", code: "ABCD", view: vote });
+  const night2 = onlineGameViewMessage(0);
+  night2.phase = "night";
+  night2.day = 2;
+  night2.players[3] = { id: 3, name: "カノン", icon: "🎀", alive: false, isCpu: true, publicRoleKey: "fakeGirl" };
+  const stage = elements.get("stage");
+  const before = stage.children.length;
+  FB.handleOnlineMessage({
+    type: "voteResolved", code: "ABCD", view: night2,
+    vote: {
+      logs: ["[投票] カノン が追放された（5票）"],
+      exiledId: 3, exiledName: "カノン", exiledPublicRoleKey: "fakeGirl",
+      tally: [{ id: 3, name: "カノン", votes: 5 }],
+    },
+  });
+  // 追放カットインが即表示され、追放者の幽霊歩行者が付く。
+  assert.equal(elements.get("cutinTitle").textContent, "🗳️ 投票結果");
+  assert.equal(elements.get("cutinSub").textContent, "カノン が追放された");
+  assert.equal(stage.children.length, before + 1, "幽霊歩行者が増える");
+  assert.match(stage.children[stage.children.length - 1].className, /motion-exile/);
+});
+
+test("オンライン演出：voteResolved で同数なら追放なしのカットインが出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const vote = onlineGameViewMessage(0);
+  vote.phase = "vote";
+  FB.handleOnlineMessage({ type: "discussionEnded", code: "ABCD", view: vote });
+  const night2 = onlineGameViewMessage(0);
+  night2.phase = "night";
+  night2.day = 2;
+  FB.handleOnlineMessage({
+    type: "voteResolved", code: "ABCD", view: night2,
+    vote: {
+      logs: ["[投票] 同数のため追放なし"],
+      exiledId: null, exiledName: null, exiledPublicRoleKey: null,
+      tally: [{ id: 3, name: "カノン", votes: 2 }, { id: 2, name: "ユイ", votes: 2 }],
+    },
+  });
+  assert.equal(elements.get("cutinTitle").textContent, "🗳️ 投票結果");
+  assert.equal(elements.get("cutinSub").textContent, "同数のため追放なし");
+});
+
+test("オンライン演出：gameEnded で自分の陣営の勝利なら勝利カットインと紙吹雪が出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const end = onlineGameViewMessage(0);
+  end.phase = "end";
+  FB.handleOnlineMessage({
+    type: "gameEnded", code: "ABCD", view: end,
+    result: {
+      winText: "イノセント陣営の勝利！",
+      winnerFaction: "イノセント",
+      sub: "オンライン対戦（人間2人）で遊びました。",
+      highlights: ["📅 2日目で決着"],
+      rows: [],
+    },
+  });
+  assert.equal(elements.get("cutinTitle").textContent, "イノセント陣営の勝利！");
+  assert.equal(elements.get("confetti").children.length, 26, "紙吹雪が26枚出る");
+});
+
+test("オンライン演出：gameEnded で敗北なら勝利カットインも紙吹雪も出ない", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const end = onlineGameViewMessage(0);
+  end.phase = "end";
+  FB.handleOnlineMessage({
+    type: "gameEnded", code: "ABCD", view: end,
+    result: {
+      winText: "インポスター陣営の勝利！",
+      winnerFaction: "インポスター",
+      sub: "オンライン対戦（人間2人）で遊びました。",
+      highlights: ["📅 2日目で決着"],
+      rows: [],
+    },
+  });
+  assert.equal(FB.cutinQueueLength, 0);
+  // celebrate() が呼ばれていなければ #confetti には触られていない。
+  assert.equal(elements.has("confetti"), false);
+});
+
+test("オンライン演出：マウス公開で役職公開のカットインが出る", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const discussion = onlineGameViewMessage(0);
+  discussion.phase = "discussion";
+  FB.handleOnlineMessage({
+    type: "discussionStarted", code: "ABCD", view: discussion,
+    talks: [
+      { type: "mouse", speakerId: 3, targetId: 4, publicRoleKey: "villager" },
+    ],
+  });
+  assert.equal(elements.get("cutinTitle").textContent, "🐭 役職公開");
+  assert.equal(elements.get("cutinSub").textContent, "スズ は 村ガール");
+});
