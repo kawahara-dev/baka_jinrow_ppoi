@@ -3285,3 +3285,172 @@ test("オンライン演出：マウス公開で役職公開のカットイン�
   assert.equal(elements.get("cutinTitle").textContent, "🐭 役職公開");
   assert.equal(elements.get("cutinSub").textContent, "スズ は 村ガール");
 });
+
+// 再接続テスト用のフェイク WebSocket。open / close をテスト側から
+// 発火でき、送ったメッセージを sent にためる。
+class FakeWebSocket {
+  constructor(url) {
+    this.url = url;
+    this.readyState = 0;
+    this.sent = [];
+    this._listeners = {};
+    FakeWebSocket.instances.push(this);
+  }
+  addEventListener(type, fn) {
+    if (!this._listeners[type]) this._listeners[type] = [];
+    this._listeners[type].push(fn);
+  }
+  dispatch(type, event = {}) {
+    for (const fn of this._listeners[type] || []) fn(event);
+  }
+  send(msg) { this.sent.push(msg); }
+  openSocket() {
+    this.readyState = 1;
+    this.dispatch("open", {});
+  }
+  closeSocket() {
+    if (this.readyState === 3) return;
+    this.readyState = 3;
+    this.dispatch("close", {});
+  }
+}
+FakeWebSocket.instances = [];
+
+// 再接続テスト用の土台：フェイク WebSocket と location を差し込み、
+// ソケットを開いて部屋を作る。再接続の待ち時間は 0 にする。
+function beginOnlineWithSocket() {
+  const loaded = loadGame({ seedSettings: BASE_SETTINGS });
+  const { FB, elements, localStorage, sandbox } = loaded;
+  FakeWebSocket.instances = [];
+  sandbox.WebSocket = FakeWebSocket;
+  sandbox.location = { protocol: "http:", host: "127.0.0.1:8787", hostname: "127.0.0.1" };
+  FB.ONLINE_RECONNECT_DELAYS_MS.splice(0, Infinity, 0, 0, 0, 0);
+  assert.equal(FB.connectOnline(), true);
+  const socket = FakeWebSocket.instances[0];
+  assert.equal(socket.url, "ws://127.0.0.1:8787/ws");
+  socket.openSocket();
+  FB.handleOnlineMessage({
+    type: "roomCreated", code: "ABCD", token: "token-1", playerId: 0,
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  return { ...loaded, socket };
+}
+
+test("オンライン再接続：ロビーで切断すると再接続中表示が出て、reconnected でロビーに戻る", () => {
+  const { FB, elements } = beginOnlineWithSocket();
+  // 切断すると再接続中表示が出て、すぐ reconnect を試みる。
+  FakeWebSocket.instances[0].closeSocket();
+  assert.equal(FB.online.reconnecting, true);
+  assert.equal(elements.get("onlineLobbyError").textContent, "サーバーとの接続が切れました。再接続中…");
+  assert.equal(FakeWebSocket.instances.length, 2, "新しいソケットで試し直す");
+  // 新しいソケットが開くと、保存したトークンで reconnect が送られる。
+  FakeWebSocket.instances[1].openSocket();
+  assert.deepEqual(JSON.parse(FakeWebSocket.instances[1].sent[0]), { type: "reconnect", code: "ABCD", token: "token-1" });
+  // サーバーから reconnected が届くと、表示が消えてロビーに戻る。
+  FB.handleOnlineMessage({
+    type: "reconnected", code: "ABCD", token: "token-1", playerId: 0,
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  assert.equal(FB.online.reconnecting, false);
+  assert.equal(elements.get("onlineLobbyError").textContent, "");
+  assert.ok(elements.get("onlinePlayersList").innerHTML.includes("ルナ"));
+  assert.ok(elements.get("onlinePlayersList").innerHTML.includes("ミオ"));
+  assert.equal(elements.get("onlineStartBtn").disabled, false);
+});
+
+test("オンライン再接続：試合中に切断するとステータス表示が出て、reconnected で現在の view を描き直す", () => {
+  const { FB, elements } = beginOnlineWithSocket();
+  FB.handleOnlineMessage({ type: "gameStarted", code: "ABCD", view: onlineGameViewMessage(0) });
+  // 占い師がユイ（2）へ夜行動を送る。
+  elements.get("cards").children[2].onclick();
+  elements.get("actionBtn").onclick();
+  FB.handleOnlineMessage({ type: "nightActionAccepted", targetId: 2 });
+  assert.equal(FB.online.nightSentId, 2);
+  // 試合中の切断：ステータス表示と行動ログに再接続中が出る。
+  FakeWebSocket.instances[0].closeSocket();
+  assert.equal(FB.online.reconnecting, true);
+  assert.ok(!elements.get("onlineStatus").classList.contains("hidden"));
+  assert.equal(elements.get("onlineStatus").textContent, "サーバーとの接続が切れました。再接続中…");
+  const lines = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(lines.some(t => t.includes("再接続中")));
+  // 新しいソケットで reconnect を送る。
+  FakeWebSocket.instances[1].openSocket();
+  assert.deepEqual(JSON.parse(FakeWebSocket.instances[1].sent[0]), { type: "reconnect", code: "ABCD", token: "token-1" });
+  // 同じ夜の view で復帰：送り済みの夜入力は残る（サーバー側に残っているため）。
+  FB.handleOnlineMessage({ type: "reconnected", code: "ABCD", token: "token-1", playerId: 0, view: onlineGameViewMessage(0) });
+  assert.equal(FB.online.reconnecting, false);
+  assert.ok(elements.get("onlineStatus").classList.contains("hidden"));
+  assert.equal(FB.online.nightSentId, 2);
+  assert.equal(elements.get("actionBtn").textContent, "夜行動を変更する");
+  const lines2 = elements.get("actionLog").children.map((c) => c.textContent);
+  assert.ok(lines2.some(t => t.includes("サーバーに再接続したよ")));
+  // もう一度切れて、朝の view で復帰：夜入力はもう要らないので消える。
+  FakeWebSocket.instances[1].closeSocket();
+  assert.equal(FB.online.reconnecting, true);
+  FakeWebSocket.instances[2].openSocket();
+  const morning = onlineGameViewMessage(0);
+  morning.phase = "morning";
+  FB.handleOnlineMessage({ type: "reconnected", code: "ABCD", token: "token-1", playerId: 0, view: morning });
+  assert.equal(FB.online.reconnecting, false);
+  assert.equal(FB.online.nightSentId, null);
+  assert.equal(elements.get("phaseText").textContent, "朝の報告");
+  assert.ok(elements.get("actionBtn").classList.contains("hidden"), "朝は夜行動ボタンが出ない");
+});
+
+test("オンライン再接続：何度も切れると諦めて入口に戻る", async () => {
+  const { FB, elements, localStorage } = beginOnlineWithSocket();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  FakeWebSocket.instances[0].closeSocket();
+  assert.equal(FB.online.reconnecting, true);
+  // 新しいソケットも開く前に切れる、を繰り返す（待ち時間は 0）。
+  for (let n = 0; n < 5; n++) {
+    const latest = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    latest.closeSocket();
+    await sleep(10);
+  }
+  // 試し直しを使い切ったので、セッションを消して入口に戻る。
+  assert.equal(FB.online.reconnecting, false);
+  assert.equal(FB.online.code, null);
+  assert.equal(localStorage.getItem(FB.ONLINE_SESSION_KEY), null);
+  assert.ok(!elements.get("onlineEntry").classList.contains("hidden"));
+  assert.ok(elements.get("onlineLobby").classList.contains("hidden"));
+  assert.equal(elements.get("onlineEntryError").textContent, "サーバーに再接続できませんでした。コードで参加し直してください。");
+});
+
+test("オンライン再接続：reconnected の代わりに bad_token が届くと試し直しをやめて入口に戻る", () => {
+  const { FB, elements, localStorage } = beginOnlineWithSocket();
+  FakeWebSocket.instances[0].closeSocket();
+  assert.equal(FB.online.reconnecting, true);
+  FakeWebSocket.instances[1].openSocket();
+  assert.deepEqual(JSON.parse(FakeWebSocket.instances[1].sent[0]), { type: "reconnect", code: "ABCD", token: "token-1" });
+  FB.handleOnlineMessage({ type: "error", error: "bad_token" });
+  assert.equal(FB.online.reconnecting, false);
+  assert.equal(FB.online.code, null);
+  assert.equal(localStorage.getItem(FB.ONLINE_SESSION_KEY), null);
+  assert.ok(!elements.get("onlineEntry").classList.contains("hidden"));
+  assert.equal(elements.get("onlineEntryError").textContent, "サーバーに再接続できませんでした。コードで参加し直してください。");
+});
+
+test("オンライン再接続：部屋に入る前の切断では再接続を試みない", () => {
+  const { FB, elements, sandbox } = loadGame({ seedSettings: BASE_SETTINGS });
+  FakeWebSocket.instances = [];
+  sandbox.WebSocket = FakeWebSocket;
+  sandbox.location = { protocol: "http:", host: "127.0.0.1:8787", hostname: "127.0.0.1" };
+  assert.equal(FB.connectOnline(), true);
+  FakeWebSocket.instances[0].openSocket();
+  // 部屋に入る前（code なし）に切れても、再接続は試みない。
+  FakeWebSocket.instances[0].closeSocket();
+  assert.equal(FB.online.reconnecting, false);
+  assert.equal(FakeWebSocket.instances.length, 1, "新しいソケットは作られない");
+  // エラー表示が一度も走っていない（要素自体が作られていない）か、空のまま。
+  const entryError = elements.get("onlineEntryError");
+  assert.equal(entryError ? entryError.textContent : "", "");
+});

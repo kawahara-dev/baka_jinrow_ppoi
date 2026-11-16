@@ -243,7 +243,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   applyOnlineVoteResolved, applyOnlineNightResolved, playOnlineNightCutins,
   stageOnlineGhostWalker, runOnlineNightCutinMotion,
   buildOnlineGameViewLogic, buildOnlineDiscussViewLogic, buildOnlineNightCutinsViewLogic,
-  ONLINE_SESSION_KEY,
+  ONLINE_SESSION_KEY, ONLINE_RECONNECT_DELAYS_MS,
   get online() { return online; },
   renderStats, renderAchievements, CLUMSY_SEER_RATE, showResults, buildHighlights, gameSettings,
   draw, paintSettings, roleHtmlFor, startHandoff, showPnpCover, showPnpRole,

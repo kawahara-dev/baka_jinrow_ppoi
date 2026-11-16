@@ -763,6 +763,7 @@
     /* オンライン議論パネル：定型文ボタン・自由入力・議論を終えるボタン。
        試合画面のカード下に出し、ソロ／パス＆プレイでは使わない。 */
     .online-discuss { margin-top: 12px; padding: 12px; border: 2px solid var(--line); border-radius: 12px; background: #fff; }
+   .online-status { margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; background: #fff3cd; border: 2px solid #e6a700; color: #7a5b00; font-weight: 800; text-align: center; }
     .online-talk-phrases { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
     .online-talk-phrases button { border: 2px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 700; cursor: pointer; }
     .online-talk-phrases button:disabled { opacity: 0.45; cursor: default; }
@@ -1197,6 +1198,7 @@
       <div class="stat"><div>あなたの陣営</div><strong id="factionText">-</strong></div>
     </div>
     <div id="discussTimer" class="discuss-timer hidden" aria-live="polite"></div>
+    <div id="onlineStatus" class="online-status hidden" role="status" aria-live="polite"></div>
     <div id="stage" class="stage" aria-hidden="true"></div>
     <details id="inGameRoleCard" class="player-role-card" open>
       <summary>
@@ -2926,6 +2928,12 @@
   // セッショントークンは新しいキー fakeBloomOnlineSession にだけ保存し、
   // 既存の保存形式（fakeBloomSettings 等）には触らない。
   const ONLINE_SESSION_KEY = "fakeBloomOnlineSession";
+  // 再接続の待ち時間（ミリ秒）。初回はすぐ試し、だめなら少しずつ
+  // 間を空けて試し直す。全部だめなら諦めて入口に戻す。
+  // テストではこの配列の中身を 0 に差し替えて待ち時間をなくす。
+  const ONLINE_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
+  const ONLINE_RECONNECTING_TEXT = "サーバーとの接続が切れました。再接続中…";
+  const ONLINE_RECONNECT_FAILED_TEXT = "サーバーに再接続できませんでした。コードで参加し直してください。";
   const ONLINE_ERROR_TEXT = {
     room_not_found: "部屋が見つかりませんでした。コードを確認してください。",
     room_full: "部屋が満員です。",
@@ -2953,11 +2961,14 @@
   // selectedId は夜・議論・投票で選んだ対象、nightSentId は送り済みの
   // 夜入力、voteSentId は送り済みの投票、discussionDoneSent は議論を
   // 終えたことの送信済みフラグ。
+  // reconnecting は切断からの復帰中、reconnectAttempts は試し直した
+  // 回数、reconnectTimer は次の試し直しまでのタイマー。
   let online = {
     socket: null, code: null, token: null, playerId: null,
     players: [], settings: null, gameStarted: false, connected: false,
     view: null, selectedId: null, nightSentId: null,
     voteSentId: null, discussionDoneSent: false,
+    reconnecting: false, reconnectAttempts: 0, reconnectTimer: null,
   };
   function isOnlineHost() { return online.playerId === 0; }
   function onlineHostname() {
@@ -3393,7 +3404,70 @@
     online.socket = null;
     online.connected = false;
   }
+  // 再接続中の表示。ロビーではエラー欄に、試合中は試合画面の
+  // ステータス表示と行動ログに出す（ログは折りたたまれていることが
+  // あるため、画面上の表示が主）。
+  function showOnlineReconnecting() {
+    const status = el("onlineStatus");
+    if (online.view && status) {
+      status.textContent = ONLINE_RECONNECTING_TEXT;
+      status.classList.remove("hidden");
+      actionLog(ONLINE_RECONNECTING_TEXT);
+    } else if (online.code) {
+      showOnlineError(ONLINE_RECONNECTING_TEXT);
+    }
+  }
+  function hideOnlineReconnecting() {
+    const status = el("onlineStatus");
+    if (status) {
+      status.textContent = "";
+      status.classList.add("hidden");
+    }
+    if (!online.view) showOnlineError("");
+  }
+  // 切断からの復帰。保存したトークンで reconnect を送り、サーバーから
+  // 現在の view をもらい直す。開けなければ少しずつ間を空けて試し直す。
+  function startOnlineReconnect() {
+    if (online.reconnecting || !online.code || !online.token) return;
+    online.reconnecting = true;
+    online.reconnectAttempts = 0;
+    showOnlineReconnecting();
+    tryOnlineReconnect();
+  }
+  function tryOnlineReconnect() {
+    if (!online.reconnecting || !online.code || !online.token) return;
+    if (!connectOnline()) {
+      scheduleOnlineReconnectRetry();
+      return;
+    }
+    sendOnlineWhenOpen({ type: "reconnect", code: online.code, token: online.token });
+  }
+  function scheduleOnlineReconnectRetry() {
+    if (!online.reconnecting) return;
+    if (online.reconnectAttempts >= ONLINE_RECONNECT_DELAYS_MS.length) {
+      failOnlineReconnect();
+      return;
+    }
+    const delay = ONLINE_RECONNECT_DELAYS_MS[online.reconnectAttempts];
+    online.reconnectAttempts += 1;
+    online.reconnectTimer = later(() => {
+      online.reconnectTimer = null;
+      tryOnlineReconnect();
+    }, delay);
+  }
+  // 再接続を諦める。セッションを消して入口に戻し、コードでの参加し直しを促す。
+  function failOnlineReconnect() {
+    if (online.reconnectTimer && typeof clearTimeout === "function") clearTimeout(online.reconnectTimer);
+    online.reconnectTimer = null;
+    online.reconnecting = false;
+    hideOnlineReconnecting();
+    leaveOnlineRoom();
+    el("onlineScreen").classList.remove("hidden");
+    showOnlineError(ONLINE_RECONNECT_FAILED_TEXT);
+  }
   function leaveOnlineRoom() {
+    // 試し直しのタイマーが残っていれば消す（抜けたあとに再接続しないように）。
+    if (online.reconnectTimer && typeof clearTimeout === "function") clearTimeout(online.reconnectTimer);
     closeOnlineSocket();
     clearOnlineSession();
     online = {
@@ -3401,7 +3475,9 @@
       players: [], settings: null, gameStarted: false, connected: false,
       view: null, selectedId: null, nightSentId: null,
       voteSentId: null, discussionDoneSent: false,
+      reconnecting: false, reconnectAttempts: 0, reconnectTimer: null,
     };
+    hideOnlineReconnecting();
     // 試合中に抜けるときは試合画面も隠す（タイトルへは呼び出し側が戻す）。
     el("gameScreen").classList.add("hidden");
     showOnlineEntry();
@@ -3426,6 +3502,40 @@
       online.players = Array.isArray(msg.players) ? msg.players : online.players;
       if (msg.settings) online.settings = msg.settings;
       if (online.code && !online.gameStarted) renderOnlineLobby();
+      return;
+    }
+    if (msg.type === "reconnected") {
+      if (msg.code && msg.code !== online.code) return;
+      // 試し直しのタイマーが残っていれば消す（復帰できたので不要）。
+      if (online.reconnectTimer && typeof clearTimeout === "function") clearTimeout(online.reconnectTimer);
+      online.reconnectTimer = null;
+      online.reconnecting = false;
+      online.code = msg.code;
+      online.token = msg.token;
+      online.playerId = msg.playerId;
+      online.players = Array.isArray(msg.players) ? msg.players : [];
+      online.settings = msg.settings || null;
+      saveOnlineSession();
+      hideOnlineReconnecting();
+      if (msg.view) {
+        // 試合中の復帰：現在の view で描き直す。フェーズが変わって
+        // いれば送り済みの入力はもう要らないので消す。同じフェーズ
+        // なら送り済みの入力はサーバー側に残っているものとして置く
+        // （送り直せば上書きできる）。
+        online.gameStarted = true;
+        online.view = msg.view;
+        online.selectedId = null;
+        if (msg.view.phase !== "night") online.nightSentId = null;
+        if (msg.view.phase !== "vote") online.voteSentId = null;
+        if (msg.view.phase !== "discussion") online.discussionDoneSent = false;
+        if (!el("gameScreen").classList.contains("hidden")) renderOnlineGame();
+        else if (!el("onlineScreen").classList.contains("hidden")) showOnlineGame();
+        if (!el("gameScreen").classList.contains("hidden")) actionLog("サーバーに再接続したよ。");
+      } else {
+        // 試合前の復帰：ロビーに戻って参加者一覧を描き直す。
+        online.gameStarted = false;
+        if (!el("onlineScreen").classList.contains("hidden")) showOnlineLobby();
+      }
       return;
     }
     if (msg.type === "gameStarted") {
@@ -3510,6 +3620,12 @@
       return;
     }
     if (msg.type === "error") {
+      // 再接続中の bad_token / room_not_found は、セッションがもう
+      // 使えない合図なので、試し直しをやめて入口に戻す。
+      if (online.reconnecting && (msg.error === "bad_token" || msg.error === "room_not_found")) {
+        failOnlineReconnect();
+        return;
+      }
       const text = ONLINE_ERROR_TEXT[msg.error] || "通信エラーが発生しました。";
       // 試合中はロビー／入口のエラー欄が見えないため、行動ログへ出す。
       if (online.view) actionLog(`オンラインのエラー：${text}`);
@@ -3525,16 +3641,19 @@
     } catch { return false; }
   }
   // 開く前・接続中に送ったメッセージは、開いたときに順番に送る。
-  // 2回押しても部屋を2つ作らないよう、open リスナーは1つだけ付ける。
+  // 2回押しても部屋を2つ作らないよう、open リスナーはソケットごとに
+  // 1つだけ付ける（切断でソケットが変わったら、新しい方に付け直す。
+  // 付けたソケットを覚えておかないと、開く前に切れた分のキューが
+  // 新しいソケットで送られない）。
   function sendOnlineWhenOpen(msg) {
     if (!online.socket) return false;
     if (online.socket.readyState === 1) return sendOnline(msg);
     online._sendQueue = online._sendQueue || [];
     online._sendQueue.push(msg);
-    if (!online._sendQueueAttached) {
-      online._sendQueueAttached = true;
+    if (online._sendQueueSocket !== online.socket) {
+      online._sendQueueSocket = online.socket;
       online.socket.addEventListener("open", () => {
-        online._sendQueueAttached = false;
+        online._sendQueueSocket = null;
         const queued = online._sendQueue || [];
         online._sendQueue = [];
         for (const m of queued) sendOnline(m);
@@ -3562,9 +3681,15 @@
     socket.addEventListener("close", () => {
       online.socket = null;
       online.connected = false;
-      if (online.code && !online.gameStarted) {
-        showOnlineError("サーバーとの接続が切れました。");
+      // 部屋に入る前（入口で切れた場合）は従来どおり何もしない。
+      if (!online.code || !online.token) return;
+      // 再接続の試し直し中にまた切れたら、次の待ち時間で試す。
+      if (online.reconnecting) {
+        scheduleOnlineReconnectRetry();
+        return;
       }
+      // 部屋に入ってからの切断は、トークンで自動的に復帰を試みる。
+      startOnlineReconnect();
     });
     return true;
   }
