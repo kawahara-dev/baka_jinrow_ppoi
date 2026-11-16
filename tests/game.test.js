@@ -3505,3 +3505,21 @@ test("オンライン議論：ソロのフェーズによらずCPU・自分の�
   assert.equal(elements.get("dialogueLogToggle").getAttribute("aria-expanded"), "false");
   assert.equal(localStorage.getItem("fakeBloomLogFold"), saved);
 });
+
+test("オンライン議論：discussionEnded で表示中の吹き出しとキューが即消える", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  beginOnlineGame(FB, 0);
+  const discussion = onlineGameViewMessage(0);
+  discussion.phase = "discussion";
+  const bubble = (id) => elements.get("cards").children.find(c =>
+    c.getAttribute("data-player") === String(id)).children.find(c => c.className === "speech-bubble");
+  FB.handleOnlineMessage({ type: "discussionStarted", code: "ABCD", view: discussion,
+    talks: [{ type: "talk", speakerId: 2, text: "CPUの発言" }] });
+  assert.equal(bubble(2)?.textContent, "CPUの発言", "議論中は吹き出しが出る");
+  const vote = { ...discussion, phase: "vote" };
+  FB.handleOnlineMessage({ type: "discussionEnded", code: "ABCD", view: vote });
+  // タイマーの期限切れを待たず、投票へ移った時点で消えていること。
+  assert.equal(bubble(2), undefined, "投票へ移ると吹き出しが即消える");
+  assert.equal(allBubbles(elements).length, 0);
+  assert.equal(FB.speechQueue.length, 0, "投票へ移るとキューも即空になる");
+});

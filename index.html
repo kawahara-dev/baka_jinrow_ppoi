@@ -3649,6 +3649,10 @@
       online.selectedId = null;
       online.voteSentId = null;
       actionLog(formatActionLog("voteGuide", { label: "投票" }));
+      // 議論の終わり際に届いた発言の吹き出しが、タイマー任せでは
+      // 最長 2.2 秒だけ投票画面に残る。ソロの discussionToVote と
+      // 同じく、投票へ移った時点で即消す。
+      clearSpeechBubbles();
       renderOnlineGame();
       return;
     }
