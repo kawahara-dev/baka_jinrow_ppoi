@@ -770,6 +770,17 @@
     .online-talk-free { display: flex; gap: 8px; margin: 8px 0; }
     .online-talk-free input { flex: 1 1 auto; min-width: 0; padding: 8px 10px; border: 2px solid var(--line); border-radius: 8px; font-size: 1rem; }
 
+    /* オンラインの長い発言・名前でグリッドの最小幅を押し広げない。 */
+    #gameScreen.online-game { min-width: 0; max-width: 100%; overflow-x: clip; }
+    #gameScreen.online-game .game-ui > *,
+    #gameScreen.online-game .right-panel > *,
+    #gameScreen.online-game .card,
+    #gameScreen.online-game .stat { min-width: 0; overflow-wrap: anywhere; }
+    #gameScreen.online-game .topbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #gameScreen.online-game .online-discuss { min-width: 0; overflow-wrap: anywhere; }
+    #gameScreen.online-game .online-talk-free { flex-wrap: wrap; }
+    #gameScreen.online-game .online-talk-phrases button { max-width: 100%; overflow-wrap: anywhere; }
+
     /* Feign風UI第2弾（その4）：ログパネルをチャット／ノート風に。
        見出しはチャットのヘッダー風（濃紺の帯＋ゴールド文字＋アイコン）、
        セリフの各行は吹き出し風、行動ログの各行はノート風（左に紫の罫）。
@@ -1756,6 +1767,8 @@
   });
 
   function draw() {
+    el("gameScreen").classList.remove("online-game");
+    applyLogFold();
     if (document.body && document.body.dataset) document.body.dataset.phase = state.phase;
     // 日数・フェーズ表示、ボタン類、マウスボタン、手番バナーの文言と
     // 表示有無は共有モジュール（buildDrawView）で作る。DOM への代入と
@@ -1994,7 +2007,7 @@
   }
   function showNextSpeechBubble() {
     speechBubbleTimer = null;
-    const next = pickNextSpeechBubbleLogic(speechQueue, state.phase);
+    const next = pickNextSpeechBubbleLogic(speechQueue, online.view ? online.view.phase : state.phase);
     if (next.action === "none") return;
     // The phase moved on while lines were queued: drop the rest.
     if (next.action === "drop") { speechQueue.length = 0; return; }
@@ -3053,6 +3066,8 @@
   function renderOnlineGame() {
     const view = buildOnlineGameViewLogic(online.view, { selectedId: online.selectedId, iconImgs: ICON_IMGS });
     if (!view) return;
+    el("gameScreen").classList.add("online-game");
+    applyLogFold();
     if (document.body && document.body.dataset) document.body.dataset.phase = view.phase;
     el("dayText").textContent = view.dayText;
     el("phaseText").textContent = view.phaseText;
@@ -3503,6 +3518,8 @@
       voteSentId: null, discussionDoneSent: false, mouseUsed: false,
       reconnecting: false, reconnectAttempts: 0, reconnectTimer: null,
     };
+    el("gameScreen").classList.remove("online-game");
+    applyLogFold();
     hideOnlineReconnecting();
     // 試合中に抜けるときは試合画面も隠す（タイトルへは呼び出し側が戻す）。
     el("gameScreen").classList.add("hidden");
@@ -3828,7 +3845,9 @@
   function applyLogFold() {
     // 表示データは共有モジュール（buildLogFoldViewLogic）が作り、
     // ここでは DOM への代入だけを行う。
-    for (const item of buildLogFoldViewLogic(logFold)) {
+    // オンライン議論中は発言を常時表示する。保存済みの設定は変更しない。
+    const displayFold = online.view?.phase === "discussion" ? { ...logFold, dialogue: false } : logFold;
+    for (const item of buildLogFoldViewLogic(displayFold)) {
       el(item.logId).classList.toggle("hidden", item.hidden);
       const btn = el(item.toggleId);
       btn.setAttribute("aria-expanded", item.ariaExpanded);

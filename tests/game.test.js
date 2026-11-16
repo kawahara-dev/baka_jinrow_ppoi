@@ -3467,3 +3467,41 @@ test("オンライン再接続：部屋に入る前の切断では再接続を�
   const entryError = elements.get("onlineEntryError");
   assert.equal(entryError ? entryError.textContent : "", "");
 });
+
+
+test("オンライン議論：ソロのフェーズによらずCPU・自分の吹き出しとログが見え、保存設定は維持される", () => {
+  const { FB, elements, localStorage } = loadGame({
+    seedSettings: BASE_SETTINGS,
+    seedStorage: { fakeBloomLogFold: JSON.stringify({ dialogue: true, action: true }) },
+  });
+  beginOnlineGame(FB);
+  FB.state.phase = "night";
+  const saved = localStorage.getItem("fakeBloomLogFold");
+  const discussion = onlineGameViewMessage(0);
+  discussion.phase = "discussion";
+  const bubble = (id) => elements.get("cards").children.find(c =>
+    c.getAttribute("data-player") === String(id)).children.find(c => c.className === "speech-bubble");
+  FB.handleOnlineMessage({ type: "discussionStarted", view: discussion,
+    talks: [{ type: "talk", speakerId: 2, text: "CPUの発言" }] });
+  assert.equal(bubble(2)?.textContent, "CPUの発言");
+  assert.equal(elements.get("dialogueLog").classList.contains("hidden"), false);
+  assert.equal(elements.get("dialogueLogToggle").getAttribute("aria-expanded"), "true");
+  assert.equal(elements.get("actionLog").classList.contains("hidden"), true);
+  FB.handleOnlineMessage({ type: "talk", speakerId: 0, speakerName: "ルナ", text: "自分の発言" });
+  FB.expireSpeechBubble();
+  assert.equal(bubble(0)?.textContent, "自分の発言");
+  assert.ok(elements.get("dialogueLog").children.some(c => c.textContent.includes("自分の発言")));
+  // 再描画でも現在の吹き出しを維持する。
+  elements.get("cards").children[1].onclick();
+  assert.equal(bubble(0)?.textContent, "自分の発言");
+  const vote = { ...discussion, phase: "vote" };
+  FB.handleOnlineMessage({ type: "discussionEnded", view: vote });
+  FB.expireSpeechBubble();
+  FB.state.phase = "discussion";
+  FB.enqueueSpeechBubble(0, "投票中は表示しない");
+  assert.equal(bubble(0), undefined);
+  assert.equal(FB.speechQueue.length, 0);
+  assert.equal(elements.get("dialogueLog").classList.contains("hidden"), true);
+  assert.equal(elements.get("dialogueLogToggle").getAttribute("aria-expanded"), "false");
+  assert.equal(localStorage.getItem("fakeBloomLogFold"), saved);
+});
