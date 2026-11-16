@@ -94,7 +94,8 @@ function messageQueue(ws) {
 }
 
 // 2人で部屋を作って試合を開始し、gameStarted を両方で受け取る。
-// 戻り値の hq / gq は各ソケットのメッセージキュー。
+// 戻り値の hq / gq は各ソケットのメッセージキュー。code / token は
+// 切断→再接続のテストで使う。
 // 失敗時はソケットを閉じてから投げる（開いたままだと server.close が待つ）。
 async function startTwoPlayerGame(port) {
   const host = await connectWs(port);
@@ -106,7 +107,8 @@ async function startTwoPlayerGame(port) {
     const created = await hq.next();
     const hostUpdate = hq.next();
     guest.send(JSON.stringify({ type: "joinRoom", code: created.code }));
-    assert.equal((await gq.next()).type, "roomJoined");
+    const joined = await gq.next();
+    assert.equal(joined.type, "roomJoined");
     // 参加の roomUpdate は参加者本人にも配信されるので読み捨てる。
     assert.equal((await gq.next()).type, "roomUpdate");
     await hostUpdate;
@@ -117,12 +119,22 @@ async function startTwoPlayerGame(port) {
     const guestMsg = await guestStarted;
     assert.equal(hostMsg.type, "gameStarted");
     assert.equal(guestMsg.type, "gameStarted");
-    return { host, guest, hq, gq, hostMsg, guestMsg };
+    return { host, guest, hq, gq, hostMsg, guestMsg, code: created.code, hostToken: created.token, guestToken: joined.token };
   } catch (err) {
     host.close();
     guest.close();
     throw err;
   }
+}
+
+// 指定した type のメッセージが届くまで読む（それ以外は読み捨てる）。
+// 切断・再接続の roomUpdate のように、合間に届くメッセージを飛ばす用。
+async function nextOfType(q, type) {
+  for (let i = 0; i < 5; i++) {
+    const msg = await q.next();
+    if (msg.type === type) return msg;
+  }
+  throw new Error(`expected ${type} not received`);
 }
 
 test("静的配信：/ は index.html、/game-logic.js は共有モジュールを返す", async () => {
@@ -604,6 +616,81 @@ test("議論：タイマーが切れると全員の discussionDone なしで投�
       guest.close();
     }
   }, { random: seededRandom(3), nightTimeoutMs: 5000, discussTimeoutMs: 150 });
+});
+
+test("議論：夜の途中で切断した人間は議論済み扱いになり、残りの人間だけで議論が終わる", async () => {
+  // seed 1：夜はタイムアウト（150ms）で解決し、両人間とも生存する。
+  // 議論タイマーは既定（なし）なので、切断したゲストを待つと止まる。
+  await withServer(async (port) => {
+    const { host, guest, hq } = await startTwoPlayerGame(port);
+    try {
+      // ゲストが夜の途中で切断し、戻ってこない。
+      guest.close();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      // 切断の roomUpdate を読み飛ばして夜の解決と議論の開始を待つ。
+      const resolved = await withTimeout(nextOfType(hq, "nightResolved"), 3000, "host nightResolved");
+      assert.equal(resolved.type, "nightResolved");
+      const started = await withTimeout(nextOfType(hq, "discussionStarted"), 2000, "host discussionStarted");
+      assert.equal(started.type, "discussionStarted");
+      // ホスト1人の discussionDone だけで投票へ進む。
+      host.send(JSON.stringify({ type: "discussionDone" }));
+      assert.equal((await hq.next()).type, "discussionDoneAccepted");
+      const ended = await withTimeout(hq.next(), 2000, "host discussionEnded");
+      assert.equal(ended.type, "discussionEnded");
+      assert.equal(ended.view.phase, "vote");
+    } finally {
+      host.close();
+    }
+  }, { random: seededRandom(1), nightTimeoutMs: 150 });
+});
+
+test("議論：夜の途中で切断して議論中に戻ってきた人間は、また議論に参加できる", async () => {
+  // seed 1：夜はタイムアウト（150ms）で解決し、両人間とも生存する。
+  // 議論タイマーは既定（なし）。
+  await withServer(async (port) => {
+    const { host, guest, hq, code, guestToken } = await startTwoPlayerGame(port);
+    let again = null;
+    try {
+      // ゲストが夜の途中で切断する。
+      guest.close();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const resolved = await withTimeout(nextOfType(hq, "nightResolved"), 3000, "host nightResolved");
+      assert.equal(resolved.type, "nightResolved");
+      const started = await withTimeout(nextOfType(hq, "discussionStarted"), 2000, "host discussionStarted");
+      assert.equal(started.type, "discussionStarted");
+      // ゲストが議論中にトークンで戻ってくる。
+      again = await connectWs(port);
+      const aq = messageQueue(again);
+      again.send(JSON.stringify({ type: "reconnect", code, token: guestToken }));
+      const reconnected = await withTimeout(aq.next(), 2000, "guest reconnected");
+      assert.equal(reconnected.type, "reconnected");
+      assert.equal(reconnected.view.phase, "discussion");
+      // ホストだけが議論を終えても、戻ってきたゲストを待つので終わらない。
+      // 再接続の roomUpdate を読み飛ばして discussionDoneAccepted を待つ。
+      host.send(JSON.stringify({ type: "discussionDone" }));
+      assert.equal((await nextOfType(hq, "discussionDoneAccepted")).type, "discussionDoneAccepted");
+      // 議論がまだ開いている証拠に、ゲストの発言が通る（終わっていたら
+      // not_discussion のエラーになる）。発言の配信を両方で読む。
+      again.send(JSON.stringify({ type: "talk", phraseId: "agree" }));
+      const hostTalk = await withTimeout(nextOfType(hq, "talk"), 2000, "host talk");
+      const guestTalk = await withTimeout(nextOfType(aq, "talk"), 2000, "guest talk");
+      assert.equal(hostTalk.speakerId, 1);
+      assert.equal(guestTalk.speakerId, 1);
+      // ゲストが改めて終えると、両方へ discussionEnded が届く。
+      // 再接続の roomUpdate を読み飛ばして discussionDoneAccepted を待つ。
+      again.send(JSON.stringify({ type: "discussionDone" }));
+      assert.equal((await nextOfType(aq, "discussionDoneAccepted")).type, "discussionDoneAccepted");
+      const hostEnded = await withTimeout(hq.next(), 2000, "host discussionEnded");
+      const guestEnded = await withTimeout(aq.next(), 2000, "guest discussionEnded");
+      assert.equal(hostEnded.type, "discussionEnded");
+      assert.equal(guestEnded.type, "discussionEnded");
+      assert.equal(hostEnded.view.phase, "vote");
+    } finally {
+      host.close();
+      guest.close();
+      if (again) again.close();
+    }
+  }, { random: seededRandom(1), nightTimeoutMs: 150 });
 });
 
 test("議論の検証：夜フェーズ中の talk・discussionDone は not_discussion になる", async () => {
