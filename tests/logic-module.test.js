@@ -4068,6 +4068,29 @@ test("buildOnlineLobbyView：設定が不正でも既定値で描き、入力を
   assert.equal(view.playersHtml, "");
 });
 
+test("buildOnlineLobbyView：ホストが移譲されたら移譲先に「ホスト」バッジが付く", () => {
+  const players = [
+    { id: 0, name: "ルナ", icon: "🌸", connected: false },
+    { id: 1, name: "ミオ", icon: "🪄", connected: true },
+  ];
+  const view = Logic.buildOnlineLobbyView({
+    code: "ABCD", players, settings: null, isHost: true, myPlayerId: 1, hostId: 1, gameStarted: false,
+  });
+  const lunaRow = view.playersHtml.split("</li>").find((row) => row.includes("ルナ"));
+  const mioRow = view.playersHtml.split("</li>").find((row) => row.includes("ミオ"));
+  assert.equal(lunaRow.includes("ホスト"), false);
+  assert.equal(mioRow.includes("ホスト"), true);
+  assert.equal(mioRow.includes("あなた"), true);
+  assert.equal(view.startDisabled, false);
+  assert.equal(view.startNote, "準備ができたら「試合開始」を押してください。");
+  // hostId 未指定なら従来どおり id 0 がホスト。
+  const legacy = Logic.buildOnlineLobbyView({
+    code: "ABCD", players, settings: null, isHost: false, myPlayerId: 1, gameStarted: false,
+  });
+  const legacyLunaRow = legacy.playersHtml.split("</li>").find((row) => row.includes("ルナ"));
+  assert.equal(legacyLunaRow.includes("ホスト"), true);
+});
+
 // オンライン対戦の player view のテスト用フィクスチャ。me は表示役職
 // （バカなら表示役職）だけで、他人の実役職は出ないサーバー側の形。
 function onlineGameViewFixture(overrides = {}) {

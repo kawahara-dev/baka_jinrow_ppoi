@@ -122,11 +122,13 @@ function createGame(code, roomPlayers, settings, random) {
 }
 
 // 開始できるかどうかの判定。開始できない理由のエラー文字列、
-// 開始できる場合は null を返す。ホスト（作成者 = id 0）だけが開始できる。
+// 開始できる場合は null を返す。ホストだけが開始できる。
+// ホストは部屋作成時は id 0、ロビーでホストが抜けたら移譲先の席
+// （room.hostId。なければ 0）。
 function validateStart(room, playerId) {
   if (!room) return "room_not_found";
   if (room.game) return "game_already_started";
-  if (playerId !== 0) return "not_host";
+  if (playerId !== (room.hostId ?? 0)) return "not_host";
   if (room.players.length < MIN_PLAYERS_TO_START) return "not_enough_players";
   return null;
 }

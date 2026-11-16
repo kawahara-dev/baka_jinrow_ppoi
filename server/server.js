@@ -130,10 +130,13 @@ function createServer(options = {}) {
     socket._roomCode = null;
   }
 
+  // 部屋の公開情報。hostId は今のホストの席（ロビーでホストが抜けたら
+  // 移譲先へ移る）。クライアントはこれで開始ボタンと「ホスト」表示を決める。
   function roomUpdate(room) {
     return {
       type: "roomUpdate",
       code: room.code,
+      hostId: room.hostId ?? 0,
       players: rooms.publicPlayers(room),
       settings: room.settings,
     };
@@ -341,6 +344,7 @@ function createServer(options = {}) {
       sendJson(socket, {
         type: "roomCreated",
         code: room.code,
+        hostId: room.hostId ?? 0,
         token: player.token,
         playerId: player.id,
         name: player.name,
@@ -362,6 +366,7 @@ function createServer(options = {}) {
       sendJson(socket, {
         type: "roomJoined",
         code: room.code,
+        hostId: room.hostId ?? 0,
         token: player.token,
         playerId: player.id,
         name: player.name,
@@ -384,6 +389,7 @@ function createServer(options = {}) {
       const reply = {
         type: "reconnected",
         code: room.code,
+        hostId: room.hostId ?? 0,
         token: player.token,
         playerId: player.id,
         name: player.name,
@@ -423,7 +429,7 @@ function createServer(options = {}) {
         sendJson(socket, { type: "error", error: "game_already_started" });
         return;
       }
-      if (player.id !== 0) {
+      if (player.id !== (room.hostId ?? 0)) {
         sendJson(socket, { type: "error", error: "not_host" });
         return;
       }

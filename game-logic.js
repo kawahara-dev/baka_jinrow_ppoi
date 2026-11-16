@@ -1794,14 +1794,17 @@
   // 値でも normalizeRoomSettings で既定値に直してから判定する。
   // players は公開情報のみ（{ id, name, icon, connected }）。
   // ホストは作成者（id 0）で、設定を変えられるのはホストだけ。
-  function buildOnlineLobbyView({ code, players, settings, isHost, myPlayerId, gameStarted }) {
+  function buildOnlineLobbyView({ code, players, settings, isHost, myPlayerId, gameStarted, hostId }) {
     const normalized = normalizeRoomSettings(settings);
     const list = Array.isArray(players) ? players : [];
     const started = !!gameStarted;
     const host = !!isHost;
+    // ホストの席。ロビーでホストが抜けると移譲先（0 以外）になる。
+    // 未指定なら部屋作成時の 0。
+    const hostSeat = typeof hostId === "number" ? hostId : 0;
     const playersHtml = list.map(p => {
       const badges = [];
-      if (p.id === 0) badges.push("ホスト");
+      if (p.id === hostSeat) badges.push("ホスト");
       if (p.id === myPlayerId) badges.push("あなた");
       if (p.connected === false) badges.push("切断中");
       const badgeHtml = badges.length ? ` <span class="online-player-badge">${badges.join("・")}</span>` : "";
