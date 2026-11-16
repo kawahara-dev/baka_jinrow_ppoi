@@ -26,6 +26,7 @@ const {
   startDiscussion,
   submitTalk,
   markDiscussionDone,
+  clearDiscussionDone,
   discussionComplete,
   discussionStartedMessage,
   talkBroadcast,
@@ -268,11 +269,17 @@ function createServer(options = {}) {
   // 公開情報で全席共通）。タイマーもここで回す。生存中の人間が
   // いなければ、議論は始まった時点で終わっている（誰も discussionDone
   // を送れないため、タイマーなしではここで止まってしまう）ので、夜の
-  // 即解決と同じくすぐ投票へ進める。
+  // 即解決と同じくすぐ投票へ進める。夜の途中で切断したままの人間も
+  // ここで議論済み扱いにする（§7：切断中は「未入力＝行動しない」。
+  // startDiscussion が discussionDone を作り直すため、切断時の印だけ
+  // では残らない。戻ってきたら reconnect で外れる）。
   function startDiscussionForRoom(room) {
     if (!room.game || room.game.phase !== "morning") return;
     const events = startDiscussion(room.game, random);
     if (!events) return;
+    for (const p of room.players) {
+      if (!p.connected) markDiscussionDone(room.game, p.id);
+    }
     const set = roomSockets.get(room.code);
     if (!set) return;
     for (const socket of set) {
@@ -367,6 +374,10 @@ function createServer(options = {}) {
         players: rooms.publicPlayers(room),
         settings: room.settings,
       };
+      // 議論中の再接続では議論済み扱いを外し、戻ってきたらまた議論に参加できる。
+      if (room.game && room.game.phase === "discussion") {
+        clearDiscussionDone(room.game, player.id);
+      }
       // 投票中の再接続では棄権扱いを外し、戻ってきたらまた投票できる。
       if (room.game && room.game.phase === "vote") {
         clearVoteAbstained(room.game, player.id);

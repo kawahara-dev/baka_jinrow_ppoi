@@ -18,6 +18,7 @@ const {
   startDiscussion,
   submitTalk,
   markDiscussionDone,
+  clearDiscussionDone,
   discussionComplete,
   discussionStartedMessage,
   talkBroadcast,
@@ -491,6 +492,25 @@ test("markDiscussionDone と discussionComplete：生存中の人間全員分で
   assert.equal(discussionComplete(game2), true);
   // 死亡した人間からの discussionDone は弾く。
   assert.equal(markDiscussionDone(game2, 1), "not_alive");
+});
+
+test("clearDiscussionDone：再接続で議論済み扱いが外れ、議論はまたその人間を待つ", () => {
+  const { game } = gameInDiscussion();
+  assert.equal(markDiscussionDone(game, 0), null);
+  assert.equal(markDiscussionDone(game, 1), null);
+  assert.equal(discussionComplete(game), true);
+  // 1人が戻ってきたら、その人だけ議論済み扱いが外れる。
+  clearDiscussionDone(game, 0);
+  assert.equal(discussionComplete(game), false);
+  // 入っていない席の解除は何もしない（冪等）。
+  clearDiscussionDone(game, 0);
+  assert.equal(discussionComplete(game), false);
+  // 議論フェーズ以外・試合なしでは何もしない（投げない）。
+  clearDiscussionDone(gameBothNeedInput(), 0);
+  clearDiscussionDone(null, 0);
+  // 解除した人間が改めて終えれば、また完了する。
+  assert.equal(markDiscussionDone(game, 0), null);
+  assert.equal(discussionComplete(game), true);
 });
 
 test("discussionStartedMessage／talkBroadcast／discussionEndedMessage：席ごとの view と秘匿漏れなし", () => {

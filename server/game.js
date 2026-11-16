@@ -341,6 +341,13 @@ function markDiscussionDone(game, playerId) {
   return null;
 }
 
+// 再接続した人間の議論済み扱いを外す（戻ってきたらまた議論に参加できる）。
+// 議論フェーズ以外では何もしない。投票の clearVoteAbstained と同じ形。
+function clearDiscussionDone(game, playerId) {
+  if (!game || game.phase !== "discussion") return;
+  game.discussionDone.delete(playerId);
+}
+
 // 生存中の人間全員が議論を終えたか。切断中の人間はサーバー側で
 // 切断時に discussionDone へ入れるため、ここでは数えない（§7）。
 function discussionComplete(game) {
@@ -584,6 +591,7 @@ module.exports = {
   startDiscussion,
   submitTalk,
   markDiscussionDone,
+  clearDiscussionDone,
   discussionComplete,
   discussionStartedMessage,
   talkBroadcast,
