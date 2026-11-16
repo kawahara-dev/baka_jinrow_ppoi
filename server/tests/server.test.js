@@ -351,6 +351,50 @@ test("startGame：ホスト以外は not_host、1人では not_enough_players、
   });
 });
 
+test("ロビーでホストが抜けるとゲストへホストが移り、新ホストが設定変更と開始ができる", async () => {
+  await withServer(async (port) => {
+    const host = await connectWs(port);
+    const guest = await connectWs(port);
+    const gq = messageQueue(guest);
+    try {
+      host.send(JSON.stringify({ type: "createRoom" }));
+      const created = await nextMessage(host);
+      assert.equal(created.hostId, 0);
+      const hostUpdate = nextMessage(host);
+      guest.send(JSON.stringify({ type: "joinRoom", code: created.code }));
+      const joined = await gq.next();
+      assert.equal(joined.type, "roomJoined");
+      assert.equal(joined.hostId, 0);
+      // 参加の roomUpdate は参加者本人にも配信されるので読み捨てる。
+      assert.equal((await gq.next()).type, "roomUpdate");
+      await hostUpdate;
+
+      // ホストがロビーで抜ける。ゲストへ roomUpdate（hostId 1）が届く。
+      host.close();
+      const update = await withTimeout(gq.next(), 5000, "host migration roomUpdate");
+      assert.equal(update.type, "roomUpdate");
+      assert.equal(update.hostId, 1);
+      assert.equal(update.players[0].connected, false);
+      assert.equal(update.players[1].connected, true);
+
+      // 新ホストは設定を変えられる。
+      guest.send(JSON.stringify({ type: "setSettings", settings: { fakeCount: "2" } }));
+      const settingsUpdate = await withTimeout(gq.next(), 5000, "settings roomUpdate");
+      assert.equal(settingsUpdate.type, "roomUpdate");
+      assert.equal(settingsUpdate.hostId, 1);
+      assert.equal(settingsUpdate.settings.fakeCount, "2");
+
+      // 新ホストが試合を開始できる。
+      const guestStarted = gq.next();
+      guest.send(JSON.stringify({ type: "startGame" }));
+      assert.equal((await guestStarted).type, "gameStarted");
+    } finally {
+      host.close();
+      guest.close();
+    }
+  });
+});
+
 test("試合中の再接続では reconnected に現在の player view が付く", async () => {
   await withServer(async (port) => {
     const host = await connectWs(port);

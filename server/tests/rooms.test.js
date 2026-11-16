@@ -118,3 +118,57 @@ test("setRoomSettings は部屋設定を検証して反映する。指定のな�
   const next2 = store.setRoomSettings(room, { fakeCount: "3", difficulty: "easy" });
   assert.deepEqual(next2, { fakeCount: "random", bomber: "off", difficulty: "easy", discussTimer: "120" });
 });
+
+// ロビーでのホスト移譲（フェーズ3 第4歩：ホスト退出の整備）。
+// ホストが抜けたら、つながっている参加者の中で一番若い席がホストになる。
+test("部屋を作るとホストは id 0 になる", () => {
+  const store = deterministicStore();
+  const { room } = store.createRoom();
+  assert.equal(room.hostId, 0);
+});
+
+test("ロビーでホストが切断すると、つながっている一番若い席へホストが移る", () => {
+  const store = deterministicStore();
+  const { room, player: host } = store.createRoom();
+  const second = store.joinRoom(room.code).player;
+  const third = store.joinRoom(room.code).player;
+  store.disconnect(room.code, host.token);
+  assert.equal(room.hostId, 1);
+  // ホスト以外が抜けてもホストは変わらない。
+  store.disconnect(room.code, third.token);
+  assert.equal(room.hostId, 1);
+  // 新ホストが抜けたら、残っている一番若い席へさらに移る。
+  // 誰も残っていなければ今のまま（元のホストが戻ればまたホスト）。
+  store.disconnect(room.code, second.token);
+  assert.equal(room.hostId, 1);
+});
+
+test("誰もつながっていなければホストは今のまま。元のホストが戻ればまたホストになる", () => {
+  const store = deterministicStore();
+  const { room, player: host } = store.createRoom();
+  store.disconnect(room.code, host.token);
+  assert.equal(room.hostId, 0);
+  const ok = store.reconnect(room.code, host.token);
+  assert.equal(ok.error, undefined);
+  assert.equal(room.hostId, 0);
+});
+
+test("移ったあと元のホストが戻ってきても、ホストは戻らない", () => {
+  const store = deterministicStore();
+  const { room, player: host } = store.createRoom();
+  store.joinRoom(room.code);
+  store.disconnect(room.code, host.token);
+  assert.equal(room.hostId, 1);
+  const ok = store.reconnect(room.code, host.token);
+  assert.equal(ok.error, undefined);
+  assert.equal(room.hostId, 1);
+});
+
+test("試合中はホストが切断してもホストは移らない（試合はサーバー側で続く）", () => {
+  const store = deterministicStore();
+  const { room, player: host } = store.createRoom();
+  store.joinRoom(room.code);
+  room.game = { phase: "night" };
+  store.disconnect(room.code, host.token);
+  assert.equal(room.hostId, 0);
+});

@@ -2817,6 +2817,36 @@ test("オンラインロビー：roomCreated でロビーが開き、コード�
   assert.ok(!elements.get("onlinePlayersList").innerHTML.includes("ユイ"));
 });
 
+test("オンラインロビー：ホストが抜けると roomUpdate でホストが移り、新ホストが開始できる", () => {
+  const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
+  FB.handleOnlineMessage({
+    type: "roomJoined", code: "ABCD", token: "token-9", playerId: 1, hostId: 0,
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: true },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  assert.equal(elements.get("onlineStartBtn").disabled, true, "ゲストは開始できない");
+  assert.equal(elements.get("onlineStartNote").textContent, "ホストが試合を開始するのを待っています。");
+  assert.equal(FB.online.hostId, 0);
+  // ホスト（ルナ）が抜けて roomUpdate が届くと、ミオがホストになる。
+  FB.handleOnlineMessage({
+    type: "roomUpdate", code: "ABCD", hostId: 1,
+    players: [
+      { id: 0, name: "ルナ", icon: "🌸", connected: false },
+      { id: 1, name: "ミオ", icon: "🪄", connected: true },
+    ],
+    settings: { fakeCount: "random", bomber: "random", difficulty: "normal", discussTimer: "0" },
+  });
+  assert.equal(FB.online.hostId, 1);
+  assert.equal(elements.get("onlineStartBtn").disabled, false);
+  assert.equal(elements.get("onlineStartNote").textContent, "準備ができたら「試合開始」を押してください。");
+  const mioRow = elements.get("onlinePlayersList").innerHTML.split("</li>").find((row) => row.includes("ミオ"));
+  assert.ok(mioRow.includes("ホスト"));
+  assert.ok(mioRow.includes("あなた"));
+});
+
 // gameStarted / nightResolved のテスト用 view（サーバーが送る形）。
 // me は表示役職だけで、他人の実役職は出ない。phase / day / players は
 // 呼び出し側で差し替えられるよう、都度新しいオブジェクトを返す。

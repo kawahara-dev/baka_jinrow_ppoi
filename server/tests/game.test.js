@@ -183,6 +183,15 @@ test("validateStart：ホスト以外・人数不足・開始済みはエラー�
   assert.equal(MIN_PLAYERS_TO_START, 2);
 });
 
+test("validateStart：ホストが移譲された部屋では移譲先だけが開始できる（hostId なしは従来どおり 0）", () => {
+  const room = { code: "ABCD", players: twoHumans(), game: null, hostId: 1 };
+  assert.equal(validateStart(room, 1), null);
+  assert.equal(validateStart(room, 0), "not_host");
+  const legacy = { code: "ABCD", players: twoHumans(), game: null };
+  assert.equal(validateStart(legacy, 0), null);
+  assert.equal(validateStart(legacy, 1), "not_host");
+});
+
 // seed 2：人間は占い師（id 0）と罠師（id 1）で、両方とも夜入力が必要。
 function gameBothNeedInput() {
   const game = createGame("ABCD", twoHumans(), undefined, seededRandom(2));

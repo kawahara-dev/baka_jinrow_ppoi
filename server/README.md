@@ -44,8 +44,9 @@ FB_PORT=9000 node server/server.js
 - `{ "type": "joinRoom", "code": "ABCD" }` — コードで参加する
 - `{ "type": "reconnect", "code": "ABCD", "token": "<セッショントークン>" }` — 切断後に同じ席へ戻る
 - `{ "type": "setSettings", "settings": { "fakeCount": "random", "bomber": "random", "difficulty": "normal", "discussTimer": "0" } }` — 部屋設定の同期（フェーズ2 第1歩）。ホストだけが、試合開始前に変えられる。値は検証して許容外は既定値に戻し、指定のないキーは今の部屋設定のままにして、部屋の全員へ設定付きの `roomUpdate` を配信する。ホスト以外は `not_host`、試合開始後は `game_already_started` のエラーになる。開始時はこの設定で配役（`fakeCount` / `bomber`）と CPU の難易度・議論タイマーが決まる
-- `{ "type": "startGame" }` — 試合を開始する（作成者＝ホストだけ。2人以上必要。
-  人間のいない席は CPU 席として役職を配る）
+- `{ "type": "startGame" }` — 試合を開始する（ホストだけ。2人以上必要。
+  人間のいない席は CPU 席として役職を配る。ホストは部屋作成時は作成者で、
+  ロビーでホストが抜けたら移譲先の席になる）
 - `{ "type": "nightAction", "targetId": 2 }` — 夜の対象を選ぶ。夜フェーズ中に、
   夜行動のある生存中の人間の席だけが送れる。解決までは送り直して変更できる。
   インポスターの人間は襲撃先（代表者）または能力先（代表者以外）を選ぶ
@@ -74,8 +75,8 @@ FB_PORT=9000 node server/server.js
 
 サーバー → クライアント：
 
-- `{ "type": "roomCreated" | "roomJoined" | "reconnected", "code", "token", "playerId", "name", "icon", "players", "settings" }` — `settings` は部屋設定（ホストの既定値で始まり、`setSettings` で変わる）
-- `{ "type": "roomUpdate", "code", "players", "settings" }` — 参加・切断・再接続・設定変更時に全員へ配信
+- `{ "type": "roomCreated" | "roomJoined" | "reconnected", "code", "hostId", "token", "playerId", "name", "icon", "players", "settings" }` — `settings` は部屋設定（ホストの既定値で始まり、`setSettings` で変わる）。`hostId` は今のホストの席
+- `{ "type": "roomUpdate", "code", "hostId", "players", "settings" }` — 参加・切断・再接続・設定変更・ホスト移譲時に全員へ配信
 - `{ "type": "gameStarted", "code", "view" }` — 試合開始時に席ごとに1通ずつ配信。
   `view` はその席だけの player view（自分の役職・インポスター仲間の名前・公開情報）。
   他人の実役職・うっかり flag・トークンは含まない。バカには表示役職だけが送られる
@@ -123,6 +124,17 @@ FB_PORT=9000 node server/server.js
 試合中の再接続では `reconnected` に現在の player view（`view`）が付く。
 議論中の再接続では議論済み扱いが外れ、戻ってきたらまた議論に参加できる。
 投票中の再接続では棄権扱いが外れ、戻ってきたらまた投票できる。
+
+## ホストの移譲（ロビーでのホスト退出）
+
+ホストは部屋作成時は作成者（`hostId` は 0）。ロビー（試合開始前）でホストが
+切断すると、つながっている参加者の中で一番若い席へホストが移り、移譲先へ
+`hostId` 付きの `roomUpdate` が配信される。移譲先は `setSettings` と
+`startGame` ができるようになる。誰もつながっていなければホストは今のままで、
+元のホストが戻ればまたホストになる。移ったあと元のホストが戻ってきても、
+ホストは戻らない（行ったり来たりを避ける）。試合中はホストが抜けても
+サーバー側で試合が続くため、ホストは移らない（ホスト権限はロビーでのみ
+意味を持つ）。
 
 ## テスト
 

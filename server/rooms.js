@@ -74,6 +74,9 @@ function createRoomStore(deps = {}) {
       createdAt: now(),
       players: [],
       game: null,
+      // ホストの席。作成時は id 0（部屋を作った人）。ロビーでホストが
+      // 抜けたら disconnect() で移譲先へ移る。
+      hostId: 0,
       settings: normalizeRoomSettings(settings),
     };
     rooms.set(room.code, room);
@@ -113,6 +116,16 @@ function createRoomStore(deps = {}) {
     const player = room.players.find((p) => p.token === token);
     if (!player) return false;
     player.connected = false;
+    // ロビーでホストが抜けたら、つながっている参加者の中で一番若い席へ
+    // ホストを移す（設計メモ §7：ホスト権限はロビーでのみ意味を持つ）。
+    // 誰もつながっていなければ今のままにし、元のホストが戻ればまた
+    // ホストになる。移ったあと元のホストが戻ってきても、ホストは戻さない
+    // （行ったり来たりを避ける）。試合中はホストが抜けてもサーバー側で
+    // 試合が続くため移さない。
+    if (!room.game && player.id === room.hostId) {
+      const next = room.players.find((p) => p.connected);
+      if (next) room.hostId = next.id;
+    }
     return true;
   }
 

@@ -2978,15 +2978,16 @@
   // 終えたことの送信済みフラグ、mouseUsed は送り済みのマウス公開
   // （次の view に載る使用済みとあわせてボタン表示に使う）。
   // reconnecting は切断からの復帰中、reconnectAttempts は試し直した
-  // 回数、reconnectTimer は次の試し直しまでのタイマー。
+  // 回数、reconnectTimer は次の試し直しまでのタイマー。hostId は今の
+  // ホストの席（ロビーでホストが抜けたら移譲先へ移る）。
   let online = {
-    socket: null, code: null, token: null, playerId: null,
+    socket: null, code: null, token: null, playerId: null, hostId: null,
     players: [], settings: null, gameStarted: false, connected: false,
     view: null, selectedId: null, nightSentId: null,
     voteSentId: null, discussionDoneSent: false, mouseUsed: false,
     reconnecting: false, reconnectAttempts: 0, reconnectTimer: null,
   };
-  function isOnlineHost() { return online.playerId === 0; }
+  function isOnlineHost() { return online.playerId !== null && online.playerId === online.hostId; }
   function onlineHostname() {
     return (typeof location !== "undefined" && location) ? location.hostname : "";
   }
@@ -3034,6 +3035,7 @@
       settings: online.settings,
       isHost: isOnlineHost(),
       myPlayerId: online.playerId,
+      hostId: online.hostId,
       gameStarted: online.gameStarted,
     });
     const codeEl = el("onlineRoomCode");
@@ -3512,7 +3514,7 @@
     closeOnlineSocket();
     clearOnlineSession();
     online = {
-      socket: null, code: null, token: null, playerId: null,
+      socket: null, code: null, token: null, playerId: null, hostId: null,
       players: [], settings: null, gameStarted: false, connected: false,
       view: null, selectedId: null, nightSentId: null,
       voteSentId: null, discussionDoneSent: false, mouseUsed: false,
@@ -3533,6 +3535,7 @@
       online.code = msg.code;
       online.token = msg.token;
       online.playerId = msg.playerId;
+      online.hostId = typeof msg.hostId === "number" ? msg.hostId : 0;
       online.players = Array.isArray(msg.players) ? msg.players : [];
       online.settings = msg.settings || null;
       online.gameStarted = false;
@@ -3544,6 +3547,7 @@
       if (msg.code && msg.code !== online.code) return;
       online.players = Array.isArray(msg.players) ? msg.players : online.players;
       if (msg.settings) online.settings = msg.settings;
+      if (typeof msg.hostId === "number") online.hostId = msg.hostId;
       if (online.code && !online.gameStarted) renderOnlineLobby();
       return;
     }
@@ -3556,6 +3560,7 @@
       online.code = msg.code;
       online.token = msg.token;
       online.playerId = msg.playerId;
+      online.hostId = typeof msg.hostId === "number" ? msg.hostId : 0;
       online.players = Array.isArray(msg.players) ? msg.players : [];
       online.settings = msg.settings || null;
       saveOnlineSession();
