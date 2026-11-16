@@ -1778,10 +1778,14 @@
     }
     return out;
   }
-  // サーバー配信のときだけオンライン入口を出す判定。Pages 版
-  // （kawahara-dev.github.io）ではオンラインは使えないので入口を出さない。
-  // hostname だけを見る純粋関数。ブラウザ側は location.hostname を渡す。
-  function isOnlineAvailable(hostname) {
+  // オンライン入口を出す判定。サーバーが配信したページ（合図あり）
+  // ならホスト名に関係なく出す（トンネル経由の公開でも出る）。
+  // 合図がないページでは、従来どおり 127.0.0.1／localhost だけ出す。
+  // Pages 版（kawahara-dev.github.io）では合図がないので出ない。
+  // hostname だけを見る純粋関数。ブラウザ側は location.hostname と
+  // サーバー配信の合図（window.__FB_SERVER_SERVED__）を渡す。
+  function isOnlineAvailable(hostname, serverServed) {
+    if (serverServed === true) return true;
     return hostname === "127.0.0.1" || hostname === "localhost";
   }
   // オンラインロビーの表示データ。部屋コード・参加者一覧・部屋設定・

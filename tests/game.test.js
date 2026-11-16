@@ -2755,6 +2755,19 @@ test("オンライン入口：ハーネス環境（location なし）では入�
   assert.match(html, /<button id="onlineBtn" class="secondary hidden">オンラインで遊ぶ<\/button>/);
 });
 
+test("オンライン入口：サーバー配信の合図があると isServerServed が true になり、入口判定も通る", () => {
+  // 合図なし（Pages 版の静的ファイルと同じ状態）では false のまま。
+  const plain = loadGame({ seedSettings: BASE_SETTINGS });
+  assert.equal(plain.FB.isServerServed(), false);
+  assert.equal(plain.FB.isOnlineAvailableLogic("kawahara-dev.github.io", plain.FB.isServerServed()), false);
+  // サーバー配信の合図があると、ホスト名に関係なく入口判定が通る
+  // （トンネル経由の公開と同じ状態。ハーネスの location は空文字）。
+  const served = loadGame({ seedSettings: BASE_SETTINGS, serverServed: true });
+  assert.equal(served.FB.isServerServed(), true);
+  assert.equal(served.FB.isOnlineAvailableLogic("", served.FB.isServerServed()), true);
+  assert.equal(served.FB.isOnlineAvailableLogic("example.trycloudflare.com", served.FB.isServerServed()), true);
+});
+
 test("オンライン入口：WebSocket がない環境で部屋作成・参加を押すと接続エラーを出す", () => {
   const { FB, elements } = loadGame({ seedSettings: BASE_SETTINGS });
   elements.get("onlineCreateBtn").onclick();

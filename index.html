@@ -2977,6 +2977,13 @@
   function onlineHostname() {
     return (typeof location !== "undefined" && location) ? location.hostname : "";
   }
+  // サーバー配信の合図（server/server.js が配信する index.html へ
+  // 差し込む window.__FB_SERVER_SERVED__）。トンネル経由の公開でも
+  // 入口を出すためのもの。Pages 版の静的ファイルには合図がないので、
+  // 従来どおり入口は出ない。
+  function isServerServed() {
+    return typeof window !== "undefined" && window.__FB_SERVER_SERVED__ === true;
+  }
   function onlineWsUrl() {
     if (typeof location === "undefined" || !location || !location.host) return null;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -3793,7 +3800,8 @@
     focusEl("onlineTitle");
   };
   // サーバー配信のときだけオンライン入口を出す。Pages 版では hidden のまま。
-  if (isOnlineAvailableLogic(onlineHostname())) el("onlineBtn").classList.remove("hidden");
+  // 合図（isServerServed）があればトンネル経由の公開でも出す。
+  if (isOnlineAvailableLogic(onlineHostname(), isServerServed())) el("onlineBtn").classList.remove("hidden");
 
   // ---- log folding (セリフ／行動ログの折りたたみ) ----
   // 折りたたみ状態は独立キー fakeBloomLogFold に保存し、既存の保存形式

@@ -3980,12 +3980,20 @@ test("normalizeRoomSettings：入力を変更しない（純粋関数）", () =>
   assert.equal(JSON.stringify(parsed), before);
 });
 
-test("isOnlineAvailable：サーバー配信のホスト名だけ true（Pages 版は false）", () => {
+test("isOnlineAvailable：サーバー配信の合図があればホスト名に関係なく true（Pages 版は false）", () => {
   assert.equal(Logic.isOnlineAvailable("127.0.0.1"), true);
   assert.equal(Logic.isOnlineAvailable("localhost"), true);
   assert.equal(Logic.isOnlineAvailable("kawahara-dev.github.io"), false);
   assert.equal(Logic.isOnlineAvailable(""), false);
   assert.equal(Logic.isOnlineAvailable(undefined), false);
+  // サーバー配信の合図があるページは、トンネル経由の公開でも入口を出す。
+  assert.equal(Logic.isOnlineAvailable("kawahara-dev.github.io", true), true);
+  assert.equal(Logic.isOnlineAvailable("example.trycloudflare.com", true), true);
+  assert.equal(Logic.isOnlineAvailable("", true), true);
+  // 合図が false／未指定なら従来どおりホスト名だけを見る。
+  assert.equal(Logic.isOnlineAvailable("kawahara-dev.github.io", false), false);
+  assert.equal(Logic.isOnlineAvailable("example.trycloudflare.com", false), false);
+  assert.equal(Logic.isOnlineAvailable("127.0.0.1", false), true);
 });
 
 test("buildOnlineLobbyView：ホストは設定を変えられて開始できる（2人以上）", () => {
