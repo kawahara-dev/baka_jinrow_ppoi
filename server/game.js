@@ -249,6 +249,10 @@ function resolveNight(game, random) {
     ),
     report: game.nightReport,
     bombReport: game.bombReport,
+    // 罠・蘇生の報告も公開情報として送る（どちらも公開ログに出る内容
+    // だけで、クライアントはここから夜のカットインを再生する）。
+    trapReport: game.trapReport,
+    doctorReport: game.doctorReport,
   };
   game.pnpNightInputs = {};
   return result;
@@ -268,6 +272,8 @@ function nightResolvedMessage(game, result, playerId) {
       privateLog: result.privateLogs[playerId] || null,
       report: result.report,
       bombReport: result.bombReport,
+      trapReport: result.trapReport || null,
+      doctorReport: result.doctorReport || null,
     },
   };
 }

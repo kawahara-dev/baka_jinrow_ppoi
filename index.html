@@ -1281,7 +1281,7 @@
   // 試合ロジックの共有モジュール（game-logic.js）から、DOM を使わない純粋な
   // データと関数を受け取る。フェーズ0：オンライン対戦のため Node でも
   // ブラウザでも動く形に切り出している。
-  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeRoomSettings: normalizeRoomSettingsLogic, isOnlineAvailable: isOnlineAvailableLogic, buildOnlineLobbyView: buildOnlineLobbyViewLogic, buildOnlineGameView: buildOnlineGameViewLogic, buildOnlineDiscussView: buildOnlineDiscussViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
+  const { ROLES, PHASE_META, PLAYER_NAMES, PLAYER_ICONS, ICON_SLUGS, CHAR_TALK, charTalkPool, pickTalkLine, CLUMSY_SEER_RATE, rand, dealRoles, resolveVoteTally, checkWinCondition, getEffectiveRoleKey, getPublicRoleKey, migrateFactionWins, formatActionLog, resolveNightActions: resolveNightActionsLogic, cpuVotePick: cpuVotePickLogic, planNightActions: planNightActionsLogic, planDiscussionTalks: planDiscussionTalksLogic, buildHighlights: buildHighlightsLogic, buildResultHighlightsView: buildResultHighlightsViewLogic, applySoloStats: applySoloStatsLogic, applyPnpStats: applyPnpStatsLogic, buildStatsView: buildStatsViewLogic, buildResultSummary: buildResultSummaryLogic, buildResultRowsView: buildResultRowsViewLogic, getPhaseHint: getPhaseHintLogic, getFakeAlliesText: getFakeAlliesTextLogic, roleHtmlFor: roleHtmlForLogic, buildRoleCardView: buildRoleCardViewLogic, buildCardsView: buildCardsViewLogic, buildRoleInfoView: buildRoleInfoViewLogic, buildRoleGuideView: buildRoleGuideViewLogic, buildParadeView: buildParadeViewLogic, buildLobbyRosterView: buildLobbyRosterViewLogic, buildDiscussTimerView: buildDiscussTimerViewLogic, buildPnpCoverView: buildPnpCoverViewLogic, buildPnpRoleView: buildPnpRoleViewLogic, buildPnpNightResultView: buildPnpNightResultViewLogic, buildPnpNightActionView: buildPnpNightActionViewLogic, buildPnpTurnBannerText: buildPnpTurnBannerTextLogic, buildStageView: buildStageViewLogic, buildDrawView: buildDrawViewLogic, normalizeSettings: normalizeSettingsLogic, buildSettingsView: buildSettingsViewLogic, normalizeRoomSettings: normalizeRoomSettingsLogic, isOnlineAvailable: isOnlineAvailableLogic, buildOnlineLobbyView: buildOnlineLobbyViewLogic, buildOnlineGameView: buildOnlineGameViewLogic, buildOnlineDiscussView: buildOnlineDiscussViewLogic, normalizeLogFold: normalizeLogFoldLogic, buildLogFoldView: buildLogFoldViewLogic, withLogFolded: withLogFoldedLogic, buildAchievementsView: buildAchievementsViewLogic, buildAchievementsChipsView: buildAchievementsChipsViewLogic, buildCutinItem: buildCutinItemLogic, buildCutinFaceHtml: buildCutinFaceHtmlLogic, buildCutinView: buildCutinViewLogic, cutinSfxFor: cutinSfxForLogic, SPEECH_BUBBLE_MS, buildSpeechBubbleItem: buildSpeechBubbleItemLogic, buildSpeechBubbleView: buildSpeechBubbleViewLogic, pickNextSpeechBubble: pickNextSpeechBubbleLogic, buildShakeView: buildShakeViewLogic, buildConfettiView: buildConfettiViewLogic, CONFETTI_REMOVE_MS, buildStageBounceView: buildStageBounceViewLogic, buildStageEventMotionView: buildStageEventMotionViewLogic, buildGhostWalkerView: buildGhostWalkerViewLogic, buildStageFlashView: buildStageFlashViewLogic, OWN_ACTION_FAMILIES, buildOwnActionMotionView: buildOwnActionMotionViewLogic, buildNightCutinsView: buildNightCutinsViewLogic, buildOnlineNightCutinsView: buildOnlineNightCutinsViewLogic, buildRevealMouseView: buildRevealMouseViewLogic } = globalThis.FakeBloomLogic;
 
   const ICON_IMGS = {}; // filled by loadIcons() from icons/<slug>.b64
 
@@ -2413,9 +2413,12 @@
   }
   function showCutin(title, sub, kind, onShow, opts) {
     // キュー項目の生成は共有モジュール（buildCutinItem）に切り出し済み。
-    // onShow は関数なのでブラウザ側で付け足す。
+    // onShow は関数なのでブラウザ側で付け足す。players は顔表示に使う
+    // 選手一覧（オンライン用。なければソロの state.players を使う）。
+    // 指定がないときはキーを付けない（キューの形状を従来通り保つ）。
     cutinQueue.push({ ...buildCutinItemLogic(title, sub, kind, opts),
-      onShow: typeof onShow === "function" ? onShow : null });
+      onShow: typeof onShow === "function" ? onShow : null,
+      ...(opts && Array.isArray(opts.players) ? { players: opts.players } : {}) });
     pumpCutin();
   }
   function pumpCutin() {
@@ -2431,7 +2434,7 @@
     // 効果音）は共有モジュール（buildCutinView）に切り出し済み。DOM への
     // 代入とタイマー・クリックだけがブラウザ側に残る。
     cutinBusy = true;
-    const view = buildCutinViewLogic(item, state.players, ICON_IMGS, ICON_SLUGS);
+    const view = buildCutinViewLogic(item, item.players || state.players, ICON_IMGS, ICON_SLUGS);
     el("cutinTitle").textContent = view.title;
     el("cutinSub").textContent = view.sub;
     if (box.dataset) box.dataset.kind = view.kind;
@@ -3125,6 +3128,10 @@
     }
   }
   function showOnlineGame() {
+    // 前の試合のカットイン・吹き出しが残っていれば消す（ソロの
+    // setupGame と同じ）。
+    clearCutins();
+    clearSpeechBubbles();
     el("titleScreen").classList.add("hidden");
     el("roleScreen").classList.add("hidden");
     el("pnpScreen").classList.add("hidden");
@@ -3229,13 +3236,26 @@
     if (!view) return;
     sayDialogue(event.speakerId, view.dialogueText, view.mouseLine);
     actionLog(view.logText);
+    // ソロの revealMouse と同じく、公開のカットインも出す。
+    showCutin(view.cutin.title, view.cutin.sub, view.cutin.kind, null,
+      { charId: view.cutin.charId, players: online.view ? online.view.players : null });
   }
   // 投票の集計をログへ反映する。票の内訳は公開情報として出し、
-  // 追放・同数の文言はサーバーが送ったログのまま出す。
+  // 追放・同数の文言はサーバーが送ったログのまま出す。ソロの
+  // tallyVotes と同じく、結果のカットインも出す（追放時は幽霊歩行者付き）。
   function applyOnlineVoteResolved(vote) {
     for (const msg of vote.logs || []) actionLog(msg);
     if (Array.isArray(vote.tally) && vote.tally.length) {
       actionLog(`🗳️ 票数：${vote.tally.map(t => `${t.name} ${t.votes}票`).join("・")}`);
+    }
+    const players = (online.view && online.view.players) || [];
+    if (vote.exiledId === null || vote.exiledId === undefined) {
+      showCutin("🗳️ 投票結果", "同数のため追放なし", "phase", null, { players });
+    } else {
+      const exiledId = vote.exiledId;
+      showCutin("🗳️ 投票結果", `${vote.exiledName || ""} が追放された`, "phase",
+        () => stageOnlineGhostWalker(exiledId, "motion-exile"),
+        { charId: exiledId, players });
     }
   }
   // オンラインの結果画面。サーバーが送った結果（勝敗文言・ハイライト・
@@ -3259,6 +3279,13 @@
     if (panel) panel.classList.add("hidden");
     const myFaction = online.view && online.view.me ? online.view.me.faction : null;
     sfx(result.winnerFaction && myFaction === result.winnerFaction ? "win" : "lose");
+    // ソロの決着ルートと同じく、自分の陣営の勝利なら勝利カットインと
+    // 紙吹雪を出す（敗北時は出さない）。
+    if (result.winnerFaction && myFaction === result.winnerFaction) {
+      showCutin(result.winText || "", "", "win", null,
+        { players: online.view ? online.view.players : null });
+      celebrate();
+    }
     if (el("resultPanel").scrollIntoView) el("resultPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
     focusEl("resultTitle");
   }
@@ -3269,9 +3296,64 @@
       actionLog("サーバーに送信できなかったよ。接続を確認してね。");
     }
   }
+  // オンラインの夜カットインを再生する。組み立ては共有モジュール
+  // （buildOnlineNightCutinsView）で、表示時モーションは夜イベントの
+  // 記述子を見てオンライン側のモーションで呼ぶ。顔表示には view の
+  // players を使う（ソロの state.players ではない）。
+  function playOnlineNightCutins(night, sentTargetId) {
+    if (!online.view || !online.view.me) return;
+    const players = online.view.players || [];
+    const blocked = String(night && night.privateLog ? night.privateLog : "").includes("妨害されて");
+    const view = buildOnlineNightCutinsViewLogic(night, online.view.me, {
+      sentTargetId: typeof sentTargetId === "number" ? sentTargetId : null,
+      blocked, players,
+    });
+    for (const item of view.items) {
+      const desc = item.onShow;
+      showCutin(item.title, item.sub, item.kind,
+        desc ? () => runOnlineNightCutinMotion(desc) : null,
+        { charId: item.charId, targetCharId: item.targetCharId, motion: item.motion, players });
+    }
+  }
+  // 夜カットインの表示時モーション（オンライン版）。ソロの
+  // runNightCutinMotion と同じ記述子を読むが、幽霊歩行者は
+  // オンラインの view を見る（ソロの state.players は使わない）。
+  function runOnlineNightCutinMotion(desc) {
+    if (!desc) return;
+    if (desc.kind === "ownAction") stageOwnActionMotion(desc.meId, desc.targetId, desc.type);
+    else if (desc.kind === "ghost") {
+      stageOnlineGhostWalker(desc.victimId, desc.motion);
+      if (desc.flash) stageFlashRed();
+    } else if (desc.kind === "revive") stageEventMotion(desc.victimId, desc.motion);
+  }
+  // オンライン版の幽霊歩行者。ステージに歩行者が残っていればその場で
+  // 動かし、いなければ view の参加者から一時的な幽霊歩行者を作る
+  // （ソロの stageGhostWalker は state.players を見るため使えない）。
+  function stageOnlineGhostWalker(playerId, cls, ms) {
+    const stage = el("stage");
+    if (!stage || !stage.querySelector || !stage.appendChild) return;
+    if (stage.querySelector(`.walker[data-player="${playerId}"]`)) {
+      stageEventMotion(playerId, cls, ms);
+      return;
+    }
+    const p = ((online.view && online.view.players) || []).find(x => x && x.id === playerId);
+    if (!p || typeof document === "undefined" || !document.createElement) return;
+    const view = buildGhostWalkerViewLogic(playerId, cls, ms, ICON_SLUGS[playerId]);
+    if (!view) return;
+    const span = document.createElement("span");
+    span.className = view.className;
+    span.setAttribute("data-player", String(view.playerId));
+    span.setAttribute("style", view.style);
+    span.innerHTML = view.innerHtml;
+    stage.appendChild(span);
+    hydrateWalkImages(span);
+    later(() => { if (span.remove) span.remove(); }, view.removeMs);
+  }
   // 夜の解決をログへ反映する。公開ログはそのまま、個人ログは
   // 「あなた：」付きで行動ログへ。夜の報告と爆弾の報告も文面化する。
-  function applyOnlineNightResolved(night) {
+  // カットインは公開イベントから再生する（第3歩）。sentTargetId は
+  // 解決前に送り済みだった夜入力の対象（自分の夜行動カットイン用）。
+  function applyOnlineNightResolved(night, sentTargetId) {
     for (const msg of night.publicLogs || []) actionLog(msg);
     if (night.privateLog) actionLog(`あなた：${night.privateLog}`);
     const report = night.report;
@@ -3290,6 +3372,7 @@
       }
     }
     if (bomb && bomb.fizzled) actionLog("💣 爆弾は不発だった。");
+    playOnlineNightCutins(night, sentTargetId);
   }
 
   function showOnlineEntry() {
@@ -3362,11 +3445,15 @@
     }
     if (msg.type === "nightResolved") {
       if (!msg.view) return;
+      // 自分の夜行動カットインのために、消す前の送り済み対象を残す。
+      const sentTargetId = online.nightSentId;
       online.view = msg.view;
       online.selectedId = null;
       online.nightSentId = null;
-      if (msg.night) applyOnlineNightResolved(msg.night);
+      // ソロの runNight と同じく、先に描画してからカットインを出す
+      // （表示時モーションが新しいステージで動くように）。
       renderOnlineGame();
+      if (msg.night) applyOnlineNightResolved(msg.night, sentTargetId);
       return;
     }
     if (msg.type === "discussionStarted") {
@@ -3407,8 +3494,10 @@
       online.view = msg.view;
       online.selectedId = null;
       online.voteSentId = null;
-      if (msg.vote) applyOnlineVoteResolved(msg.vote);
+      // 夜と同じく、先に描画してからカットインを出す（追放者の幽霊
+      // 歩行者が新しいステージで動くように）。
       renderOnlineGame();
+      if (msg.vote) applyOnlineVoteResolved(msg.vote);
       return;
     }
     if (msg.type === "gameEnded") {

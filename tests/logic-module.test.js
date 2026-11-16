@@ -3692,6 +3692,109 @@ test("ブラウザ側の nightCutins は共有モジュールの buildNightCutin
   assert.equal(stage.classList.contains("flash-red"), true, "赤フラッシュが付く");
 });
 
+// オンライン夜カットイン用の players（view の players 配列の形）。
+function onlineNightPlayers() {
+  return fakeNightPlayers().map((p) => ({ id: p.id, name: p.name, icon: p.icon }));
+}
+
+test("buildOnlineNightCutinsView：空の夜は items が空で celebrate は false・純粋性", () => {
+  const players = onlineNightPlayers();
+  const night = {
+    report: { type: "none", victimId: null },
+    bombReport: { explodedVictims: [], fizzled: false },
+    trapReport: null, doctorReport: null,
+  };
+  const me = { id: 0, roleKey: "apprenticeSeer" };
+  const before = JSON.stringify({ night, me });
+  const a = Logic.buildOnlineNightCutinsView(night, me, { sentTargetId: null, blocked: false, players });
+  const b = Logic.buildOnlineNightCutinsView(night, me, { sentTargetId: null, blocked: false, players });
+  assert.equal(JSON.stringify(a), JSON.stringify(b), "同じ入力で同じ結果");
+  assert.equal(JSON.stringify({ night, me }), before, "入力を変更しない");
+  assert.equal(a.celebrate, false);
+  assert.deepEqual(a.items, []);
+});
+
+test("buildOnlineNightCutinsView：自分の夜行動・襲撃・爆弾・罠・蘇生がソロと同じ文言・順番で並ぶ", () => {
+  const players = onlineNightPlayers();
+  const night = {
+    report: { type: "eliminated", victimId: 3 },
+    bombReport: { explodedVictims: [5], fizzled: false },
+    trapReport: { attackerId: 6, victimId: 3 },
+    doctorReport: { victimId: 7, cause: "bomb" },
+  };
+  const me = { id: 0, roleKey: "apprenticeSeer" };
+  const view = Logic.buildOnlineNightCutinsView(night, me, { sentTargetId: 2, blocked: false, players });
+  assert.equal(view.celebrate, false);
+  assert.deepEqual(view.items.map((i) => i.title),
+    ["🔍 調査", "🌙 夜の襲撃", "💣 爆弾が爆発！", "🪤 罠が作動！", "💉 蘇生した！"]);
+  // 自分の夜行動（占い）：対象名付き・自分の顔＋相手の顔・ownAction の記述子。
+  assert.deepEqual(view.items[0], {
+    title: "🔍 調査", sub: "→ ユイ", kind: "info",
+    charId: 0, targetCharId: 2, motion: Logic.OWN_ACTION_FAMILIES.investigate,
+    onShow: { kind: "ownAction", meId: 0, targetId: 2, type: "investigate" },
+  });
+  // 襲撃：幽霊歩行者＋赤フラッシュの記述子。
+  assert.deepEqual(view.items[1].onShow, { kind: "ghost", victimId: 3, motion: "motion-flinch", flash: true });
+  assert.equal(view.items[1].charId, 3);
+  // 爆弾：幽霊歩行者（フラッシュなし）。
+  assert.equal(view.items[2].charId, 5);
+  assert.deepEqual(view.items[2].onShow, { kind: "ghost", victimId: 5, motion: "motion-blast", flash: false });
+  // 罠：襲撃者が幽霊歩行者になる。
+  assert.equal(view.items[3].charId, 6);
+  assert.deepEqual(view.items[3].onShow, { kind: "ghost", victimId: 6, motion: "motion-trap", flash: false });
+  // 蘇生：助かった人がその場で動く。
+  assert.equal(view.items[4].charId, 7);
+  assert.deepEqual(view.items[4].onShow, { kind: "revive", victimId: 7, motion: "motion-revive" });
+});
+
+test("buildOnlineNightCutinsView：襲撃の表示役職では自分の行動カットインは出ない", () => {
+  const players = onlineNightPlayers();
+  const night = { report: { type: "eliminated", victimId: 3 }, bombReport: { explodedVictims: [], fizzled: false } };
+  const me = { id: 0, roleKey: "fakeGirl" };
+  const view = Logic.buildOnlineNightCutinsView(night, me, { sentTargetId: 2, blocked: false, players });
+  assert.deepEqual(view.items.map((i) => i.title), ["🌙 夜の襲撃"]);
+});
+
+test("buildOnlineNightCutinsView：妨害されたときは行動カットインの代わりに「✋ 妨害された！」が出る", () => {
+  const players = onlineNightPlayers();
+  const night = { report: { type: "none", victimId: null }, bombReport: { explodedVictims: [], fizzled: false } };
+  const me = { id: 0, roleKey: "apprenticeSeer" };
+  const view = Logic.buildOnlineNightCutinsView(night, me, { sentTargetId: 2, blocked: true, players });
+  assert.deepEqual(view.items.map((i) => i.title), ["✋ 妨害された！"]);
+  assert.equal(view.items[0].kind, "attack");
+  assert.equal(view.items[0].onShow, null);
+});
+
+test("buildOnlineNightCutinsView：防がれた夜・不発の爆弾・report だけの蘇生", () => {
+  const players = onlineNightPlayers();
+  const me = { id: 0, roleKey: "villager" };
+  const blocked = Logic.buildOnlineNightCutinsView(
+    { report: { type: "blocked", victimId: null }, bombReport: { explodedVictims: [], fizzled: false } },
+    me, { sentTargetId: null, blocked: false, players });
+  assert.deepEqual(blocked.items.map((i) => i.title), ["🛡️ 襲撃は防がれた！"]);
+  const fizzled = Logic.buildOnlineNightCutinsView(
+    { report: { type: "none", victimId: null }, bombReport: { explodedVictims: [], fizzled: true } },
+    me, { sentTargetId: null, blocked: false, players });
+  assert.deepEqual(fizzled.items.map((i) => i.title), ["💣 爆弾は不発だった"]);
+  // doctorReport がなくても report.type === "revived" なら蘇生カットインが出る。
+  const revived = Logic.buildOnlineNightCutinsView(
+    { report: { type: "revived", victimId: 4 }, bombReport: { explodedVictims: [], fizzled: false } },
+    me, { sentTargetId: null, blocked: false, players });
+  assert.deepEqual(revived.items.map((i) => i.title), ["💉 蘇生した！"]);
+  assert.equal(revived.items[0].charId, 4);
+});
+
+test("buildOnlineNightCutinsView：不正な入力でも落ちない", () => {
+  const players = onlineNightPlayers();
+  assert.deepEqual(Logic.buildOnlineNightCutinsView(null, null, {}).items, []);
+  assert.deepEqual(Logic.buildOnlineNightCutinsView({}, { id: 0, roleKey: "villager" }, {}).items, []);
+  // 送り先が数値でなければ自分の行動カットインは出ない。
+  const view = Logic.buildOnlineNightCutinsView(
+    { report: { type: "none", victimId: null }, bombReport: { explodedVictims: [], fizzled: false } },
+    { id: 0, roleKey: "apprenticeSeer" }, { sentTargetId: "2", blocked: false, players });
+  assert.deepEqual(view.items, []);
+});
+
 test("buildRevealMouseView：イノセント公開は疑念 -5・文言とログとカットイン", () => {
   const players = fakeNightPlayers();
   const actor = { ...players[0], roleKey: "mouse" };

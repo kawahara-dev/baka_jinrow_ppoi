@@ -72,12 +72,13 @@ FB_PORT=9000 node server/server.js
   `view` はその席だけの player view（自分の役職・インポスター仲間の名前・公開情報）。
   他人の実役職・うっかり flag・トークンは含まない。バカには表示役職だけが送られる
 - `{ "type": "nightActionAccepted", "targetId": 2 }` — 夜入力を受け付けた合図
-- `{ "type": "nightResolved", "code", "view", "night": { "publicLogs", "privateLog", "report", "bombReport" } }` —
+- `{ "type": "nightResolved", "code", "view", "night": { "publicLogs", "privateLog", "report", "bombReport", "trapReport", "doctorReport" } }` —
   夜の解決時に席ごとに1通ずつ配信。`view` は解決後の player view（`phase` は
   `"morning"`、夜に倒れた者の役職は `publicRoleKey` で公開される）。
   `publicLogs` は全員に見える行動ログ、`privateLog` はその席だけの夜結果
   （ない席は `null`）、`report` は夜の報告（`{ type: "eliminated" | "blocked" | "none" | "revived", victimId }`）、
-  `bombReport` は爆弾の報告。夜入力が必要な人間全員分が揃うか、開始から
+  `bombReport` は爆弾の報告、`trapReport` は罠の報告（作動した夜だけ `{ attackerId, victimId }`、それ以外は `null`）、
+  `doctorReport` は蘇生の報告（蘇生した夜だけ `{ victimId, cause }`、それ以外は `null`）。夜入力が必要な人間全員分が揃うか、開始から
   60秒のタイムアウト（未入力は「行動しない」扱い）で解決する。誰も夜入力が
   いらない配役では開始直後に解決する。夜の解決直後に議論が始まる
 - `{ "type": "discussionStarted", "code", "view", "talks" }` — 議論の開始時に
