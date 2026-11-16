@@ -1876,6 +1876,9 @@
       meAlive: mePlayer ? mePlayer.alive : false,
       meRoleName: me.roleName || ROLES[me.roleKey]?.name || "",
       meFaction: me.faction || ROLES[me.roleKey]?.faction || "",
+      // マウス公開の使用済み（サーバーが view に載せる。クライアントが
+      // マウスボタンの表示に使う。送り済みの公開は次の view にも載る）。
+      meMouseUsed: !!view.me.mouseUsed,
       // 夜行動の有無は表示役職で見る（バカがインポスター表示のときは
       // ボタンを出してもサーバーが no_night_action で弾く。権威はサーバー）。
       hasNightAction: !!ROLES[me.roleKey]?.nightAction,

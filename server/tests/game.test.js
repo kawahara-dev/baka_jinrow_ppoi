@@ -16,6 +16,8 @@ const {
   resolveNight,
   nightResolvedMessage,
   startDiscussion,
+  submitMouseReveal,
+  mouseRevealBroadcast,
   submitTalk,
   markDiscussionDone,
   clearDiscussionDone,
@@ -38,7 +40,7 @@ const {
   NIGHT_TIMEOUT_MS,
   VOTE_TIMEOUT_MS,
 } = require("../game.js");
-const { ROLES, PLAYER_NAMES, PLAYER_ICONS, getEffectiveRoleKey } = require("../../game-logic.js");
+const { ROLES, PLAYER_NAMES, PLAYER_ICONS, getEffectiveRoleKey, getPublicRoleKey } = require("../../game-logic.js");
 
 // 決定的な乱数源（mulberry32）。seed を変えて何通りかの配役を試す。
 function seededRandom(seed) {
@@ -413,7 +415,13 @@ test("startDiscussion：朝から議論へ移り、CPU だけが発言する（�
     } else if (e.type === "mouse") {
       const target = game.players[e.targetId];
       assert.ok(target);
-      assert.equal(e.publicRoleKey, getPublicRoleKey(target));
+      const speaker = game.players[e.speakerId];
+      if (speaker.roleKey === "baka") {
+        // バカがマウスを表示しているときは捏造役職（バカ以外）が公開される。
+        assert.ok(e.publicRoleKey !== "baka" && ROLES[e.publicRoleKey]);
+      } else {
+        assert.equal(e.publicRoleKey, getPublicRoleKey(target));
+      }
     } else {
       assert.fail(`unexpected event type ${e.type}`);
     }
@@ -426,6 +434,124 @@ test("startDiscussion：朝から議論へ移り、CPU だけが発言する（�
   assert.equal(startDiscussion(fresh, seededRandom(1)), null);
   assert.equal(fresh.phase, "night");
   assert.equal(startDiscussion(null, seededRandom(1)), null);
+});
+
+// 議論フェーズのヘルパー（任意の seed 版）：夜入力の要る人間は席2へ
+// 入力し、夜を解決して両人間を生存に戻してから議論を開始する。
+// seed 3（政治家＋ネズミ）・seed 5（バカ表示マウス＋政治家）では
+// 人間の夜入力は要らないため、そのまま夜が解決する。
+function gameInDiscussionSeed(seed) {
+  const game = createGame("ABCD", twoHumans(), undefined, seededRandom(seed));
+  for (const p of game.players) {
+    if (!p.isCpu && needsNightInput(game, p.id)) {
+      assert.equal(submitNightAction(game, p.id, 2), null);
+    }
+  }
+  const result = resolveNight(game, seededRandom(seed + 1000));
+  assert.ok(result);
+  assert.equal(game.phase, "morning");
+  for (const id of [0, 1]) {
+    game.players[id].alive = true;
+    game.players[id].publicRoleKey = null;
+  }
+  const events = startDiscussion(game, seededRandom(seed + 2000));
+  assert.ok(events);
+  assert.equal(game.phase, "discussion");
+  return { game, events };
+}
+
+test("playerView：マウス公開の使用済みが me に載る（初期値は false）", () => {
+  const game = createGame("ABCD", twoHumans(), undefined, seededRandom(42));
+  assert.equal(playerView(game, 0).me.mouseUsed, false);
+  assert.equal(playerView(game, 1).me.mouseUsed, false);
+});
+
+test("submitMouseReveal：マウス人間が対象の公開役職を公開し、1回だけ使える", () => {
+  // seed 3：人間は政治家（id 0）とネズミ（id 1）。
+  const { game } = gameInDiscussionSeed(3);
+  assert.equal(game.players[1].roleKey, "mouse");
+  // 席2（ユイ）の公開役職が公開される。
+  const target = game.players[2];
+  const event = submitMouseReveal(game, 1, 2, seededRandom(7));
+  assert.deepEqual(event, {
+    type: "mouse",
+    speakerId: 1,
+    targetId: 2,
+    publicRoleKey: getPublicRoleKey(target),
+  });
+  assert.equal(game.players[1].mouseUsed, true);
+  // 公開された役職の陣営で対象の疑念が更新される（ソロと同じ）。
+  assert.equal(target.suspicion, ROLES[getPublicRoleKey(target)].faction === "イノセント" ? -5 : 8);
+  // 配信メッセージは公開情報だけの形になる。
+  assert.deepEqual(mouseRevealBroadcast(game, event), {
+    type: "mouse",
+    code: "ABCD",
+    speakerId: 1,
+    targetId: 2,
+    publicRoleKey: getPublicRoleKey(target),
+  });
+  assert.equal(mouseRevealBroadcast(game, null), null);
+  // 2回目は使えない。
+  assert.equal(submitMouseReveal(game, 1, 3, seededRandom(7)), "already_used");
+  // マウスでない人間は公開できない（政治家）。
+  assert.equal(submitMouseReveal(game, 0, 2, seededRandom(7)), "not_mouse");
+  // 対象の検証：自分・死亡・存在しない席は弾く。
+  const { game: game2 } = gameInDiscussionSeed(3);
+  assert.equal(submitMouseReveal(game2, 1, 1, seededRandom(7)), "invalid_target");
+  assert.equal(submitMouseReveal(game2, 1, 99, seededRandom(7)), "invalid_target");
+  game2.players[3].alive = false;
+  assert.equal(submitMouseReveal(game2, 1, 3, seededRandom(7)), "invalid_target");
+  game2.players[3].alive = true;
+  // CPU 席・死亡した人間は公開できない。
+  assert.equal(submitMouseReveal(game2, 5, 2, seededRandom(7)), "not_a_player");
+  game2.players[1].alive = false;
+  assert.equal(submitMouseReveal(game2, 1, 2, seededRandom(7)), "not_alive");
+  game2.players[1].alive = true;
+  // 夜フェーズ・試合なしでは弾く。
+  assert.equal(submitMouseReveal(gameBothNeedInput(), 1, 2, seededRandom(7)), "not_discussion");
+  assert.equal(submitMouseReveal(null, 1, 2, seededRandom(7)), "no_game");
+});
+
+test("submitMouseReveal：バカがマウスを表示しているときは捏造役職を公開する", () => {
+  // seed 5：人間の席0がバカで、マウスを表示している。
+  const { game } = gameInDiscussionSeed(5);
+  assert.equal(game.players[0].roleKey, "baka");
+  assert.equal(game.players[0].fakeDisplayRoleKey, "mouse");
+  const target = game.players[2];
+  const event = submitMouseReveal(game, 0, 2, seededRandom(7));
+  assert.equal(event.type, "mouse");
+  assert.equal(event.speakerId, 0);
+  assert.equal(event.targetId, 2);
+  // 公開されるのはバカ以外の役職（でたらめ）。対象の本当の公開役職とは
+  // 限らないが、バカそのものにはならない。
+  assert.ok(event.publicRoleKey !== "baka" && ROLES[event.publicRoleKey]);
+  assert.equal(game.players[0].mouseUsed, true);
+  // 疑念は公開された（捏造の）役職の陣営で更新される。
+  assert.equal(target.suspicion, ROLES[event.publicRoleKey].faction === "イノセント" ? -5 : 8);
+  // 配信メッセージにバカの実役職は漏れない。
+  const json = JSON.stringify(mouseRevealBroadcast(game, event));
+  assert.equal(json.includes("baka"), false);
+});
+
+test("startDiscussion：バカがマウスを表示しているときは捏造役職を公開する", () => {
+  // CPU の席2だけを生かし、バカ（マウス表示）にしておく。ほかの CPU は
+  // 死亡扱いにして発言者から外す。乱数を 0 に固定するとマウス公開が
+  // 必ず選ばれ、捏造役職はプールの先頭になる。
+  const game = createGame("ABCD", twoHumans(), undefined, seededRandom(3));
+  game.phase = "morning";
+  for (const p of game.players) {
+    if (p.id >= 2 && p.id !== 2) p.alive = false;
+  }
+  game.players[2].roleKey = "baka";
+  game.players[2].fakeDisplayRoleKey = "mouse";
+  game.players[2].mouseUsed = false;
+  const events = startDiscussion(game, () => 0);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "mouse");
+  assert.equal(events[0].speakerId, 2);
+  const pool = Object.keys(ROLES).filter((k) => k !== "baka");
+  assert.equal(events[0].publicRoleKey, pool[0]);
+  assert.notEqual(events[0].publicRoleKey, getPublicRoleKey(game.players[events[0].targetId]));
 });
 
 test("submitTalk：定型文・自由入力の検証（対象・長さ・両方指定・フェーズ・生死）", () => {

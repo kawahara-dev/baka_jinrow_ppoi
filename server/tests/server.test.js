@@ -7,6 +7,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createServer } = require("../server.js");
+const { createGame } = require("../game.js");
+const { getPublicRoleKey } = require("../../game-logic.js");
 
 function listen(server) {
   return new Promise((resolve) => {
@@ -593,6 +595,102 @@ test("議論：夜明け後に discussionStarted が届き、発言と議論終�
       guest.close();
     }
   }, { random: seededRandom(8), nightTimeoutMs: 5000, discussTimeoutMs: 5000 });
+});
+
+test("マウス公開：人間のマウスが公開すると両方へ mouse が届き、2回目・非マウス・議論外はエラー", async () => {
+  // seed 3：人間は政治家（id 0）とネズミ（id 1）。夜は開始直後に解決し、
+  // 両人間とも生きて議論に入る（通しで確認済み）。
+  await withServer(async (port) => {
+    const { host, guest, hq, gq } = await startTwoPlayerGame(port);
+    try {
+      // 夜の即解決 → nightResolved → discussionStarted を両方で読む。
+      assert.equal((await withTimeout(hq.next(), 2000, "host nightResolved")).type, "nightResolved");
+      assert.equal((await withTimeout(gq.next(), 2000, "guest nightResolved")).type, "nightResolved");
+      const hostStarted = await withTimeout(hq.next(), 2000, "host discussionStarted");
+      const guestStarted = await withTimeout(gq.next(), 2000, "guest discussionStarted");
+      assert.equal(hostStarted.type, "discussionStarted");
+      assert.equal(guestStarted.type, "discussionStarted");
+      // ホスト（政治家）はマウスでない。
+      host.send(JSON.stringify({ type: "mouseReveal", targetId: 2 }));
+      assert.equal((await hq.next()).error, "not_mouse");
+      // ゲスト（ネズミ）が席2の役職を公開する。両方へ同じ公開が届く。
+      guest.send(JSON.stringify({ type: "mouseReveal", targetId: 2 }));
+      const hostMouse = await withTimeout(hq.next(), 2000, "host mouse");
+      const guestMouse = await withTimeout(gq.next(), 2000, "guest mouse");
+      // 公開される役職は対象の公開役職（同じ seed の配役から求める）。
+      const expectedGame = createGame("ABCD", [{ id: 0 }, { id: 1 }], undefined, seededRandom(3));
+      const expectedRole = getPublicRoleKey(expectedGame.players[2]);
+      for (const msg of [hostMouse, guestMouse]) {
+        assert.equal(msg.type, "mouse");
+        assert.equal(msg.code, hostStarted.code);
+        assert.equal(msg.speakerId, 1);
+        assert.equal(msg.targetId, 2);
+        assert.equal(msg.publicRoleKey, expectedRole);
+        const json = JSON.stringify(msg);
+        assert.equal(json.includes("baka"), false);
+        assert.equal(json.includes("clumsy"), false);
+        assert.equal(json.includes("token"), false);
+      }
+      // 公開したあとの view には使用済みが載る（次の discussionEnded で確認）。
+      assert.equal(guestStarted.view.me.mouseUsed, false);
+      // 2回目は使えない。
+      guest.send(JSON.stringify({ type: "mouseReveal", targetId: 3 }));
+      assert.equal((await gq.next()).error, "already_used");
+      // 議論を終えると投票へ進み、マウス公開は受け付けない。
+      host.send(JSON.stringify({ type: "discussionDone" }));
+      assert.equal((await hq.next()).type, "discussionDoneAccepted");
+      guest.send(JSON.stringify({ type: "discussionDone" }));
+      assert.equal((await gq.next()).type, "discussionDoneAccepted");
+      const hostEnded = await withTimeout(hq.next(), 2000, "host discussionEnded");
+      const guestEnded = await withTimeout(gq.next(), 2000, "guest discussionEnded");
+      assert.equal(hostEnded.type, "discussionEnded");
+      assert.equal(guestEnded.type, "discussionEnded");
+      assert.equal(guestEnded.view.me.mouseUsed, true, "使用済みが view に載る");
+      guest.send(JSON.stringify({ type: "mouseReveal", targetId: 2 }));
+      assert.equal((await gq.next()).error, "not_discussion");
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, { random: seededRandom(3), nightTimeoutMs: 5000, discussTimeoutMs: 5000 });
+});
+
+test("マウス公開：バカがマウスを表示しているときは捏造役職が公開され、実役職は漏れない", async () => {
+  // seed 5：人間の席0がバカで、マウスを表示している。夜明け後も生存する。
+  await withServer(async (port) => {
+    const { host, guest, hq, gq } = await startTwoPlayerGame(port);
+    try {
+      assert.equal((await withTimeout(hq.next(), 2000, "host nightResolved")).type, "nightResolved");
+      assert.equal((await withTimeout(gq.next(), 2000, "guest nightResolved")).type, "nightResolved");
+      const hostStarted = await withTimeout(hq.next(), 2000, "host discussionStarted");
+      const guestStarted = await withTimeout(gq.next(), 2000, "guest discussionStarted");
+      assert.equal(hostStarted.type, "discussionStarted");
+      assert.equal(guestStarted.type, "discussionStarted");
+      // ホストの表示役職はマウス（バカの実役職は view に出ない）。
+      assert.equal(hostStarted.view.me.roleKey, "mouse");
+      // ホストが席2の役職を公開する。両方へ同じ公開が届く。
+      host.send(JSON.stringify({ type: "mouseReveal", targetId: 2 }));
+      const hostMouse = await withTimeout(hq.next(), 2000, "host mouse");
+      const guestMouse = await withTimeout(gq.next(), 2000, "guest mouse");
+      for (const msg of [hostMouse, guestMouse]) {
+        assert.equal(msg.type, "mouse");
+        assert.equal(msg.code, hostStarted.code);
+        assert.equal(msg.speakerId, 0);
+        assert.equal(msg.targetId, 2);
+        // 捏造役職：バカ以外の有効な役職キーであること。
+        assert.ok(msg.publicRoleKey !== "baka");
+        assert.ok(typeof msg.publicRoleKey === "string" && msg.publicRoleKey.length > 0);
+        const json = JSON.stringify(msg);
+        assert.equal(json.includes("baka"), false, "実役職バカは漏れない");
+        assert.equal(json.includes("clumsy"), false);
+        assert.equal(json.includes("token"), false);
+        assert.equal(json.includes("fakeDisplayRoleKey"), false);
+      }
+    } finally {
+      host.close();
+      guest.close();
+    }
+  }, { random: seededRandom(5), nightTimeoutMs: 5000, discussTimeoutMs: 5000 });
 });
 
 test("議論：タイマーが切れると全員の discussionDone なしで投票へ進む", async () => {

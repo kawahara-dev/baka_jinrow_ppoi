@@ -2953,6 +2953,8 @@
     invalid_target: "選べない対象です。",
     not_discussion: "いまは議論フェーズではありません。",
     bad_talk: "送れない発言です。",
+    not_mouse: "この役職にマウス公開はありません。",
+    already_used: "マウス公開はもう使いました。",
     not_vote: "いまは投票フェーズではありません。",
   };
   // オンラインの接続状態。サーバーから届いた roomCreated / roomUpdate 等の
@@ -2960,14 +2962,15 @@
   // view は試合開始後に届く player view（自分の役職は表示役職だけ）。
   // selectedId は夜・議論・投票で選んだ対象、nightSentId は送り済みの
   // 夜入力、voteSentId は送り済みの投票、discussionDoneSent は議論を
-  // 終えたことの送信済みフラグ。
+  // 終えたことの送信済みフラグ、mouseUsed は送り済みのマウス公開
+  // （次の view に載る使用済みとあわせてボタン表示に使う）。
   // reconnecting は切断からの復帰中、reconnectAttempts は試し直した
   // 回数、reconnectTimer は次の試し直しまでのタイマー。
   let online = {
     socket: null, code: null, token: null, playerId: null,
     players: [], settings: null, gameStarted: false, connected: false,
     view: null, selectedId: null, nightSentId: null,
-    voteSentId: null, discussionDoneSent: false,
+    voteSentId: null, discussionDoneSent: false, mouseUsed: false,
     reconnecting: false, reconnectAttempts: 0, reconnectTimer: null,
   };
   function isOnlineHost() { return online.playerId === 0; }
@@ -3090,8 +3093,8 @@
       hydrateWalkImages(stage);
     }
     // ボタンはフェーズで切り替える。夜は夜行動ボタン、投票は投票ボタン、
-    // 議論は下の議論パネル。次へ・マウスはオンラインでは出さない
-    // （マウスの公開は送信メッセージが未整備のため見送り。後半の残課題）。
+    // 議論は下の議論パネルとマウスボタン（表示役職がマウスの人間だけ、
+    // 1試合1回）。次へはオンラインでは出さない。
     const nightActive = view.phase === "night" && view.meAlive && view.hasNightAction;
     el("actionBtn").textContent = online.nightSentId != null ? "夜行動を変更する" : "夜行動を実行";
     el("actionBtn").classList.toggle("hidden", !nightActive);
@@ -3099,7 +3102,12 @@
     el("voteBtn").textContent = online.voteSentId != null ? "投票を変更する" : "投票する";
     el("voteBtn").classList.toggle("hidden", !voteActive);
     el("nextBtn").classList.add("hidden");
-    el("mouseBtn").classList.add("hidden");
+    // マウスボタンは議論中・生存中・表示役職がマウス・未使用のときだけ。
+    // 使用済みはサーバーが view に載せる mouseUsed が権威で、送った
+    // 直後は受け取った公開イベントで覚える mouseUsed も見る。
+    const mouseActive = view.phase === "discussion" && view.meAlive
+      && online.view.me.roleKey === "mouse" && !view.meMouseUsed && !online.mouseUsed;
+    el("mouseBtn").classList.toggle("hidden", !mouseActive);
     const pnpBanner = el("pnpTurnBanner");
     if (pnpBanner) pnpBanner.classList.add("hidden");
     renderOnlineDiscussPanel(view);
@@ -3184,6 +3192,16 @@
       if (id === online.view.me.id) return;
       online.selectedId = id;
       renderOnlineGame();
+    }
+  }
+  // マウス公開をサーバーへ送る。対象はカードで選んだ生存中の他人
+  // （議論の対象選択と同じ）。サーバーが表示役職・使用済み・フェーズを
+  // 検証し、公開は部屋の全員へ配信される（送った本人にも届く）。
+  function sendOnlineMouseReveal() {
+    if (!online.view || online.view.phase !== "discussion") return;
+    if (online.selectedId == null) { alert("公開する相手を1人選んでね！"); return; }
+    if (!sendOnline({ type: "mouseReveal", targetId: online.selectedId })) {
+      actionLog("サーバーに送信できなかったよ。接続を確認してね。");
     }
   }
   // 議論の定型文をサーバーへ送る。対象が必要な文言はカードで選んだ
@@ -3286,6 +3304,7 @@
     el("retryBtn").classList.add("hidden");
     el("actionBtn").classList.add("hidden");
     el("voteBtn").classList.add("hidden");
+    el("mouseBtn").classList.add("hidden");
     const panel = el("onlineDiscussPanel");
     if (panel) panel.classList.add("hidden");
     const myFaction = online.view && online.view.me ? online.view.me.faction : null;
@@ -3474,7 +3493,7 @@
       socket: null, code: null, token: null, playerId: null,
       players: [], settings: null, gameStarted: false, connected: false,
       view: null, selectedId: null, nightSentId: null,
-      voteSentId: null, discussionDoneSent: false,
+      voteSentId: null, discussionDoneSent: false, mouseUsed: false,
       reconnecting: false, reconnectAttempts: 0, reconnectTimer: null,
     };
     hideOnlineReconnecting();
@@ -3525,6 +3544,7 @@
         online.gameStarted = true;
         online.view = msg.view;
         online.selectedId = null;
+        online.mouseUsed = false;
         if (msg.view.phase !== "night") online.nightSentId = null;
         if (msg.view.phase !== "vote") online.voteSentId = null;
         if (msg.view.phase !== "discussion") online.discussionDoneSent = false;
@@ -3545,6 +3565,7 @@
       online.nightSentId = null;
       online.voteSentId = null;
       online.discussionDoneSent = false;
+      online.mouseUsed = false;
       if (online.view) showOnlineGame();
       return;
     }
@@ -3578,6 +3599,19 @@
     if (msg.type === "talk") {
       if (typeof msg.speakerId !== "number" || typeof msg.text !== "string") return;
       sayDialogue(msg.speakerId, `${msg.speakerName || ""}：${msg.text}`, msg.text);
+      return;
+    }
+    if (msg.type === "mouse") {
+      // 人間のマウス公開（CPU のものは discussionStarted の talks に入る）。
+      // 公開される役職はサーバーが送った publicRoleKey だけ（実役職は出ない）。
+      if (typeof msg.speakerId !== "number" || typeof msg.targetId !== "number"
+        || typeof msg.publicRoleKey !== "string") return;
+      applyOnlineMouseReveal(msg);
+      // 自分の公開が届いたら、ボタンは次の view を待たずに隠す。
+      if (msg.speakerId === online.playerId) {
+        online.mouseUsed = true;
+        if (online.view) renderOnlineGame();
+      }
       return;
     }
     if (msg.type === "discussionDoneAccepted") {
@@ -3822,6 +3856,10 @@
   };
   el("howBtn").onclick = () => el("howTo").classList.toggle("hidden");
   el("mouseBtn").onclick = () => {
+    // オンライン対戦中（議論フェーズの view が届いている間）は
+    // サーバーへ送る。試合が終わったあとの stale な view（phase "end"）
+    // ではソロ側へ落とすため、フェーズも見る。
+    if (online.view && online.view.phase === "discussion") { sendOnlineMouseReveal(); return; }
     const me = state.players[state.playerId];
     const target = state.players[state.selectedId];
     if (!me || getEffectiveRoleKey(me) !== "mouse" || me.mouseUsed) return;
