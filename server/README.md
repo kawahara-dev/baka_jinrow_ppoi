@@ -53,6 +53,13 @@ FB_PORT=9000 node server/server.js
   `{ "type": "talk", "text": "ちょっと待って" }` — 議論の発言。議論フェーズ中に、
   生存中の人間の席だけが送れる。定型文（`phraseId`）か短い自由入力（`text`、100文字まで）の
   どちらか片方だけ。対象を取る定型文は生存中の他人を `targetId` で指定する
+- `{ "type": "mouseReveal", "targetId": 2 }` — 議論フェーズ中に、表示役職がマウスの
+  人間が対象の役職を公開する。1試合1回だけ。対象は生存中の他人だけ（自分は不可）。
+  公開される役職は部屋の全員へ `{ "type": "mouse", ... }` で配信される。公開する側が
+  バカ（マウス表示）のときは、ソロと同じくバカ以外の役職からランダムに1つ選んだ
+  捏造役職が公開される（設計メモ §8：バカには表示役職だけが送られるため、本当の
+  役職は知らない）。マウスでない人間は `not_mouse`、使用済みは `already_used`、
+  議論フェーズ以外は `not_discussion` のエラーになる
 - `{ "type": "discussionDone" }` — 議論を終えた合図。生存中の人間全員分が揃うか、
   議論タイマー（設定の `discussTimer` 秒。既定はタイマーなし）が切れると投票へ進む。
   切断した人間は自動で議論済み扱いになる（議論中の切断だけでなく、夜の途中で
@@ -87,9 +94,13 @@ FB_PORT=9000 node server/server.js
   `"discussion"`）。`talks` は CPU の発言イベントの配列で全席共通：
   `{ "type": "talk", "speakerId", "text" }`（セリフ）か
   `{ "type": "mouse", "speakerId", "targetId", "publicRoleKey" }`（マウス公開。
-  公開される役職は全員に見える公開情報）
+  公開される役職は全員に見える公開情報。公開する側がバカ（マウス表示）の
+  ときは、ソロと同じく捏造役職になる）
 - `{ "type": "talk", "code", "speakerId", "speakerName", "text" }` — 人間の
   議論の発言を部屋の全員へ配信する（公開情報だけ）
+- `{ "type": "mouse", "code", "speakerId", "targetId", "publicRoleKey" }` — 人間の
+  マウス公開を部屋の全員へ配信する（公開情報だけ。`discussionStarted` の `talks`
+  に入る CPU のマウス公開と同じ形。公開する側がバカのときは捏造役職になる）
 - `{ "type": "discussionDoneAccepted" }` — 議論終了の合図を受け付けた返信
 - `{ "type": "discussionEnded", "code", "view" }` — 議論の終了時に席ごとに
   1通ずつ配信。`view` はその席だけの player view（`phase` は `"vote"`）。
@@ -106,7 +117,7 @@ FB_PORT=9000 node server/server.js
   （実役職・陣営・脱落の記録。試合終了後の開示なのでバカの実役職も含む）。
   投票の集計で決着したときと、夜の解決で決着したとき（その場合は
   `nightResolved` の view も `phase` は `"end"`）の両方で送られる
-- `{ "type": "error", "error": "room_not_found" | "room_full" | "bad_token" | "bad_json" | "unknown_type" | "bad_message" | "not_in_room" | "not_host" | "not_enough_players" | "game_already_started" | "no_game" | "not_night" | "not_a_player" | "not_alive" | "no_night_action" | "invalid_target" | "not_discussion" | "bad_talk" | "not_vote" }`
+- `{ "type": "error", "error": "room_not_found" | "room_full" | "bad_token" | "bad_json" | "unknown_type" | "bad_message" | "not_in_room" | "not_host" | "not_enough_players" | "game_already_started" | "no_game" | "not_night" | "not_a_player" | "not_alive" | "no_night_action" | "invalid_target" | "not_discussion" | "bad_talk" | "not_mouse" | "already_used" | "not_vote" }`
 
 `players` は公開情報のみ（`id` / `name` / `icon` / `connected`）。トークンは含まない。
 試合中の再接続では `reconnected` に現在の player view（`view`）が付く。

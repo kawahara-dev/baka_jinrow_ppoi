@@ -4150,6 +4150,15 @@ test("buildOnlineGameView：脱落者は公開役職だけが出て、ステー�
   assert.ok(!view.players.some(p => p.roleKey === "baka"), "実役職のバカは出ない");
 });
 
+test("buildOnlineGameView：マウス公開の使用済みが meMouseUsed に出る", () => {
+  const unused = Logic.buildOnlineGameView(onlineGameViewFixture());
+  assert.equal(unused.meMouseUsed, false, "view に mouseUsed がなければ false");
+  const used = Logic.buildOnlineGameView(onlineGameViewFixture({
+    me: { id: 0, name: "ルナ", icon: "🌸", roleKey: "mouse", roleName: "ネズミ", faction: "イノセント", allies: [], mouseUsed: true },
+  }));
+  assert.equal(used.meMouseUsed, true, "サーバーが送った使用済みがそのまま出る");
+});
+
 test("buildOnlineGameView：不正な入力は null・入力を変更しない", () => {
   assert.equal(Logic.buildOnlineGameView(null), null);
   assert.equal(Logic.buildOnlineGameView({}), null);

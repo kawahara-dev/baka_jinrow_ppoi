@@ -24,6 +24,8 @@ const {
   resolveNight,
   nightResolvedMessage,
   startDiscussion,
+  submitMouseReveal,
+  mouseRevealBroadcast,
   submitTalk,
   markDiscussionDone,
   clearDiscussionDone,
@@ -470,6 +472,24 @@ function createServer(options = {}) {
       }
       // 発言は公開情報なので部屋の全員へ同じものを配信する。
       const out = talkBroadcast(room.game, talk);
+      if (out) broadcast(room.code, out);
+      return;
+    }
+    if (msg.type === "mouseReveal") {
+      if (!socket._roomCode) {
+        sendJson(socket, { type: "error", error: "not_in_room" });
+        return;
+      }
+      const room = rooms.getRoom(socket._roomCode);
+      const player = room && room.players.find((p) => p.token === socket._token);
+      const event = submitMouseReveal(room && room.game, player ? player.id : -1, msg.targetId, random);
+      if (typeof event === "string") {
+        sendJson(socket, { type: "error", error: event });
+        return;
+      }
+      // マウス公開は公開情報なので部屋の全員へ同じものを配信する
+      // （CPU のマウス公開と同じ形。送った本人にも届く）。
+      const out = mouseRevealBroadcast(room.game, event);
       if (out) broadcast(room.code, out);
       return;
     }

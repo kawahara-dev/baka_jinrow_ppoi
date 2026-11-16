@@ -84,6 +84,8 @@ function createGame(code, roomPlayers, settings, random) {
       // 夜の解決（共有モジュール）が読む・書く状態。初期値はソロと同じ。
       suspicion: 0,
       lastTarget: null,
+      // マウス公開の使用済み（1試合1回。議論フェーズで使う）。
+      mouseUsed: false,
     };
   });
   return {
@@ -157,6 +159,8 @@ function playerView(game, playerId) {
       roleName: shownRole.name,
       faction: shownRole.faction,
       allies,
+      // マウス公開の使用済み（クライアントがボタンを隠す判断に使う）。
+      mouseUsed: !!me.mouseUsed,
     },
     players: game.players.map((p) => ({
       id: p.id,
@@ -282,8 +286,12 @@ function nightResolvedMessage(game, result, playerId) {
 // 共有モジュールの planDiscussionTalks で CPU の発言イベントを作る
 // （人間の席は発言しない。人数が多いほど CPU の発言は減る）。
 // マウス公開のイベントには公開される役職（publicRoleKey）を付ける
-// （マウスの公開は全員に見える公開情報）。朝以外では null を返す。
-// 戻り値はイベントの配列：{ type: "talk", speakerId, text } /
+// （マウスの公開は全員に見える公開情報）。公開する側がバカ（マウス
+// 表示）のときは、ソロの revealMouse と同じくバカ以外の役職から
+// ランダムに1つ選んだ捏造役職を公開する（§8：バカには表示役職だけ
+// が送られるため、本当の役職は知らない。でたらめな公開になる）。
+// 朝以外では null を返す。戻り値はイベントの配列：
+// { type: "talk", speakerId, text } /
 // { type: "mouse", speakerId, targetId, publicRoleKey }。
 function startDiscussion(game, random) {
   if (!game || game.phase !== "morning") return null;
@@ -291,13 +299,63 @@ function startDiscussion(game, random) {
   game.discussionDone = new Set();
   const alive = game.players.filter((p) => p.alive);
   const events = planDiscussionTalks(game, alive, { random });
+  const rnd = typeof random === "function" ? random : Math.random;
   return events.map((e) => {
     if (e.type === "mouse") {
+      const speaker = game.players.find((p) => p.id === e.speakerId);
       const target = game.players.find((p) => p.id === e.targetId);
-      return { type: "mouse", speakerId: e.speakerId, targetId: e.targetId, publicRoleKey: target ? getPublicRoleKey(target) : null };
+      let publicRoleKey = target ? getPublicRoleKey(target) : null;
+      if (speaker && speaker.roleKey === "baka" && target) {
+        const pool = Object.keys(ROLES).filter((k) => k !== "baka");
+        publicRoleKey = pool[Math.floor(rnd() * pool.length)];
+      }
+      return { type: "mouse", speakerId: e.speakerId, targetId: e.targetId, publicRoleKey };
     }
     return { type: "talk", speakerId: e.speakerId, text: e.text };
   });
+}
+
+// 人間のマウス公開を受け付ける。成功したら公開イベント、ダメなら
+// 理由を返す。議論フェーズ中・生存中の人間・表示役職がマウス・
+// 未使用・対象は生存中の他人だけ（自分は不可）。1試合1回だけ。
+// 公開する役職は対象の公開役職。ただし公開する側がバカ（マウス表示）
+// のときはソロと同じくバカ以外の役職からランダムに1つ選ぶ（§8：
+// バカには表示役職だけが送られるため、本当の役職は知らない）。
+// ソロの revealMouse と同じく、公開された役職の陣営で対象の疑念を
+// 更新する（イノセント -5／それ以外 8。CPU の投票が疑念を見るため）。
+// random は () => [0,1) の注入可能な乱数源（既定は Math.random）。
+function submitMouseReveal(game, playerId, targetId, random) {
+  if (!game) return "no_game";
+  if (game.phase !== "discussion") return "not_discussion";
+  const p = game.players.find((x) => x.id === playerId);
+  if (!p || p.isCpu) return "not_a_player";
+  if (!p.alive) return "not_alive";
+  if (getEffectiveRoleKey(p) !== "mouse") return "not_mouse";
+  if (p.mouseUsed) return "already_used";
+  const target = game.players.find((x) => x.id === targetId);
+  if (!target || !target.alive || targetId === playerId) return "invalid_target";
+  const rnd = typeof random === "function" ? random : Math.random;
+  let shownRoleKey = getPublicRoleKey(target);
+  if (p.roleKey === "baka") {
+    const pool = Object.keys(ROLES).filter((k) => k !== "baka");
+    shownRoleKey = pool[Math.floor(rnd() * pool.length)];
+  }
+  p.mouseUsed = true;
+  target.suspicion = ROLES[shownRoleKey].faction === "イノセント" ? -5 : 8;
+  return { type: "mouse", speakerId: playerId, targetId, publicRoleKey: shownRoleKey };
+}
+
+// 人間のマウス公開を全員へ配信するメッセージ（公開情報だけ）。
+// discussionStarted の talks に入る CPU のマウス公開と同じ形。
+function mouseRevealBroadcast(game, event) {
+  if (!game || !event) return null;
+  return {
+    type: "mouse",
+    code: game.code,
+    speakerId: event.speakerId,
+    targetId: event.targetId,
+    publicRoleKey: event.publicRoleKey,
+  };
 }
 
 // 人間の議論の発言を受け付ける。成功したら { speakerId, text }、
@@ -589,6 +647,8 @@ module.exports = {
   resolveNight,
   nightResolvedMessage,
   startDiscussion,
+  submitMouseReveal,
+  mouseRevealBroadcast,
   submitTalk,
   markDiscussionDone,
   clearDiscussionDone,
