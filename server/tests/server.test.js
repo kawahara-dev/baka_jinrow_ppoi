@@ -153,6 +153,30 @@ test("静的配信：/ は index.html、/game-logic.js は共有モジュール�
   });
 });
 
+test("静的配信：サーバーが配る index.html だけオンライン入口の合図が入る（Pages 版の原文にはない）", async () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  // 念のため：リポジトリの原文（Pages へ行くバイト）には合図の代入がない
+  // （isServerServed の参照としては __FB_SERVER_SERVED__ が出るが、
+  // 「=true」の代入形はサーバーだけが差し込む）。
+  const diskHtml = fs.readFileSync(path.join(__dirname, "..", "..", "index.html"), "utf8");
+  assert.equal(diskHtml.includes("window.__FB_SERVER_SERVED__=true"), false);
+  await withServer(async (port) => {
+    const index = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(index.status, 200);
+    const indexText = await index.text();
+    // 合図が入り、メインスクリプト（FakeBloomLogic の取り出し）より
+    // 前に置かれている（読み込み時に判定が走るため）。
+    const marker = indexText.indexOf("window.__FB_SERVER_SERVED__=true");
+    assert.ok(marker >= 0, "合図が差し込まれている");
+    assert.ok(marker < indexText.indexOf("globalThis.FakeBloomLogic"));
+    // game-logic.js 等の他のファイルには合図の代入を差し込まない
+    // （コメント中の参照はあってもよい）。
+    const logic = await fetch(`http://127.0.0.1:${port}/game-logic.js`);
+    assert.equal((await logic.text()).includes("window.__FB_SERVER_SERVED__=true"), false);
+  });
+});
+
 test("静的配信：server/ 配下と存在しないファイルは 404 になる", async () => {
   await withServer(async (port) => {
     const serverFile = await fetch(`http://127.0.0.1:${port}/server/server.js`);

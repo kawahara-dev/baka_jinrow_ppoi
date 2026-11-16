@@ -216,9 +216,11 @@ function createSandbox(seedSettings, { fakeAudio = false, seedStorage = null } =
 // seedSettings: タイトル画面の設定（fakeCount / bomber / sound / difficulty / bgm）。
 // fakeAudio: true なら FakeAudioContext を差し込み、BGM の発音パスを検証できる。
 // seedStorage: localStorage に先に仕込む任意のキー（折りたたみ状態など）。
+// serverServed: true ならサーバー配信の合図（window.__FB_SERVER_SERVED__）
+// をスクリプト実行前に立て、トンネル経由の公開と同じ状態を再現する。
 // 共有モジュール game-logic.js を先に同じコンテキストで読み、ブラウザと
 // 同じ順序（game-logic.js → index.html のメインスクリプト）で実行する。
-function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
+function loadGame({ seedSettings, fakeAudio, seedStorage, serverServed } = {}) {
   const root = path.resolve(__dirname, "..");
   const logicSrc = fs.readFileSync(path.join(root, "game-logic.js"), "utf8");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
@@ -243,6 +245,7 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
   applyOnlineVoteResolved, applyOnlineNightResolved, playOnlineNightCutins,
   stageOnlineGhostWalker, runOnlineNightCutinMotion,
   buildOnlineGameViewLogic, buildOnlineDiscussViewLogic, buildOnlineNightCutinsViewLogic,
+  isServerServed,
   ONLINE_SESSION_KEY, ONLINE_RECONNECT_DELAYS_MS,
   get online() { return online; },
   renderStats, renderAchievements, CLUMSY_SEER_RATE, showResults, buildHighlights, gameSettings,
@@ -276,6 +279,9 @@ function loadGame({ seedSettings, fakeAudio, seedStorage } = {}) {
 };
 `;
   const { sandbox, alerts, elements, localStorage } = createSandbox(seedSettings, { fakeAudio, seedStorage });
+  // サーバー配信の合図はメインスクリプトの実行前に立てる（ブラウザでは
+  // サーバーが差し込んだスクリプトが先に走るのと同じ順序）。
+  if (serverServed) sandbox.__FB_SERVER_SERVED__ = true;
   vm.createContext(sandbox);
   vm.runInContext(logicSrc, sandbox, { filename: "game-logic.js" });
   vm.runInContext(src, sandbox, { filename: "index.html<script>" });

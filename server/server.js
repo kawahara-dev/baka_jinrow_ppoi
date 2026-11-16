@@ -8,7 +8,10 @@
 //   人間の定型文＋自由入力・議論の終了と投票への遷移）、投票フェーズ
 //   （投票の収集・タイムアウト・集計と追放・勝敗・結果開示）。
 //   夜の解決でも決着すればそのまま試合終了になる。
-// 試験運用は VM 内だけ。外部公開しない。待ち受けは 127.0.0.1 に固定する。
+// 試験運用は VM 内だけ。待ち受けは 127.0.0.1 に固定する。
+// フェーズ3の試験では cloudflared のクイックトンネル（外部プロセス）
+// 経由で一時的に公開してよいが、サーバー自体の待ち受けは変えない。
+// トンネルは検証の間だけ開き、終わったら閉じる（常時公開しない）。
 "use strict";
 
 const http = require("node:http");
@@ -58,6 +61,18 @@ const CONTENT_TYPES = {
   ".ico": "image/x-icon",
   ".md": "text/markdown; charset=utf-8",
 };
+
+// サーバー配信の合図：配信する index.html のメインスクリプトの直前に
+// window.__FB_SERVER_SERVED__ を立てる小さなスクリプトを差し込む。
+// クライアントはこの合図でオンライン入口を出す（トンネル経由の公開でも
+// 出る）。Pages 版の静的ファイルには合図がないので入口は出ない。
+// 差し込むのは index.html だけで、game-logic.js 等の他のファイルは
+// そのまま配る。合図の有無は配信バイトで確認できる。
+const ONLINE_SERVED_MARKER = "<script>window.__FB_SERVER_SERVED__=true;</script>";
+function injectOnlineServedMarker(html) {
+  if (!html.includes("<script>")) return html;
+  return html.replace("<script>", `${ONLINE_SERVED_MARKER}\n<script>`);
+}
 
 function createServer(options = {}) {
   const root = options.root || path.resolve(__dirname, "..");
@@ -631,10 +646,16 @@ function createServer(options = {}) {
         res.end("not found");
         return;
       }
+      // index.html だけサーバー配信の合図を差し込む（他のファイルは
+      // そのまま）。合図はメインスクリプトより前に走る位置に入る。
+      const body =
+        path.basename(filePath) === "index.html"
+          ? injectOnlineServedMarker(data.toString("utf8"))
+          : data;
       res.writeHead(200, {
         "Content-Type": CONTENT_TYPES[path.extname(filePath)] || "application/octet-stream",
       });
-      res.end(data);
+      res.end(body);
     });
   }
 
