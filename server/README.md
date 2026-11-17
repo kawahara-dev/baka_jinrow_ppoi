@@ -139,8 +139,12 @@ FB_PORT=9000 node server/server.js
 ## テスト
 
 ```sh
-node --test server/tests/ws.test.js server/tests/rooms.test.js server/tests/game.test.js server/tests/server.test.js
+node --test server/tests/ws.test.js server/tests/rooms.test.js server/tests/game.test.js server/tests/server.test.js server/tests/e2e.test.js
 ```
 
 `server/tests/server.test.js` は実際に HTTP + WebSocket で接続する通しテスト
 （Node 24 の組み込み WebSocket クライアントを使用）。
+
+`server/tests/e2e.test.js` は2人の人間クライアント＋CPU 6席で1試合を最後まで
+回す通しテスト（配役は seed 固定）。秘匿（実役職・うっかり flag・トークン）が
+試合終了前の view に漏れていないことも見る。
