@@ -144,7 +144,6 @@ function createRoomStore(deps = {}) {
     DEFAULT_ROOM_SETTINGS,
     normalizeRoomSettings,
     MAX_PLAYERS,
-    ROOM_CODE_ALPHABET,
     ROOM_CODE_LENGTH,
   };
 }
@@ -152,7 +151,6 @@ function createRoomStore(deps = {}) {
 module.exports = {
   createRoomStore,
   MAX_PLAYERS,
-  ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
   DEFAULT_ROOM_SETTINGS,
   normalizeRoomSettings,
