@@ -83,4 +83,4 @@ function decodeFrames(buffer) {
   return { frames, rest: buffer.subarray(offset) };
 }
 
-module.exports = { WS_GUID, computeAcceptKey, encodeFrame, encodeTextFrame, decodeFrames };
+module.exports = { computeAcceptKey, encodeFrame, encodeTextFrame, decodeFrames };
