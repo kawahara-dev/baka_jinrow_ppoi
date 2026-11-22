@@ -9,7 +9,6 @@ const crypto = require("node:crypto");
 const {
   PLAYER_NAMES,
   PLAYER_ICONS,
-  DEFAULT_ROOM_SETTINGS,
   normalizeRoomSettings,
 } = require("../game-logic.js");
 
@@ -141,8 +140,6 @@ function createRoomStore(deps = {}) {
     getRoom,
     publicPlayers,
     setRoomSettings,
-    DEFAULT_ROOM_SETTINGS,
-    normalizeRoomSettings,
     MAX_PLAYERS,
     ROOM_CODE_LENGTH,
   };
@@ -152,6 +149,4 @@ module.exports = {
   createRoomStore,
   MAX_PLAYERS,
   ROOM_CODE_LENGTH,
-  DEFAULT_ROOM_SETTINGS,
-  normalizeRoomSettings,
 };
