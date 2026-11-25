@@ -63,7 +63,7 @@
 `tests/` に Node 標準のテストランナー（`node:test`）による自動テストがあります。依存パッケージは不要で、Node 18以上があれば実行できます。
 
 ```sh
-node --test   # リポジトリのルートで実行（tests/*.test.js を自動検出）
+node --test   # リポジトリのルートで実行（tests/ と server/tests/ の *.test.js を自動検出）
 ```
 
 `tests/harness.js` が `game-logic.js` を先に読んでから `index.html` の `<script>` を読み、IIFE の外枠だけを外して DOM スタブ付きの `vm` コンテキストで実行します（jsdom 不要）。テスト側は `setupGame` / `runNight` / `resolveNightActions` / `doVote` / `checkWin` などのゲーム内部を直接呼び、以下を検証します。
