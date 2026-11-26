@@ -92,6 +92,9 @@
 
 - `state.playerId`（単数）から「人間のプレイヤー ID 一覧 `humanPlayerIds`」＋
   「現在入力中の人 `currentTurnPlayerId`」へ拡張する。
+  （実装では「現在入力中の人」は `currentTurnPlayerId` ではなく
+  `state.pnpIndex`（`humanPlayerIds` への添字）＋ `pnpCurrentPlayer()` で持つ。
+  2026-11-26 確認）
 - ソロ時は `humanPlayerIds = [playerId]` として従来通り動かし、既存の挙動を壊さない。
   夜行動・投票・議論の各処理は「現在の番の人」を参照する形に寄せる。
 - 設定（`SETTINGS_KEY`）の保存形式は変えない。モードと参加人数は設定に追加するだけ。
